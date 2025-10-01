@@ -157,7 +157,7 @@ PM_SEARCH = bool((environ.get('PM_SEARCH', True)), True)  # PM Search On (True) 
 EMOJI_MODE = bool(environ.get('EMOJI_MODE', "False"))  # Emoji status On (True) / Off (False)
 BUTTON_MODE = is_enabled((environ.get('BUTTON_MODE', "False")), False) # pm & Group button or link mode (True) / Off (False)
 STREAM_MODE = bool((environ.get('STREAM_MODE', "True")), True) # Set Stream mode True or False
-PREMIUM_STREAM_MODE = bool(environ.get('PREMIUM_STREAM_MODE', "False")), False) # Set Stream mode True or False only for premium users
+PREMIUM_STREAM_MODE = bool(environ.get('PREMIUM_STREAM_MODE', "False")), False # Set Stream mode True or False only for premium users
 
 
 # ============================
