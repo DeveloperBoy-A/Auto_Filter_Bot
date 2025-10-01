@@ -218,7 +218,7 @@ Mᴇꜱꜱᴀɢᴇ : <b>{}</b>"""
 
     
     MOVIE_UPDATE_NOTIFY_TXT = """
-</b>【✨ ᴛɪᴛʟᴇ : <code>{filename}</code> </b>】🆕️
+</b>【✅TITLE:<code>{filename}</code></b>】🆕️
 
 
 🎭 Gᴇɴʀᴇs : <b>{genres}</b>
@@ -229,7 +229,7 @@ Mᴇꜱꜱᴀɢᴇ : <b>{}</b>"""
 {episodes}
 
 
-🔍 <b>Sᴇᴀʀᴄʜ →</b> {search_link}
+ 🔍<b>Sᴇᴀʀᴄʜ in</b> {search_link}
 """
 
 
