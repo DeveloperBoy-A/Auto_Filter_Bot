@@ -100,8 +100,8 @@ LOG_VR_CHANNEL = int(environ.get('LOG_VR_CHANNEL', '-1002477743748')) #Verificat
 LOG_API_CHANNEL = int(environ.get('LOG_API_CHANNEL', '-1002434203118')) #If Anyone Set Your Bot In Any Group And Set Shortner In That Group Then In This Channel The All Details Come
 VERIFY_IMG = environ.get("VERIFY_IMG", "https://telegra.ph/file/9ecc5d6e4df5b83424896.jpg")
 
-TUTORIAL = environ.get("TUTORIAL", "https://t.me/newmovies_support/653")   # Tutorial link for verification
-TUTORIAL_2 = environ.get("TUTORIAL_2", "https://t.me/newmovies_support/653")   # Second tutorial link for verification
+TUTORIAL = environ.get("TUTORIAL", "https://t.me/newmovies_support/817")   # Tutorial link for verification
+TUTORIAL_2 = environ.get("TUTORIAL_2", "https://t.me/newmovies_support/817")   # Second tutorial link for verification
 TUTORIAL_3 = environ.get("TUTORIAL_3", "https://t.me/newmovies_support/653")   # Third tutorial link for verification
 
 # Verification (Must Fill All Veriables. Else You Got Error
@@ -111,8 +111,8 @@ SHORTENER_WEBSITE = environ.get("SHORTENER_WEBSITE", "shortxlinks.com") # Shorte
 SHORTENER_API2 = environ.get("SHORTENER_API2", "c7770c9d260bbc19a85d71ea2f1fe87c837aa0e8")  # Shortener API key for second website
 SHORTENER_WEBSITE2 = environ.get("SHORTENER_WEBSITE2", "arlinks.in") # Shortener website for second website
 
-SHORTENER_API3 = environ.get("SHORTENER_API3", "67953c01ee00c1a64eaa18917d948a57140f1915")  
-SHORTENER_WEBSITE3 = environ.get("SHORTENER_WEBSITE3", "shortxlinks.com") # Shortener website for third website
+SHORTENER_API3 = environ.get("SHORTENER_API3", "c87d7e57386c262af5efeece69d0acd0b071a4cc&url")  
+SHORTENER_WEBSITE3 = environ.get("SHORTENER_WEBSITE3", "linkshortify.com") # Shortener website for third website
 
 TWO_VERIFY_GAP = int(environ.get('TWO_VERIFY_GAP', "1800")) # Time gap for two-step verification in seconds (default: 20 minutes)
 THREE_VERIFY_GAP = int(environ.get('THREE_VERIFY_GAP', "54000"))    
@@ -145,7 +145,7 @@ MAX_LIST_ELM = environ.get("MAX_LIST_ELM", None) # Maximum number of elements in
 INDEX_REQ_CHANNEL = int(environ.get('INDEX_REQ_CHANNEL', LOG_CHANNEL))  # Index Request Channel ID (make sure bot is admin)
 NO_RESULTS_MSG = bool(environ.get("NO_RESULTS_MSG", True))  # True if you want no results messages in Log Channel
 MAX_BTN = is_enabled((environ.get('MAX_BTN', "True")), True)    # Max Button On (True) / Off (False)
-P_TTI_SHOW_OFF = is_enabled((environ.get('P_TTI_SHOW_OFF', "False")), False)    # P_TTI_SHOW_OFF On (True) / Off (False)
+P_TTI_SHOW_OFF = is_enabled((environ.get('P_TTI_SHOW_OFF', "True")), True)    # P_TTI_SHOW_OFF On (True) / Off (False)
 IMDB = is_enabled((environ.get('IMDB', "False")), False)    # IMDB Results On (True) / Off (False)
 AUTO_FFILTER = is_enabled((environ.get('AUTO_FFILTER', "True")), True) # Auto Filter On (True) / Off (False)
 AUTO_DELETE = is_enabled((environ.get('AUTO_DELETE', "True")), True) # Auto Delete On (True) / Off (False)
@@ -154,10 +154,10 @@ SPELL_CHECK_REPLY = is_enabled(environ.get("SPELL_CHECK_REPLY", "True"), True) #
 MELCOW_NEW_USERS = is_enabled((environ.get('MELCOW_NEW_USERS', "False")), False) # Melcow New Users On (True) / Off (False)
 PROTECT_CONTENT = is_enabled((environ.get('PROTECT_CONTENT', "False")), False) # Protect Content On (True) / Off (False)
 PM_SEARCH = bool(environ.get('PM_SEARCH', True))  # PM Search On (True) / Off (False)
-EMOJI_MODE = bool(environ.get('EMOJI_MODE', "False"))  # Emoji status On (True) / Off (False)
+EMOJI_MODE = bool(environ.get('EMOJI_MODE', "False"), False)  # Emoji status On (True) / Off (False)
 BUTTON_MODE = is_enabled((environ.get('BUTTON_MODE', "False")), False) # pm & Group button or link mode (True) / Off (False)
 STREAM_MODE = bool(environ.get('STREAM_MODE', "True")) # Set Stream mode True or False
-PREMIUM_STREAM_MODE = bool(environ.get('PREMIUM_STREAM_MODE', "False")), False # Set Stream mode True or False only for premium users
+PREMIUM_STREAM_MODE = bool(environ.get('PREMIUM_STREAM_MODE', "False"), False), False # Set Stream mode True or False only for premium users
 
 
 # ============================
