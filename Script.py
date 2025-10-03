@@ -9,7 +9,7 @@ class script(object):
 
 <b>ʜᴇʏ {},</b>
 
-<b>🤖 ɪ ᴀᴍ <a href=https://t.me/{}>{}</a>, ᴛʜᴇ ᴍᴏꜱᴛ ᴘᴏᴡᴇʀꜰᴜʟ ᴀᴜᴛᴏ ꜰɪʟᴛᴇʀ ʙᴏᴛ ᴡɪᴛʜ ᴘʀᴇᴍɪᴜᴍ ꜰᴇᴀᴛᴜʀᴇꜱ.</b>"""
+<b>🤖 ɪ ᴀᴍ <a href=https://t.me/{}>{}</a>, ᴛʜᴇ ᴍᴏꜱᴛ ᴘᴏᴡᴇʀꜰᴜʟ ᴀᴜᴛᴏ ꜰɪʟᴛᴇʀ ʙᴏᴛ ᴡɪᴛʜ ᴘʀᴇᴍɪᴜᴍ ꜰᴇᴀᴛᴜʀᴇꜱ. \n<blockquote>🌿 ᴍᴀɪɴᴛᴀɪɴᴇᴅ ʙʏ : 𝐃𝐞𝐯𝐞𝐥𝐨𝐩𝐞𝐫_𝐁𝐨𝐲™(𝓐𝓷𝓴𝓲𝓽_𝓜𝓮𝓮𝓷𝓪😝) </blockquote></b>"""
 
     
     HELP_TXT = """<b>
@@ -214,21 +214,20 @@ Nᴀᴍᴇ : {}
 
 Mᴇꜱꜱᴀɢᴇ : <b>{}</b>"""
     
-    CAPTION = """<b><a href="https://t.me/+MINAQiQyVq8wMWRl">{file_name}</a></b>\n\n<b>⚜️ Powered by 𝖩𝗈𝗂𝗇✅➥ : <a href="https://t.me/+MINAQiQyVq8wMWRl">[ 🔰𝑵𝒆𝒘 𝒎𝒐𝒗𝒊𝒆 & 𝒘𝒆𝒃 𝒔𝒆𝒓𝒊𝒆𝒔🔰 ]</a></b>"""
+    CAPTION = """<b><a href="https://t.me/newmovieswebseries_group">🗃️{file_size}🗃️{file_name}</a></b>\n\n<b>⚜️ Powered by 𝖩𝗈𝗂𝗇✅➥ : <a href="https://t.me/+MINAQiQyVq8wMWRl">[ 🔰𝑵𝒆𝒘 𝒎𝒐𝒗𝒊𝒆 & 𝒘𝒆𝒃 𝒔𝒆𝒓𝒊𝒆𝒔🔰 ]</a></b>"""
 
     
     MOVIE_UPDATE_NOTIFY_TXT = """
-</b> 【𝗧𝗜𝗧𝗟𝗘:- <code>{filename}</code></b>✅】🆕️
+</b> 【<code>{filename}</code></b>✅】🆕️
 
 🎭 Gᴇɴʀᴇs : <b>{genres}</b>
 📺 ᴏᴛᴛ    : <b>{ott}</b>
 🖼️ Pɪxᴇʟs  : <b>{quality}</b>
 🎧 Aᴜᴅɪᴏ   : <b>{language}</b>
 🔥 Rᴀᴛɪɴɢ   : <b>{rating}</b>
-{episodes}
+📢  : {episodes}
 
- 🔍<b>Sᴇᴀʀᴄʜ in</b> {search_link}
-"""
+ \n<blockquote>🌿 Powered by : <a href="https://t.me/+MINAQiQyVq8wMWRl">[🔰𝑵𝒆𝒘 𝒎𝒐𝒗𝒊𝒆 & 𝒘𝒆𝒃 𝒔𝒆𝒓𝒊𝒆𝒔🔰]</a></blockquote></b>"""
 
 
     IMDB_TEMPLATE_TXT = """
