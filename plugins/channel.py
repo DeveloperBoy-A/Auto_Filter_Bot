@@ -321,6 +321,9 @@ async def send_movie_update(bot, base_name):
                 InlineKeyboardButton(
                     '🗃️ ɢᴇᴛ ғɪʟᴇs 🗃️',
                     url=f"https://t.me/{temp.U_NAME}?start=getfile-{base_name.replace(' ', '-')}"
+                ),InlineKeyboardButton(
+                    '♻️How To Download♻️',
+                    url=f"https://t.me/newmovies_support/653"
                 )
             ]])
 
@@ -370,7 +373,10 @@ async def update_movie_message(bot, base_name):
             InlineKeyboardButton(
                 '🗃️ ɢᴇᴛ ғɪʟᴇs 🗃️',
                 url=f"https://t.me/{temp.U_NAME}?start=getfile-{base_name.replace(' ', '-')}"
-            )
+            ),InlineKeyboardButton(
+                    '♻️How To Download♻️',
+                    url=f"https://t.me/newmovies_support/653"
+                )
         ]])
 
         message_id = movie_doc.get("message_id")
