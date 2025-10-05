@@ -319,12 +319,11 @@ async def send_movie_update(bot, base_name):
             text = generate_movie_message(movie_doc, base_name)
             buttons = InlineKeyboardMarkup([[
                 InlineKeyboardButton(
-                    '🗃️ ɢᴇᴛ ғɪʟᴇs 🗃️',
+                    '🗃️ Gᴇᴛ Fɪʟᴇ 🗃️',
                     url=f"https://t.me/{temp.U_NAME}?start=getfile-{base_name.replace(' ', '-')}"
-                ),
-InlineKeyboardButton(
-                    '♻️How To Download♻️',
-                    url=f"https://t.me/newmovies_support/653"
+                )],
+            [
+                InlineKeyboardButton('♻️ Hᴏᴡ Tᴏ Dᴏᴡɴʟᴏᴀᴅ ♻️', url="https://t.me/newmovies_support/653"
                 )
             ]])
 
@@ -371,15 +370,14 @@ async def update_movie_message(bot, base_name):
 
         text = generate_movie_message(movie_doc, base_name)
         buttons = InlineKeyboardMarkup([[
-            InlineKeyboardButton(
-                '🗃️ ɢᴇᴛ ғɪʟᴇs 🗃️',
-                url=f"https://t.me/{temp.U_NAME}?start=getfile-{base_name.replace(' ', '-')}"
-            ),
-InlineKeyboardButton(
-                    '♻️How To Download♻️',
-                    url=f"https://t.me/newmovies_support/653"
+                InlineKeyboardButton(
+                    '🗃️ Gᴇᴛ Fɪʟᴇ 🗃️',
+                    url=f"https://t.me/{temp.U_NAME}?start=getfile-{base_name.replace(' ', '-')}"
+                )],
+            [
+                InlineKeyboardButton('♻️ Hᴏᴡ Tᴏ Dᴏᴡɴʟᴏᴀᴅ ♻️', url="https://t.me/newmovies_support/653"
                 )
-        ]])
+            ]])
 
         message_id = movie_doc.get("message_id")
         is_photo = movie_doc.get("is_photo", False)
