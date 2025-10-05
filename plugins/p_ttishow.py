@@ -13,7 +13,7 @@ import logging
 from time import time
 from bot import botStartTime
 
-"""-----------------------------------------https://t.me/dreamxbotz--------------------------------------"""
+"""-----------------------------------------https://t.me/+MINAQiQyVq8wMWRl--------------------------------------"""
 
 @Client.on_message(filters.new_chat_members & filters.group)
 async def save_group(bot, message):
