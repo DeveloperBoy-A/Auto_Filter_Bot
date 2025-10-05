@@ -126,7 +126,7 @@ def schedule_update(bot, base_name, delay=5):
     if handle := pending_updates.get(base_name):
         if not handle.cancelled():
             handle.cancel()
-    
+
     loop = asyncio.get_event_loop()
     pending_updates[base_name] = loop.call_later(
         delay,
@@ -318,12 +318,9 @@ async def send_movie_update(bot, base_name):
 
             text = generate_movie_message(movie_doc, base_name)
             buttons = InlineKeyboardMarkup([[
-            InlineKeyboardButton(
-                '🗃️ ɢᴇᴛ ғɪʟᴇs 🗃️ ',
-                url=f"https://t.me/{temp.U_NAME}?start=getfile-{base_name.replace(' ', '-')}),
-             InlineKeyboardButton(
-                '♻️How To Download♻️',
-                url=f"https://t.me/newmovies_support/653}"
+                InlineKeyboardButton(
+                    '🗃️ ɢᴇᴛ ғɪʟᴇs 🗃️',
+                    url=f"https://t.me/{temp.U_NAME}?start=getfile-{base_name.replace(' ', '-')}"
                 )
             ]])
 
@@ -371,11 +368,8 @@ async def update_movie_message(bot, base_name):
         text = generate_movie_message(movie_doc, base_name)
         buttons = InlineKeyboardMarkup([[
             InlineKeyboardButton(
-                '🗃️ ɢᴇᴛ ғɪʟᴇs 🗃️ ',
-                url=f"https://t.me/{temp.U_NAME}?start=getfile-{base_name.replace(' ', '-')}),
-             InlineKeyboardButton(
-                '♻️How To Download♻️',
-                url=f"https://t.me/newmovies_support/653}"
+                '🗃️ ɢᴇᴛ ғɪʟᴇs 🗃️',
+                url=f"https://t.me/{temp.U_NAME}?start=getfile-{base_name.replace(' ', '-')}"
             )
         ]])
 
