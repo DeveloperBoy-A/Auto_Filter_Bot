@@ -10,7 +10,7 @@ shortzy
 datetime
 pytz
 aiohttp
-
+pyrogram
 
 
 # Other tools
