@@ -15,8 +15,8 @@
       "index",
       "inline"
     ],
-    "website": "https://github.com/DeveloperBoy-A/Auto_Filter_Bot.git",
-    "repository": "https://github.com/DeveloperBoy-A/Auto_Filter_Bot.git",
+    "website": "https://github.com/DreamXBotz/Auto_Filter_Bot",
+    "repository": "https://github.com/DreamXBotz/Auto_Filter_Bot",
     "env": {
         "BOT_TOKEN": {
             "description": "Your bot token.",
