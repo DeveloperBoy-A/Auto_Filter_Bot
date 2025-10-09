@@ -1,16 +1,8 @@
-FROM python:3.12.2
+    # Example Dockerfile to install ffmpeg on an Ubuntu base image
+    FROM ubuntu:latest
+    RUN apt-get update && apt-get install -y ffmpeg
+    # Add your application code and dependencies here
+    COPY . /app
+    WORKDIR /app
 
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends git && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
-
-WORKDIR /DreamxBotz
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip --root-user-action=ignore && \
-    pip install --no-cache-dir -r requirements.txt --root-user-action=ignore
-
-COPY . .
-
-CMD ["python3", "bot.py"]
+    CMD ["python3 bot.py"] 
