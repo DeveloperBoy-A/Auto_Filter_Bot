@@ -5,7 +5,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DreamXbotz | {{file_name}}</title>
+    <title>𝑵𝒆𝒘 𝒎𝒐𝒗𝒊𝒆 & 𝒘𝒆𝒃 𝒔𝒆𝒓𝒊𝒆𝒔 | {{file_name}}</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -723,12 +723,12 @@
 
     <header class="header">
         <div class="header-content">
-            <a href="https://t.me/dreamxbotz" class="logo">DreamXbotz</a>
+            <a href="https://t.me/+MINAQiQyVq8wMWRl" class="logo">𝑵𝒆𝒘 𝒎𝒐𝒗𝒊𝒆 & 𝒘𝒆𝒃 𝒔𝒆𝒓𝒊𝒆𝒔</a>
 
             <nav class="nav">
                 <a href="#video-section">Stream</a>
                 <a href="#explore-section">Explore</a>
-                <a href="http://t.me/BHARATHboi_bot">Contact</a>
+                <a href="https://t.me/its_ankit_meena907">😎Contact Owner🤞</a>
             </nav>
 
             <button class="mobile-menu-btn" onclick="toggleMobileMenu()">
@@ -739,7 +739,7 @@
         <nav class="mobile-nav" id="mobile-nav">
             <a href="#video-section" onclick="closeMobileMenu()">Stream</a>
             <a href="#explore-section" onclick="closeMobileMenu()">Explore</a>
-            <a href="http://t.me/BHARATHboi_bot" onclick="closeMobileMenu()">Contact</a>
+            <a href="https://t.me/its_ankit_meena907" onclick="closeMobileMenu()">😎Contact Owner🤞</a>
         </nav>
     </header>
 
@@ -748,7 +748,7 @@
             <!-- Coded by @bharath_boy || it's requested not to remove the credit -->
             <section id="video-section" class="video-section">
                 <div class="video-container glass">
-                    <video id="player" playsinline controls data-poster="https://envs.sh/34_.jpg?x=bcb2b992">
+                    <video id="player" playsinline controls data-poster="https://i.ibb.co/PGbSZmXX/photo-2025-10-11-17-47-54-7560022393859604496.jpg">
                         <source src="{{file_url}}" type="video/mp4" />
                     </video>
                 </div>
@@ -816,14 +816,14 @@
                 <div class="cards-container">
                     <div class="info-card glass fade-in">
                         <div class="card-icon">
-                            <img src="https://i.postimg.cc/L546cM3F/erasebg-transformed.png" alt="Channel Logo">
+                            <img src="https://i.ibb.co/PGbSZmXX/photo-2025-10-11-17-47-54-7560022393859604496.jpg" alt="Channel Logo">
                         </div>
                         <h3>Our Channels</h3>
                         <p>Get the latest updates from our main channel for exclusive content and real-time
                             notifications.</p>
                         <div class="card-links">
-                            <a href="https://t.me/Blaze_Updatez" class="card-btn">Join Blaze Updates</a>
-                            <a href="https://t.me/anime_cartoon_stickers" class="card-btn">Anime Stickers</a>
+                            <a href="https://t.me/+MINAQiQyVq8wMWRl" class="card-btn">New Movie Update</a>
+                            <a href="https://t.me/newmovieswebseries_group" class="card-btn">Movie Req Group</a>
                         </div>
                     </div>
 
@@ -835,9 +835,9 @@
                         <p>Interact with our intelligent bots for an enhanced streaming experience and automated
                             assistance.</p>
                         <div class="card-links">
-                            <a href="https://t.me/Blaze_Moviesposter_downloaderbot" class="card-btn">PosterFlix Bot</a>
-                            <a href="https://t.me/video_thumbcover_changerbot" class="card-btn">Thumb Changer</a>
-                            <a href="https://t.me/Blaze_forward_bot" class="card-btn">Forward Bot Pro</a>
+                            <a href="https://t.me/Newmovie_sbot" class="card-btn">Tokyo PrincessBot</a>
+
+                            <a href="https://t.me/DB_FileStorebot" class="card-btn">File Store Bot</a>
                             <!-- <a href="#" class="card-btn">Dummy Bot Button</a> -->
                         </div>
                     </div>
@@ -847,7 +847,7 @@
     </div>
     <!-- Credit @bharath_boy for this markup || do not delete this comment -->
     <footer class="footer">
-        <p>&copy; 2025 <a href="https://t.me/dreamxbotz">DreamXbotz</a>. All Rights Reserved.</p>
+        <p>&copy; 2025 <a href="https://t.me/+MINAQiQyVq8wMWRl">𝑵𝒆𝒘 𝒎𝒐𝒗𝒊𝒆 & 𝒘𝒆𝒃 𝒔𝒆𝒓𝒊𝒆𝒔</a>. All Rights Reserved.</p>
     </footer>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
@@ -1079,7 +1079,7 @@
                     duration: 0.3,
                     y: 20,
                     opacity: 0,
-                    stagger: 0
+                    stagger: 0.1
                 });
             } else {
                 menuBtn.className = 'fas fa-bars';
@@ -1247,8 +1247,9 @@
         };
         const videoUrl = getCurrentUrl();
         const e = videoUrl;
+
         // Credit for this JavaScript goes to @bharath_boy || please do not remove.
-        function vlc_player() { const x = e.replace(/^https?:\/\//, ""); window.location.href = `vlc://${x}`; event.preventDefault(); }
+        function vlc_player() { window.location.href = `vlc://${e}`; event.preventDefault(); }
         function mx_player() { window.location.href = `intent:${e}#Intent;action=android.intent.action.VIEW;type=video/*;package=com.mxtech.videoplayer.ad;end`; event.preventDefault(); }
         function mx_playerpro() { window.location.href = `intent:${e}#Intent;action=android.intent.action.VIEW;type=video/*;package=com.mxtech.videoplayer.pro;end`; event.preventDefault(); }
         function playit_player() { window.location.href = `playit://playerv2/video?url=${e}`; event.preventDefault(); }
