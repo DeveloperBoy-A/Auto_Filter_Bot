@@ -1,11 +1,10 @@
 import time
 import asyncio
-import logging
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 from database.users_chats_db import db
 from info import ADMINS
-from utils import users_broadcast, groups_broadcast, temp, get_readable_time
+from utils import temp, get_readable_time
 
 lock = asyncio.Lock()
 
@@ -27,6 +26,37 @@ async def broadcast_cancel(bot, query):
     elif target == 'groups':
         temp.B_GROUPS_CANCEL = True
         await query.message.edit("🛑 Trying to cancel groups broadcasting...")
+
+# ----------------- Helper: Send message -----------------
+async def send_message(bot, chat_id, reply_msg, pin=False):
+    try:
+        sent = None
+        if reply_msg.text:
+            sent = await bot.send_message(chat_id=chat_id, text=reply_msg.text)
+        elif reply_msg.photo:
+            sent = await bot.send_photo(chat_id=chat_id, photo=reply_msg.photo.file_id, caption=reply_msg.caption)
+        elif reply_msg.video:
+            sent = await bot.send_video(chat_id=chat_id, video=reply_msg.video.file_id, caption=reply_msg.caption)
+        elif reply_msg.document:
+            sent = await bot.send_document(chat_id=chat_id, document=reply_msg.document.file_id, caption=reply_msg.caption)
+        else:
+            return None, "Error"
+
+        if pin:
+            try:
+                await sent.pin()
+            except:
+                pass
+        return sent, "Success"
+
+    except Exception as e:
+        err = str(e).lower()
+        if "blocked" in err:
+            return None, "Blocked"
+        elif "chat not found" in err or "deleted" in err:
+            return None, "Deleted"
+        else:
+            return None, "Error"
 
 # ----------------- User Broadcast -----------------
 @Client.on_message(filters.command("broadcast") & filters.user(ADMINS) & filters.reply)
@@ -69,31 +99,24 @@ async def broadcast_users(bot, message):
     cancelled = False
 
     async def send(user):
-        try:
-            sent_msg, result = await users_broadcast(int(user["id"]), b_msg, is_pin)
-            if sent_msg and auto_delete_time > 0:
-                asyncio.create_task(auto_delete(sent_msg, auto_delete_time))
-            return result
-        except Exception:
-            return "Error"
+        sent_msg, result = await send_message(bot, int(user["id"]), b_msg, is_pin)
+        if sent_msg and auto_delete_time > 0:
+            asyncio.create_task(auto_delete(sent_msg, auto_delete_time))
+        return result
 
     async with lock:
-        for i in range(0, total_users, 100):
+        for i in range(0, total_users, 50):  # batching
             if temp.B_USERS_CANCEL:
                 temp.B_USERS_CANCEL = False
                 cancelled = True
                 break
-            batch = users[i:i + 100]
+            batch = users[i:i + 50]
             results = await asyncio.gather(*[send(user) for user in batch])
             for res in results:
-                if res == "Success":
-                    success += 1
-                elif res == "Blocked":
-                    blocked += 1
-                elif res == "Deleted":
-                    deleted += 1
-                elif res == "Error":
-                    failed += 1
+                if res == "Success": success += 1
+                elif res == "Blocked": blocked += 1
+                elif res == "Deleted": deleted += 1
+                elif res == "Error": failed += 1
             done = i + len(batch)
             elapsed = get_readable_time(time.time() - start_time)
             await status_msg.edit(
@@ -105,11 +128,9 @@ async def broadcast_users(bot, message):
                 f"🗑️ Deleted: <code>{deleted}</code>\n"
                 f"❌ Failed: <code>{failed}</code>\n"
                 f"⏱️ Time: {elapsed}",
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("❌ CANCEL", callback_data="broadcast_cancel#users")]
-                ])
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ CANCEL", callback_data="broadcast_cancel#users")]])
             )
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.2)
 
     elapsed = get_readable_time(time.time() - start_time)
     final_status = (
@@ -164,23 +185,21 @@ async def broadcast_group(bot, message):
                 temp.B_GROUPS_CANCEL = False
                 cancelled = True
                 break
-            try:
-                sent_msg = await groups_broadcast(int(chat['id']), b_msg, is_pin)
-                if sent_msg and auto_delete_time > 0:
-                    asyncio.create_task(auto_delete(sent_msg, auto_delete_time))
-                success += 1
-            except Exception:
-                failed += 1
+            sent_msg, result = await send_message(bot, int(chat["id"]), b_msg, is_pin)
+            if sent_msg and auto_delete_time > 0:
+                asyncio.create_task(auto_delete(sent_msg, auto_delete_time))
+            if result == "Success": success += 1
+            else: failed += 1
             done += 1
+
             if done % 10 == 0:
-                btn = [[InlineKeyboardButton("❌ CANCEL", callback_data="broadcast_cancel#groups")]]
                 await status_msg.edit(
                     f"📣 <b>Group broadcast progress:</b>\n\n"
                     f"👥 Total Groups: <code>{total_chats}</code>\n"
                     f"✅ Completed: <code>{done} / {total_chats}</code>\n"
                     f"📬 Success: <code>{success}</code>\n"
                     f"❌ Failed: <code>{failed}</code>",
-                    reply_markup=InlineKeyboardMarkup(btn)
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ CANCEL", callback_data="broadcast_cancel#groups")]])
                 )
 
     elapsed = get_readable_time(time.time() - start_time)
