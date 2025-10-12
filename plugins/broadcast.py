@@ -223,15 +223,14 @@ async def broadcast_group(bot, message):
 
             if done % 10 == 0:
                 await status_msg.edit(
-                    f"📣 <b>Group broadcast progress:</b>\n\n"
-                    f"👥 Total Groups: <code>{total_chats}</code>\n"
-                    f"✅ Completed: <code>{done} / {total_chats}</code>\n"
-                    f"📬 Success: <code>{success}</code>\n"
-                    f"❌ Failed: <code>{failed}</code>\n\n"
-                    f"🌿<blockquote> Maintained by :【𝐃𝐞𝐯𝐞𝐥𝐨𝐩𝐞𝐫_𝐁𝐨𝐲™(𝓐𝓷𝓴𝓲𝓽_𝓜𝓮𝓮𝓷𝓪😝)】</blockquote>"
-                ),
-                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ CANCEL", callback_data="broadcast_cancel#groups")]])
-                )
+    f"📣 <b>Group broadcast progress:</b>\n\n"
+    f"👥 Total Groups: <code>{total_chats}</code>\n"
+    f"✅ Completed: <code>{done} / {total_chats}</code>\n"
+    f"📬 Success: <code>{success}</code>\n"
+    f"❌ Failed: <code>{failed}</code>\n\n"
+    f"🌿<blockquote> Maintained by :【𝐃𝐞𝐯𝐞𝐥𝐨𝐩𝐞𝐫_𝐁𝐨𝐲™(𝓐𝓷𝓴𝓲𝓽_𝓜𝓮𝓮𝓷𝓪😝)】</blockquote>",
+    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ CANCEL", callback_data="broadcast_cancel#groups")]])
+)
 
     elapsed = get_readable_time(time.time() - start_time)
     final_text = (
