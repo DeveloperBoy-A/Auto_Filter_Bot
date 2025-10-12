@@ -103,45 +103,47 @@ async def is_check_admin(bot, chat_id, user_id):
     except:
         return False
     
-async def users_broadcast(user_id, message, is_pin):
-    try:
-        m=await message.copy(chat_id=user_id)
-        if is_pin:
-            await m.pin(both_sides=True)
-        return True, "Success"
-    except FloodWait as e:
-        await asyncio.sleep(e.x)
-        return await users_broadcast(user_id, message)
-    except InputUserDeactivated:
-        await db.delete_user(int(user_id))
-        logging.info(f"{user_id}-Removed from Database, since deleted account.")
-        return False, "Deleted"
-    except UserIsBlocked:
-        logging.info(f"{user_id} -Blocked the bot.")
-        await db.delete_user(user_id)
-        return False, "Blocked"
-    except PeerIdInvalid:
-        await db.delete_user(int(user_id))
-        logging.info(f"{user_id} - PeerIdInvalid")
-        return False, "Error"
-    except Exception as e:
-        return False, "Error"
+from pyrogram import Client
 
-async def groups_broadcast(chat_id, message, is_pin):
+# Users broadcast
+async def users_broadcast(user_id, message, is_pin=False):
     try:
-        m = await message.copy(chat_id=chat_id)
+        sent_msg = await Client.copy_message(
+            chat_id=user_id,
+            from_chat_id=message.chat.id,
+            message_id=message.id
+        )
         if is_pin:
             try:
-                await m.pin()
+                await sent_msg.pin()
             except:
                 pass
-        return "Success"
-    except FloodWait as e:
-        await asyncio.sleep(e.x)
-        return await groups_broadcast(chat_id, message)
+        return sent_msg, "Success"
     except Exception as e:
-        await db.delete_chat(chat_id)
-        return "Error"
+        if "USER_IS_BLOCKED" in str(e):
+            return None, "Blocked"
+        elif "PEER_ID_INVALID" in str(e) or "MESSAGE_ID_INVALID" in str(e):
+            return None, "Deleted"
+        else:
+            return None, "Error"
+
+# Groups broadcast
+async def groups_broadcast(chat_id, message, is_pin=False):
+    try:
+        sent_msg = await Client.copy_message(
+            chat_id=chat_id,
+            from_chat_id=message.chat.id,
+            message_id=message.id
+        )
+        if is_pin:
+            try:
+                await sent_msg.pin()
+            except:
+                pass
+        return sent_msg
+    except Exception as e:
+        print(f"Error sending to group {chat_id}: {e}")
+        return None
 
 async def junk_group(chat_id, message):
     try:
@@ -794,7 +796,7 @@ async def get_cap(settings, remaining_seconds, files, query, total_results, sear
                         f"🧱 ᴛᴏᴛᴀʟ ꜰɪʟᴇꜱ : <code>{total_results}</code>\n"
                         f"⏰ ʀᴇsᴜʟᴛ ɪɴ : <code>{remaining_seconds} Sᴇᴄᴏɴᴅs</code>\n\n"
                         f"📝 ʀᴇǫᴜᴇsᴛᴇᴅ ʙʏ : {query.from_user.mention}\n"
-                        f"<blockquote>🌿 ᴍᴀɪɴᴛᴀɪɴᴇᴅ ʙʏ : 𝐃𝐞𝐯𝐞𝐥𝐨𝐩𝐞𝐫_𝐁𝐨𝐲™(𝓐𝓷𝓴𝓲𝓽_𝓜𝓮𝓮𝓷𝓪😝)</a></blockquote>\n</b>"
+                        f"<blockquote>🌿 ᴍᴀɪɴᴛᴀɪɴᴇᴅ ʙʏ : 𝐃𝐞𝐯𝐞𝐥𝐨𝐩𝐞𝐫_𝐁𝐨𝐲™(𝓐𝓷𝓴𝓲𝓽_𝓜𝓮𝓮𝓷𝓪😝)</blockquote>\n</b>"
                     )
                     cap += "\n\n🧾 <u>Your Requested Files Are Here</u> 👇 👇\n\n</b>"
                     for idx, file in enumerate(files, start=offset + 1):
@@ -812,7 +814,7 @@ async def get_cap(settings, remaining_seconds, files, query, total_results, sear
                 f"<b>🏷 ᴛɪᴛʟᴇ : <code>{search}</code>\n"
                 f"🧱 ᴛᴏᴛᴀʟ ꜰɪʟᴇꜱ : <code>{total_results}</code>\n\n"
                 f"📝 ʀᴇǫᴜᴇsᴛᴇᴅ ʙʏ : {query.from_user.mention}\n"
-                f"<blockquote>🌿 ᴍᴀɪɴᴛᴀɪɴᴇᴅ ʙʏ : 𝐃𝐞𝐯𝐞𝐥𝐨𝐩𝐞𝐫_𝐁𝐨𝐲™(𝓐𝓷𝓴𝓲𝓽_𝓜𝓮𝓮𝓷𝓪😝)</a></blockquote>\n</b>"
+                f"<blockquote>🌿 ᴍᴀɪɴᴛᴀɪɴᴇᴅ ʙʏ : 𝐃𝐞𝐯𝐞𝐥𝐨𝐩𝐞𝐫_𝐁𝐨𝐲™(𝓐𝓷𝓴𝓲𝓽_𝓜𝓮𝓮𝓷𝓪😝)</blockquote>\n</b>"
             )
             cap += "\n\n🧾 <u>Your Requested Files Are Here</u> 👇\n\n</b>"
             for idx, file in enumerate(files, start=offset):
