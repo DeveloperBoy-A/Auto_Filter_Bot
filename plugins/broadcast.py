@@ -13,8 +13,19 @@ async def auto_delete(msg, delay):
     await asyncio.sleep(delay)
     try:
         await msg.delete()
-    except Exception:
+    except:
         pass
+
+# ----------------- Track last broadcast messages -----------------
+temp.LAST_USER_BROADCAST = []
+temp.LAST_GROUP_BROADCAST = []
+
+async def track_message(sent_msg, target="user"):
+    if sent_msg:
+        if target == "user":
+            temp.LAST_USER_BROADCAST.append(sent_msg)
+        elif target == "group":
+            temp.LAST_GROUP_BROADCAST.append(sent_msg)
 
 # ----------------- Cancel Callback -----------------
 @Client.on_callback_query(filters.regex(r'^broadcast_cancel'))
@@ -30,21 +41,23 @@ async def broadcast_cancel(bot, query):
 # ----------------- Helper: Send message -----------------
 async def send_message(bot, chat_id, reply_msg, pin=False):
     try:
+        reply_markup = reply_msg.reply_markup  # keep original buttons
         sent = None
+
         if reply_msg.text:
-            sent = await bot.send_message(chat_id=chat_id, text=reply_msg.text)
+            sent = await bot.send_message(chat_id=chat_id, text=reply_msg.text, reply_markup=reply_markup)
         elif reply_msg.photo:
-            sent = await bot.send_photo(chat_id=chat_id, photo=reply_msg.photo.file_id, caption=reply_msg.caption)
+            sent = await bot.send_photo(chat_id=chat_id, photo=reply_msg.photo.file_id, caption=reply_msg.caption, reply_markup=reply_markup)
         elif reply_msg.video:
-            sent = await bot.send_video(chat_id=chat_id, video=reply_msg.video.file_id, caption=reply_msg.caption)
+            sent = await bot.send_video(chat_id=chat_id, video=reply_msg.video.file_id, caption=reply_msg.caption, reply_markup=reply_markup)
         elif reply_msg.document:
-            sent = await bot.send_document(chat_id=chat_id, document=reply_msg.document.file_id, caption=reply_msg.caption)
+            sent = await bot.send_document(chat_id=chat_id, document=reply_msg.document.file_id, caption=reply_msg.caption, reply_markup=reply_markup)
         else:
             return None, "Error"
 
         if pin:
             try:
-                await sent.pin()
+                await sent.pin(disable_notification=True)
             except:
                 pass
         return sent, "Success"
@@ -64,7 +77,7 @@ async def broadcast_users(bot, message):
     if lock.locked():
         return await message.reply("⚠️ Another broadcast is in progress. Please wait...")
 
-    # Ask for pin
+    # Pin question
     ask = await message.reply(
         "<b>Do you want to pin this message in users?</b>",
         reply_markup=ReplyKeyboardMarkup([["Yes", "No"]], one_time_keyboard=True, resize_keyboard=True)
@@ -75,11 +88,9 @@ async def broadcast_users(bot, message):
         await ask.delete()
         return await message.reply("❌ Timed out. Broadcast cancelled.")
     await ask.delete()
-    if user_response.text not in ("Yes", "No"):
-        return await message.reply("❌ Invalid input. Broadcast cancelled.")
     is_pin = user_response.text == "Yes"
 
-    # Ask auto-delete time
+    # Auto-delete
     ask_time = await message.reply("<b>Enter auto-delete time in seconds (0 to disable auto-delete):</b>")
     try:
         time_response = await bot.listen(chat_id=message.chat.id, user_id=message.from_user.id, timeout=60)
@@ -100,12 +111,13 @@ async def broadcast_users(bot, message):
 
     async def send(user):
         sent_msg, result = await send_message(bot, int(user["id"]), b_msg, is_pin)
+        await track_message(sent_msg, "user")
         if sent_msg and auto_delete_time > 0:
             asyncio.create_task(auto_delete(sent_msg, auto_delete_time))
         return result
 
     async with lock:
-        for i in range(0, total_users, 50):  # batching
+        for i in range(0, total_users, 50):
             if temp.B_USERS_CANCEL:
                 temp.B_USERS_CANCEL = False
                 cancelled = True
@@ -157,8 +169,6 @@ async def broadcast_group(bot, message):
         await ask.delete()
         return await message.reply("❌ Timed out. Broadcast cancelled.")
     await ask.delete()
-    if user_response.text not in ("Yes", "No"):
-        return await message.reply("❌ Invalid input. Broadcast cancelled.")
     is_pin = user_response.text == "Yes"
 
     ask_time = await message.reply("<b>Enter auto-delete time in seconds (0 to disable auto-delete):</b>")
@@ -186,6 +196,7 @@ async def broadcast_group(bot, message):
                 cancelled = True
                 break
             sent_msg, result = await send_message(bot, int(chat["id"]), b_msg, is_pin)
+            await track_message(sent_msg, "group")
             if sent_msg and auto_delete_time > 0:
                 asyncio.create_task(auto_delete(sent_msg, auto_delete_time))
             if result == "Success": success += 1
@@ -212,31 +223,31 @@ async def broadcast_group(bot, message):
     )
     await status_msg.edit(final_text)
 
-# ----------------- Manual Delete -----------------
+# ----------------- Delete last broadcast -----------------
 @Client.on_message(filters.command("del_broadcast") & filters.user(ADMINS))
-async def del_broadcast(bot, message):
-    if len(message.command) < 2:
-        return await message.reply("⚙️ Usage: `/del_broadcast <message_id>`")
-    try:
-        msg_id = int(message.command[1])
-        await bot.delete_messages(chat_id=message.chat.id, message_ids=msg_id)
-        await message.reply("🗑️ Broadcast deleted successfully.")
-    except Exception as e:
-        if "MESSAGE_DELETE_FORBIDDEN" in str(e):
-            await message.reply("❌ Cannot delete this message: Bot has no permission or didn't send this message.")
-        else:
-            await message.reply(f"❌ Error: {e}")
+async def del_last_user_broadcast(bot, message):
+    if not temp.LAST_USER_BROADCAST:
+        return await message.reply("⚠️ No user broadcast messages to delete.")
+    count = 0
+    for msg in temp.LAST_USER_BROADCAST:
+        try:
+            await msg.delete()
+            count += 1
+        except:
+            pass
+    temp.LAST_USER_BROADCAST.clear()
+    await message.reply(f"🗑️ Deleted {count} user broadcast messages successfully.")
 
 @Client.on_message(filters.command("del_grp_broadcast") & filters.user(ADMINS))
-async def del_grp_broadcast(bot, message):
-    if len(message.command) < 2:
-        return await message.reply("⚙️ Usage: `/del_grp_broadcast <message_id>`")
-    try:
-        msg_id = int(message.command[1])
-        await bot.delete_messages(chat_id=message.chat.id, message_ids=msg_id)
-        await message.reply("🗑️ Group broadcast deleted successfully.")
-    except Exception as e:
-        if "MESSAGE_DELETE_FORBIDDEN" in str(e):
-            await message.reply("❌ Cannot delete this message: Bot has no permission or didn't send this message.")
-        else:
-            await message.reply(f"❌ Error: {e}")
+async def del_last_group_broadcast(bot, message):
+    if not temp.LAST_GROUP_BROADCAST:
+        return await message.reply("⚠️ No group broadcast messages to delete.")
+    count = 0
+    for msg in temp.LAST_GROUP_BROADCAST:
+        try:
+            await msg.delete()
+            count += 1
+        except:
+            pass
+    temp.LAST_GROUP_BROADCAST.clear()
+    await message.reply(f"🗑️ Deleted {count} group broadcast messages successfully.")
