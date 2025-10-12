@@ -1,10 +1,10 @@
-import time, asyncio, logging, datetime
+import time, asyncio, logging
 from pyrogram import Client, filters
 from pyrogram.errors import MessageTooLong
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 from database.users_chats_db import db
 from info import ADMINS
-from utils import users_broadcast, groups_broadcast, temp, get_readable_time, clear_junk, junk_group
+from utils import users_broadcast, groups_broadcast, temp, get_readable_time
 
 lock = asyncio.Lock()
 
@@ -71,7 +71,7 @@ async def broadcast_users(bot, message):
     async def send(user):
         try:
             sent_msg, result = await users_broadcast(int(user["id"]), b_msg, is_pin)
-            if auto_delete_time > 0:
+            if sent_msg and auto_delete_time > 0:
                 asyncio.create_task(auto_delete(sent_msg, auto_delete_time))
             return result
         except Exception:
@@ -143,7 +143,6 @@ async def broadcast_group(bot, message):
 
     is_pin = user_response.text == "Yes"
 
-    # Ask auto-delete time
     ask_time = await message.reply("<b>Enter auto-delete time in seconds (0 to disable auto-delete):</b>")
     try:
         time_response = await bot.listen(chat_id=message.chat.id, user_id=message.from_user.id, timeout=60)
@@ -170,14 +169,11 @@ async def broadcast_group(bot, message):
                 break
             try:
                 sent_msg = await groups_broadcast(int(chat['id']), b_msg, is_pin)
-                if auto_delete_time > 0:
+                if sent_msg and auto_delete_time > 0:
                     asyncio.create_task(auto_delete(sent_msg, auto_delete_time))
-            except Exception as e:
-                logging.exception(f"Error broadcasting to group {chat['id']}")
+                success += 1
+            except:
                 failed += 1
-                continue
-
-            success += 1
             done += 1
 
             if done % 10 == 0:
@@ -201,11 +197,31 @@ async def broadcast_group(bot, message):
     )
     await status_msg.edit(final_text)
 
-# ----------------- Manual Delete Commands -----------------
+# ----------------- Manual Delete -----------------
 @Client.on_message(filters.command("del_broadcast") & filters.user(ADMINS))
 async def del_broadcast(bot, message):
     if len(message.command) < 2:
         return await message.reply("⚙️ Usage: `/del_broadcast <message_id>`")
     try:
         msg_id = int(message.command[1])
-        await bot
+        await bot.delete_messages(chat_id=message.chat.id, message_ids=msg_id)
+        await message.reply("🗑️ Broadcast deleted successfully.")
+    except Exception as e:
+        if "MESSAGE_DELETE_FORBIDDEN" in str(e):
+            await message.reply("❌ Cannot delete this message: Bot has no permission or didn't send this message.")
+        else:
+            await message.reply(f"❌ Error: {e}")
+
+@Client.on_message(filters.command("del_grp_broadcast") & filters.user(ADMINS))
+async def del_grp_broadcast(bot, message):
+    if len(message.command) < 2:
+        return await message.reply("⚙️ Usage: `/del_grp_broadcast <message_id>`")
+    try:
+        msg_id = int(message.command[1])
+        await bot.delete_messages(chat_id=message.chat.id, message_ids=msg_id)
+        await message.reply("🗑️ Group broadcast deleted successfully.")
+    except Exception as e:
+        if "MESSAGE_DELETE_FORBIDDEN" in str(e):
+            await message.reply("❌ Cannot delete this message: Bot has no permission or didn't send this message.")
+        else:
+            await message.reply(f"❌ Error: {e}")
