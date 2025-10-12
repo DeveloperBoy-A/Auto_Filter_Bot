@@ -1,3 +1,5 @@
+#this code is developed by 【𝐃𝐞𝐯𝐞𝐥𝐨𝐩𝐞𝐫_𝐁𝐨𝐲™(𝓐𝓷𝓴𝓲𝓽_𝓜𝓮𝓮𝓷𝓪😝)】
+# Don't remove the my credit please 🙏
 import time
 import asyncio
 from pyrogram import Client, filters
@@ -9,6 +11,8 @@ from utils import temp, get_readable_time
 lock = asyncio.Lock()
 
 # ----------------- Helper: Auto-delete -----------------
+#This feature is developed by 【𝐃𝐞𝐯𝐞𝐥𝐨𝐩𝐞𝐫_𝐁𝐨𝐲™(𝓐𝓷𝓴𝓲𝓽_𝓜𝓮𝓮𝓷𝓪😝)】
+# Don't remove the my credit please 🙏
 async def auto_delete(msg, delay):
     await asyncio.sleep(delay)
     try:
@@ -17,6 +21,8 @@ async def auto_delete(msg, delay):
         pass
 
 # ----------------- Track last broadcast messages -----------------
+#this code is developed by 【𝐃𝐞𝐯𝐞𝐥𝐨𝐩𝐞𝐫_𝐁𝐨𝐲™(𝓐𝓷𝓴𝓲𝓽_𝓜𝓮𝓮𝓷𝓪😝)】
+# Don't remove the my credit please 🙏
 temp.LAST_USER_BROADCAST = []
 temp.LAST_GROUP_BROADCAST = []
 
@@ -28,6 +34,8 @@ async def track_message(sent_msg, target="user"):
             temp.LAST_GROUP_BROADCAST.append(sent_msg)
 
 # ----------------- Cancel Callback -----------------
+#this code is developed by 【𝐃𝐞𝐯𝐞𝐥𝐨𝐩𝐞𝐫_𝐁𝐨𝐲™(𝓐𝓷𝓴𝓲𝓽_𝓜𝓮𝓮𝓷𝓪😝)】
+# Don't remove the my credit please 🙏
 @Client.on_callback_query(filters.regex(r'^broadcast_cancel'))
 async def broadcast_cancel(bot, query):
     _, target = query.data.split("#", 1)
@@ -39,6 +47,8 @@ async def broadcast_cancel(bot, query):
         await query.message.edit("🛑 Trying to cancel groups broadcasting...")
 
 # ----------------- Helper: Send message -----------------
+#this code is developed by 【𝐃𝐞𝐯𝐞𝐥𝐨𝐩𝐞𝐫_𝐁𝐨𝐲™(𝓐𝓷𝓴𝓲𝓽_𝓜𝓮𝓮𝓷𝓪😝)】
+# Don't remove the my credit please 🙏
 async def send_message(bot, chat_id, reply_msg, pin=False):
     try:
         reply_markup = reply_msg.reply_markup  # keep original buttons
@@ -72,12 +82,16 @@ async def send_message(bot, chat_id, reply_msg, pin=False):
             return None, "Error"
 
 # ----------------- User Broadcast -----------------
+##This feature is developed by 【𝐃𝐞𝐯𝐞𝐥𝐨𝐩𝐞𝐫_𝐁𝐨𝐲™(𝓐𝓷𝓴𝓲𝓽_𝓜𝓮𝓮𝓷𝓪😝)】
+# Don't remove the my credit please 🙏
 @Client.on_message(filters.command("broadcast") & filters.user(ADMINS) & filters.reply)
 async def broadcast_users(bot, message):
     if lock.locked():
         return await message.reply("⚠️ Another broadcast is in progress. Please wait...")
 
     # Pin question
+    #this code is developed by 【𝐃𝐞𝐯𝐞𝐥𝐨𝐩𝐞𝐫_𝐁𝐨𝐲™(𝓐𝓷𝓴𝓲𝓽_𝓜𝓮𝓮𝓷𝓪😝)】
+# Don't remove the my credit please 🙏
     ask = await message.reply(
         "<b>Do you want to pin this message in users?</b>",
         reply_markup=ReplyKeyboardMarkup([["Yes", "No"]], one_time_keyboard=True, resize_keyboard=True)
@@ -90,7 +104,8 @@ async def broadcast_users(bot, message):
     await ask.delete()
     is_pin = user_response.text == "Yes"
 
-    # Auto-delete
+    # Auto-delete feature is developed by 【𝐃𝐞𝐯𝐞𝐥𝐨𝐩𝐞𝐫_𝐁𝐨𝐲™(𝓐𝓷𝓴𝓲𝓽_𝓜𝓮𝓮𝓷𝓪😝)】
+# Don't remove the my credit please 🙏
     ask_time = await message.reply("<b>Enter auto-delete time in seconds (0 to disable auto-delete):</b>")
     try:
         time_response = await bot.listen(chat_id=message.chat.id, user_id=message.from_user.id, timeout=60)
@@ -152,11 +167,14 @@ async def broadcast_users(bot, message):
         f"📬 Success: <code>{success}</code>\n"
         f"⛔ Blocked: <code>{blocked}</code>\n"
         f"🗑️ Deleted: <code>{deleted}</code>\n"
-        f"❌ Failed: <code>{failed}</code>"
+        f"❌ Failed: <code>{failed}</code>\n\n"
+        f"🌿<blockquote> Maintained by :【𝐃𝐞𝐯𝐞𝐥𝐨𝐩𝐞𝐫_𝐁𝐨𝐲™(𝓐𝓷𝓴𝓲𝓽_𝓜𝓮𝓮𝓷𝓪😝)】</blockquote>"
     )
     await status_msg.edit(final_status)
 
 # ----------------- Group Broadcast -----------------
+          #This feature is developed by 【𝐃𝐞𝐯𝐞𝐥𝐨𝐩𝐞𝐫_𝐁𝐨𝐲™(𝓐𝓷𝓴𝓲𝓽_𝓜𝓮𝓮𝓷𝓪😝)】
+# Don't remove the my credit please 🙏
 @Client.on_message(filters.command("grp_broadcast") & filters.user(ADMINS) & filters.reply)
 async def broadcast_group(bot, message):
     ask = await message.reply(
@@ -209,7 +227,9 @@ async def broadcast_group(bot, message):
                     f"👥 Total Groups: <code>{total_chats}</code>\n"
                     f"✅ Completed: <code>{done} / {total_chats}</code>\n"
                     f"📬 Success: <code>{success}</code>\n"
-                    f"❌ Failed: <code>{failed}</code>",
+                    f"❌ Failed: <code>{failed}</code>\n\n"
+                    f"🌿<blockquote> Maintained by :【𝐃𝐞𝐯𝐞𝐥𝐨𝐩𝐞𝐫_𝐁𝐨𝐲™(𝓐𝓷𝓴𝓲𝓽_𝓜𝓮𝓮𝓷𝓪😝)】</blockquote>"
+                ),
                     reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ CANCEL", callback_data="broadcast_cancel#groups")]])
                 )
 
@@ -219,11 +239,14 @@ async def broadcast_group(bot, message):
         f"⏱️ Completed in {elapsed}\n"
         f"👥 Total Groups: <code>{total_chats}</code>\n"
         f"📬 Success: <code>{success}</code>\n"
-        f"❌ Failed: <code>{failed}</code>"
+        f"❌ Failed: <code>{failed}</code>\n\n"
+        f"🌿<blockquote> Maintained by :【𝐃𝐞𝐯𝐞𝐥𝐨𝐩𝐞𝐫_𝐁𝐨𝐲™(𝓐𝓷𝓴𝓲𝓽_𝓜𝓮𝓮𝓷𝓪😝)】</blockquote>"
     )
     await status_msg.edit(final_text)
 
 # ----------------- Delete last broadcast -----------------
+#This feature is developed by 【𝐃𝐞𝐯𝐞𝐥𝐨𝐩𝐞𝐫_𝐁𝐨𝐲™(𝓐𝓷𝓴𝓲𝓽_𝓜𝓮𝓮𝓷𝓪😝)】
+# Don't remove the my credit please 🙏
 @Client.on_message(filters.command("del_broadcast") & filters.user(ADMINS))
 async def del_last_user_broadcast(bot, message):
     if not temp.LAST_USER_BROADCAST:
@@ -251,3 +274,6 @@ async def del_last_group_broadcast(bot, message):
             pass
     temp.LAST_GROUP_BROADCAST.clear()
     await message.reply(f"🗑️ Deleted {count} group broadcast messages successfully.")
+#_________________________End of the broadcast code____________________#
+##this code is developed by 【𝐃𝐞𝐯𝐞𝐥𝐨𝐩𝐞𝐫_𝐁𝐨𝐲™(𝓐𝓷𝓴𝓲𝓽_𝓜𝓮𝓮𝓷𝓪😝)】
+# Don't remove the my credit please 🙏 Thanks 👍 
