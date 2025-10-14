@@ -1,13 +1,11 @@
-import time
-from pyrogram.errors import FloodWait
-botStartTime = time.time()
-import os
 import sys
 import glob
 import importlib
 from pathlib import Path
-from pyrogram import idle, __version__
+from pyrogram import Client, idle, __version__
 from pyrogram.raw.all import layer
+import time
+from pyrogram.errors import FloodWait
 import asyncio
 from datetime import date, datetime
 import pytz
@@ -22,136 +20,82 @@ from dreamxbotz.Bot import dreamxbotz
 from dreamxbotz.util.keepalive import ping_server
 from dreamxbotz.Bot.clients import initialize_clients
 from PIL import Image
-import logging
-import logging.config
-import traceback
-
-# Use uvloop for faster async performance
-try:
-    import uvloop
-    asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-except ImportError:
-    pass  # uvloop optional
-
 Image.MAX_IMAGE_PIXELS = 500_000_000
 
-# ----------------- Logging -----------------
+import logging
+import logging.config
+
 logging.config.fileConfig('logging.conf')
-logging.getLogger().setLevel(logging.WARNING)
+logging.getLogger().setLevel(logging.INFO)
 logging.getLogger("pyrogram").setLevel(logging.ERROR)
 logging.getLogger("imdbpy").setLevel(logging.ERROR)
 logging.getLogger("aiohttp").setLevel(logging.ERROR)
 logging.getLogger("aiohttp.web").setLevel(logging.ERROR)
 logging.getLogger("pymongo").setLevel(logging.WARNING)
 
-# ----------------- Plugin loader -----------------
-PLUGIN_FILES = tuple(glob.glob("plugins/*.py"))
+botStartTime = time.time()
+ppath = "plugins/*.py"
+files = glob.glob(ppath)
 
-# ----------------- Global loop -----------------
-loop = asyncio.get_event_loop()
-
-# ----------------- Exception handler -----------------
-def handle_exception(loop, context):
-    msg = context.get("exception", context.get("message", "Unknown"))
-    print(f"[Caught Exception] {msg}")
-    if isinstance(msg, BaseException):
-        traceback.print_exc()
-
-loop.set_exception_handler(handle_exception)
-
-# ----------------- Async keep-alive -----------------
-async def async_keep_alive_ping():
-    url = os.environ.get("KOYEB_APP_URL")
-    if not url:
-        return
-    import aiohttp
-    timeout = aiohttp.ClientTimeout(total=10)
-    async with aiohttp.ClientSession(timeout=timeout) as session:
-        while True:
-            try:
-                await session.get(url)
-            except Exception:
-                pass
-            await asyncio.sleep(300)  # 5 min ping
-
-# ----------------- Bot startup -----------------
 async def dreamxbotz_start():
-    print('\n\nInitializing DreamxBotz (optimized uvloop)')
+    print('\n\nInitalizing DreamxBotz')
     await dreamxbotz.start()
-
-    me = await dreamxbotz.get_me()
-    dreamxbotz.username = me.username
-
+    bot_info = await dreamxbotz.get_me()
+    dreamxbotz.username = bot_info.username
     await initialize_clients()
-
-    # Load plugins (import once)
-    for file_path in PLUGIN_FILES:
-        patt = Path(file_path)
-        plugin_name = patt.stem
-        import_path = f"plugins.{plugin_name}"
-        if import_path in sys.modules:
-            continue
-        spec = importlib.util.spec_from_file_location(import_path, patt)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        sys.modules[import_path] = module
-        print("DreamxBotz Imported => " + plugin_name)
-
+    for name in files:
+        with open(name) as a:
+            patt = Path(a.name)
+            plugin_name = patt.stem.replace(".py", "")
+            plugins_dir = Path(f"plugins/{plugin_name}.py")
+            import_path = "plugins.{}".format(plugin_name)
+            spec = importlib.util.spec_from_file_location(import_path, plugins_dir)
+            load = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(load)
+            sys.modules["plugins." + plugin_name] = load
+            print("DreamxBotz Imported => " + plugin_name)
     if ON_HEROKU:
-        asyncio.create_task(ping_server())
-
+        asyncio.create_task(ping_server()) 
     b_users, b_chats = await db.get_banned()
     temp.BANNED_USERS = b_users
     temp.BANNED_CHATS = b_chats
-
     await Media.ensure_indexes()
     if MULTIPLE_DB:
         await Media2.ensure_indexes()
-        print("Multiple DB mode ON")
+        print("Multiple Database Mode On. Now Files Will Be Save In Second DB If First DB Is Full")
     else:
-        print("Single DB mode ON")
-
+        print("Single DB Mode On ! Files Will Be Save In First Database")
+    me = await dreamxbotz.get_me()
     temp.ME = me.id
     temp.U_NAME = me.username
     temp.B_NAME = me.first_name
     temp.B_LINK = me.mention
     dreamxbotz.username = '@' + me.username
-
     dreamxbotz.loop.create_task(check_expired_premium(dreamxbotz))
-
+    logging.info(f"{me.first_name} with Pyrogram v{__version__} (Layer {layer}) started on {me.username}.")
+    logging.info(LOG_STR)
+    logging.info(script.LOGO)
     tz = pytz.timezone('Asia/Kolkata')
     today = date.today()
     now = datetime.now(tz)
-    time_str = now.strftime("%H:%M:%S %p")
-    await dreamxbotz.send_message(chat_id=LOG_CHANNEL, text=script.RESTART_TXT.format(temp.B_LINK, today, time_str))
-
-    # --- aiohttp web server ---
-    runner = web.AppRunner(await web_server())
-    await runner.setup()
+    time = now.strftime("%H:%M:%S %p")
+    await dreamxbotz.send_message(chat_id=LOG_CHANNEL, text=script.RESTART_TXT.format(temp.B_LINK, today, time))
+    app = web.AppRunner(await web_server())
+    await app.setup()
     bind_address = "0.0.0.0"
-    port = int(os.environ.get("PORT", 8080))
-    site = web.TCPSite(runner, bind_address, port)
-    await site.start()
-    print(f"🌐 Web server started on port {port}")
-
-    # --- Non-blocking keep-alive ping ---
-    asyncio.create_task(async_keep_alive_ping())
-
-    # --- Existing keep_alive task ---
+    await web.TCPSite(app, bind_address, PORT).start()
     dreamxbotz.loop.create_task(keep_alive())
-
     await idle()
-    await runner.cleanup()
 
-# ----------------- Entry point -----------------
 if __name__ == '__main__':
-    try:
-        loop.run_until_complete(dreamxbotz_start())
-    except FloodWait as e:
-        print(f"FloodWait! Sleeping for {e.value} seconds.")
-        loop.run_until_complete(asyncio.sleep(e.value))
-    except KeyboardInterrupt:
-        logging.info('Service Stopped Bye 👋')
-    except Exception as e:
-        print(f"[Safeguard] Unexpected exception: {e}")
-        traceback.print_exc()
+    loop = asyncio.get_event_loop()
+    while True:
+        try:
+            loop.run_until_complete(dreamxbotz_start())
+            break  
+        except FloodWait as e:
+            print(f"FloodWait! Sleeping for {e.value} seconds.")
+            time.sleep(e.value) 
+        except KeyboardInterrupt:
+            logging.info('Service Stopped Bye 👋')
+            break
