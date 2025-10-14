@@ -1,6 +1,6 @@
 import time
 import asyncio
-from pyrogram import Client, filters
+from pyrogram import filters, Client
 import platform
 import os
 import shutil
@@ -10,24 +10,35 @@ from info import ADMINS, Bot_cmds
 
 logging.basicConfig(level=logging.INFO)
 
+# ---------------- Helper: non-blocking delete ----------------
+async def delete_later(msg, delay=60):
+    await asyncio.sleep(delay)
+    try:
+        await msg.delete()
+    except:
+        pass
 
+# ---------------- Commands ----------------
 @Client.on_message(filters.command(["stickerid"]))
-async def stickerid(bot, message):   
-    if message.reply_to_message.sticker:
-       await message.reply(f"**Sticker ID is**  \n `{message.reply_to_message.sticker.file_id}` \n \n ** Unique ID is ** \n\n`{message.reply_to_message.sticker.file_unique_id}`", quote=True)
-    else: 
-       await message.reply("Oops !! Not a sticker file")
+async def stickerid(bot, message):
+    if message.reply_to_message and message.reply_to_message.sticker:
+        await message.reply(
+            f"**Sticker ID is**  \n `{message.reply_to_message.sticker.file_id}`\n\n"
+            f"**Unique ID is**\n `{message.reply_to_message.sticker.file_unique_id}`",
+            quote=True
+        )
+    else:
+        await message.reply("Oops !! Not a sticker file")
 
-CMD = ["/", "."]  
+CMD = ["/", "."]
 
 @Client.on_message(filters.command("alive", CMD))
 async def check_alive(_, message):
     sticker = await message.reply_sticker("CAACAgIAAxkBAAEBVAlmCYqbLub_o5pVUOEwbqhV8kRytgACRBkAAgjh2UlSqev16oISqB4E") 
     text = await message.reply_text("Yᴏᴜ ᴀʀᴇ ᴠᴇʀʏ ʟᴜᴄᴋʏ 🤞 I ᴀᴍ ᴀʟɪᴠᴇ ❤️\nPʀᴇss /start ᴛᴏ ᴜsᴇ ᴍᴇ!")
-    await asyncio.sleep(60)
-    await sticker.delete()
-    await text.delete()
-    await message.delete()
+    asyncio.create_task(delete_later(sticker, 60))
+    asyncio.create_task(delete_later(text, 60))
+    asyncio.create_task(delete_later(message, 60))
 
 @Client.on_message(filters.command("ping", CMD))
 async def ping(_, message):
@@ -36,10 +47,10 @@ async def ping(_, message):
     end_t = time.time()
     time_taken_s = (end_t - start_t) * 1000
     await rm.edit(f"🏓 Ping! : {time_taken_s:.3f} ms")
-    await asyncio.sleep(60)
-    await rm.delete()
-    await message.delete()
+    asyncio.create_task(delete_later(rm, 60))
+    asyncio.create_task(delete_later(message, 60))
 
+# ---------------- System Info ----------------
 start_time = time.time()
 
 def format_time(seconds):
@@ -53,7 +64,6 @@ def format_time(seconds):
         return f"{hours:02d}ʜ : {minutes:02d}ᴍ : {sec:02d}s"
 
 def get_size(size_kb):
-    """Convert KB to a human-readable format."""
     size_bytes = int(size_kb) * 1024
     for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
         if size_bytes < 1024:
@@ -63,7 +73,7 @@ def get_size(size_kb):
 
 def get_system_info():
     bot_uptime = format_time(time.time() - start_time)
-    os_info = f"{platform.system()}"
+    os_info = platform.system()
     try:
         with open('/proc/uptime') as f:
             system_uptime = format_time(float(f.readline().split()[0]))
@@ -72,8 +82,8 @@ def get_system_info():
     try:
         with open('/proc/meminfo') as f:
             meminfo = f.readlines()
-        total_ram = get_size(meminfo[0].split()[1])  
-        available_ram = get_size(meminfo[2].split()[1])  
+        total_ram = get_size(meminfo[0].split()[1])
+        available_ram = get_size(meminfo[2].split()[1])
         used_ram = get_size(int(meminfo[0].split()[1]) - int(meminfo[2].split()[1]))
     except Exception:
         total_ram, used_ram = "Unavailable", "Unavailable"
@@ -96,7 +106,7 @@ def get_system_info():
 
 async def calculate_latency():
     start = time.time()
-    await asyncio.sleep(0)  
+    await asyncio.sleep(0)
     end = time.time()
     latency = (end - start) * 1000
     return f"{latency:.3f} ms"
@@ -104,20 +114,17 @@ async def calculate_latency():
 @Client.on_message(filters.command("system"))
 async def send_system_info(client, message):
     system_info = get_system_info()
-    latency = await calculate_latency() 
+    latency = await calculate_latency()
     full_info = f"{system_info}\n📶 **Latency:** {latency}"
     info = await message.reply_text(full_info)
-    await asyncio.sleep(60)
-    await info.delete()
-    await message.delete()
+    asyncio.create_task(delete_later(info, 60))
+    asyncio.create_task(delete_later(message, 60))
 
-
+# ---------------- Set Bot Commands (Admin only) ----------------
 @Client.on_message(filters.command("commands") & filters.user(ADMINS))
 async def set_commands(client, message):
     commands = [BotCommand(cmd, desc) for cmd, desc in Bot_cmds.items()]
     await client.set_bot_commands(commands)
-    bot_set = await message.reply("ʙᴏᴛ ᴄᴏᴍᴍᴀɴᴅs ᴜᴘᴅᴀᴛᴇᴅ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ✅ ")
-    await asyncio.sleep(119)  
-    await bot_set.delete()
-    await message.delete()
-
+    bot_set = await message.reply("ʙᴏᴛ ᴄᴏᴍᴍᴀɴᴅs ᴜᴘᴅᴀᴛᴇᴅ ✅")
+    asyncio.create_task(delete_later(bot_set, 119))
+    asyncio.create_task(delete_later(message, 119))
