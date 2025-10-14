@@ -1,3 +1,6 @@
+import time
+from pyrogram.errors import FloodWait
+botStartTime = time.time()
 import os
 import sys
 import glob
