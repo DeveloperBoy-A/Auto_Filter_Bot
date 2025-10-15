@@ -324,6 +324,9 @@ async def send_movie_update(bot, base_name):
                 )],
             [
                 InlineKeyboardButton('♻️ Hᴏᴡ Tᴏ Dᴏᴡɴʟᴏᴀᴅ ♻️', url="https://t.me/newmovies_support/653"
+                )],
+                                            [
+                InlineKeyboardButton('🔰MOVIE SEARCH GROUP🔰', url="https://t.me/newmovieswebseries_group"
                 )
             ]])
 
@@ -376,9 +379,11 @@ async def update_movie_message(bot, base_name):
                 )],
             [
                 InlineKeyboardButton('♻️ Hᴏᴡ Tᴏ Dᴏᴡɴʟᴏᴀᴅ ♻️', url="https://t.me/newmovies_support/653"
+                )],
+                                            [
+                InlineKeyboardButton('🔰MOVIE SEARCH GROUP🔰', url="https://t.me/newmovieswebseries_group"
                 )
             ]])
-
         message_id = movie_doc.get("message_id")
         is_photo = movie_doc.get("is_photo", False)
 
