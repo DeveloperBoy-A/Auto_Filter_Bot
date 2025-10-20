@@ -124,7 +124,7 @@ async def broadcast_users(bot, message):
 
     async def send(user):
         try:
-            _, result = await users_broadcast(int(user["id"]), b_msg, is_pin)
+            result = await users_broadcast(int(user["id"]), b_msg, is_pin)
             return result
         except Exception as e:
             logging.exception(f"Error sending broadcast to {user['id']}")
