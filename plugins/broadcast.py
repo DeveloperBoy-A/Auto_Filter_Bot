@@ -114,18 +114,21 @@ async def broadcast_users(bot, message):
         return await message.reply("❌ Invalid or no response. Broadcast cancelled.")
     await ask_time.delete()
 
-    b_msg = message.reply_to_message
+        b_msg = message.reply_to_message
     users = [user async for user in await db.get_all_users()]
     total_users = len(users)
-    status_msg = await message.reply_text("📤 <b>Broadcasting your message...</b>")
-
+    dreamxbotz_status_msg = await message.reply_text("📤 <b>Broadcasting your message...</b>")
     success = blocked = deleted = failed = 0
     start_time = time.time()
     cancelled = False
 
     async def send(user):
-        sent_msg, result = await send_message(bot, int(user["id"]), b_msg, is_pin)
-        await track_message(sent_msg, "user")
+        try:
+            _, result = await users_broadcast(int(user["id"]), b_msg, is_pin)
+            return result
+        except Exception as e:
+            logging.exception(f"Error sending broadcast to {user['id']}")
+            return "Error"
         if sent_msg and auto_delete_time > 0:
             asyncio.create_task(auto_delete(sent_msg, auto_delete_time))
         return result
