@@ -114,7 +114,7 @@ async def broadcast_users(bot, message):
         return await message.reply("❌ Invalid or no response. Broadcast cancelled.")
     await ask_time.delete()
 
-        b_msg = message.reply_to_message
+    b_msg = message.reply_to_message
     users = [user async for user in await db.get_all_users()]
     total_users = len(users)
     dreamxbotz_status_msg = await message.reply_text("📤 <b>Broadcasting your message...</b>")
