@@ -88,21 +88,20 @@ async def send_message(bot, chat_id, reply_msg, pin=False):
 async def broadcast_users(bot, message):
     if lock.locked():
         return await message.reply("⚠️ Another broadcast is in progress. Please wait...")
-
-    # Pin question
-    #this code is developed by 【𝐃𝐞𝐯𝐞𝐥𝐨𝐩𝐞𝐫_𝐁𝐨𝐲™(𝓐𝓷𝓴𝓲𝓽_𝓜𝓮𝓮𝓷𝓪😝)】
-# Don't remove the my credit please 🙏
     ask = await message.reply(
         "<b>Do you want to pin this message in users?</b>",
         reply_markup=ReplyKeyboardMarkup([["Yes", "No"]], one_time_keyboard=True, resize_keyboard=True)
     )
     try:
-        user_response = await bot.listen(chat_id=message.chat.id, user_id=message.from_user.id, timeout=60)
+        dreamxbotz_user_response = await bot.listen(chat_id=message.chat.id, user_id=message.from_user.id, timeout=60)
     except asyncio.TimeoutError:
         await ask.delete()
         return await message.reply("❌ Timed out. Broadcast cancelled.")
     await ask.delete()
-    is_pin = user_response.text == "Yes"
+    if dreamxbotz_user_response.text not in ("Yes", "No"):
+        return await message.reply("❌ Invalid input. Broadcast cancelled.")
+
+    is_pin = dreamxbotz_user_response.text == "Yes"
 
     # Auto-delete feature is developed by 【𝐃𝐞𝐯𝐞𝐥𝐨𝐩𝐞𝐫_𝐁𝐨𝐲™(𝓐𝓷𝓴𝓲𝓽_𝓜𝓮𝓮𝓷𝓪😝)】
 # Don't remove the my credit please 🙏
