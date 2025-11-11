@@ -39,8 +39,7 @@ Levenshtein==0.24.0
 
 
 # Git-based Packages
-git+https://github.com/Joelkb/cinemagoer
-
+git+https://github.com/theamanchaudhary/cinemagoer
 gunicorn==20.1.0 
 werkzeug==3.0.6 
 Flask 
