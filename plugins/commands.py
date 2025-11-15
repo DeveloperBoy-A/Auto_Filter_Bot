@@ -253,7 +253,7 @@ async def start(client, message):
                     f"👋 ʜᴇʟʟᴏ {message.from_user.mention}\n\n"
                     "❣️ ʏᴏᴜ ᴍᴜsᴛ ᴊᴏɪɴ ᴛʜᴇ ʀᴇǫᴜɪʀᴇᴅ ᴄʜᴀɴɴᴇʟs ᴛᴏ ᴄᴏɴᴛɪɴᴜᴇ.\n"
                     "👉 ᴊᴏɪɴ ᴀʟʟ ᴛʜᴇ ʙᴇʟᴏᴡ ᴄʜᴀɴɴᴇʟs ᴀɴᴅ ᴛʀʏ ᴀɢᴀɪɴ.\n"
-                    "⚠️ पहले Backup channel ज्वॉइन करो फिर वापस 🔙 आ कर Try Agin पर क्लिक करें.
+                    "⚠️ पहले Backup channel ज्वॉइन करो फिर वापस 🔙 आ कर Try Agin पर क्लिक करें."
                 )
                 await message.reply_photo(
                     photo=photo,
