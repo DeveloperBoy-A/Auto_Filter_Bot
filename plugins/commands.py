@@ -366,7 +366,11 @@ async def start(client, message):
                     reply_markup=InlineKeyboardMarkup(btn)
                 )
                 filesarr.append(msg)
-            k = await client.send_message(chat_id=message.from_user.id, text=f"<b><u>❗️⚠️❗️IMPORTANT WARNING❗️️⚠️❗️</u></b>\n\nᴛʜɪꜱ ᴍᴏᴠɪᴇ ꜰɪʟᴇ/ᴠɪᴅᴇᴏ ᴡɪʟʟ ʙᴇ AUTOMATICALLY ᴅᴇʟᴇᴛᴇᴅ ɪɴ <b><u><code>{get_time(DELETE_TIME)}</code></u> 🫥 <i></b>(ᴅᴜᴇ ᴛᴏ ᴄᴏᴘʏʀɪɢʜᴛ ɪꜱꜱᴜᴇꜱ)</i>.\n\n<b><i>ᴘʟᴇᴀꜱᴇ ꜰᴏʀᴡᴀʀᴅ ᴛʜɪꜱ ꜰɪʟᴇ ᴛᴏ ꜱᴏᴍᴇᴡʜᴇʀᴇ ᴇʟꜱᴇ ᴀɴᴅ ꜱᴛᴀʀᴛ ᴅᴏᴡɴʟᴏᴀᴅɪɴɢ ᴛʜᴇʀᴇ.\n⚠️ यह फ़ाइल थोड़ी देर में स्वचालित रूप से हटा दी जाएगी, इसलिए इसे अपने saved massage पर अग्रेषित करें और फिर डाउनलोड करें।</i></b>")
+            k = await client.send_message(chat_id=message.from_user.id, text=f"<b><u>f"<b><u>⚠️❗️IMPORTANT WARNING❗️⚠️</u></b>\n\n"
+f"THIS MOVIE FILE/VIDEO WILL BE <b>AUTOMATICALLY DELETED</b> IN <b><u><code>{get_time(DELETE_TIME)}</code></u></b> 🫥 "
+"(DUE TO COPYRIGHT ISSUES).\n\n"
+f"<b><i>PLEASE FORWARD THIS FILE TO SOMEWHERE ELSE AND START DOWNLOADING THERE.\n\n"
+f"⚠️ यह फ़ाइल <u><code>{get_time(DELETE_TIME)}</code></u> में स्वचालित रूप से हटा दी जाएगी, इसलिए इसे अपने SAVED MESSAGES पर अग्रेषित करें और फिर डाउनलोड करें।</i></b>")
             await asyncio.sleep(DELETE_TIME)
             for x in filesarr:
                 await x.delete()
@@ -424,10 +428,11 @@ async def start(client, message):
                 reply_markup=InlineKeyboardMarkup(btn)
             )
             k = await msg.reply(
-                f"<b><u>❗️⚠️❗️IMPORTANT WARNING❗️️⚠️❗️</u></b>\n\n"
-                f"ᴛʜɪꜱ ᴍᴏᴠɪᴇ ꜰɪʟᴇ/ᴠɪᴅᴇᴏ ᴡɪʟʟ ʙᴇ AUTOMATICALLY ᴅᴇʟᴇᴛᴇᴅ ɪɴ <b><u><code>{get_time(DELETE_TIME)}</code></u> 🫥 <i></b>"
-                "(ᴅᴜᴇ ᴛᴏ ᴄᴏᴘʏʀɪɢʜᴛ ɪꜱꜱᴜᴇꜱ)</i>.\n\n"
-                "<b><i>ᴘʟᴇᴀꜱᴇ ꜰᴏʀᴡᴀʀᴅ ᴛʜɪꜱ ꜰɪʟᴇ ᴛᴏ ꜱᴏᴍᴇᴡʜᴇʀᴇ ᴇʟꜱᴇ ᴀɴᴅ ꜱᴛᴀʀᴛ ᴅᴏᴡɴʟᴏᴀᴅɪɴɢ ᴛʜᴇʀᴇ.\n ⚠️ यह फ़ाइल थोड़ी देर में स्वचालित रूप से हटा दी जाएगी, इसलिए इसे अपने saved massage पर अग्रेषित करें और फिर डाउनलोड करें।</i></b>",
+                f"<b><u>⚠️❗️IMPORTANT WARNING❗️⚠️</u></b>\n\n"
+f"THIS MOVIE FILE/VIDEO WILL BE <b>AUTOMATICALLY DELETED</b> IN <b><u><code>{get_time(DELETE_TIME)}</code></u></b> 🫥 "
+"(DUE TO COPYRIGHT ISSUES).\n\n"
+f"<b><i>PLEASE FORWARD THIS FILE TO SOMEWHERE ELSE AND START DOWNLOADING THERE.\n\n"
+f"⚠️ यह फ़ाइल <u><code>{get_time(DELETE_TIME)}</code></u> में स्वचालित रूप से हटा दी जाएगी, इसलिए इसे अपने SAVED MESSAGES पर अग्रेषित करें और फिर डाउनलोड करें।</i></b>",
                 quote=True
             )
             await asyncio.sleep(DELETE_TIME)
@@ -481,10 +486,11 @@ async def start(client, message):
         reply_markup=InlineKeyboardMarkup(btn)
     )
     k = await msg.reply(
-        f"<b><u>❗️⚠️❗️IMPORTANT WARNING❗️️⚠️❗️</u></b>\n\n"
-        f"ᴛʜɪꜱ ᴍᴏᴠɪᴇ ꜰɪʟᴇ/ᴠɪᴅᴇᴏ ᴡɪʟʟ ʙᴇ AUTOMATICALLY ᴅᴇʟᴇᴛᴇᴅ ɪɴ <b><u><code>{get_time(DELETE_TIME)}</code></u> 🫥 <i></b>"
-        "(ᴅᴜᴇ ᴛᴏ ᴄᴏᴘʏʀɪɢʜᴛ ɪꜱꜱᴜᴇꜱ)</i>.\n\n"
-        "<b><i>ᴘʟᴇᴀꜱᴇ ꜰᴏʀᴡᴀʀᴅ ᴛʜɪꜱ ꜰɪʟᴇ ᴛᴏ ꜱᴏᴍᴇᴡʜᴇʀᴇ ᴇʟꜱᴇ ᴀɴᴅ ꜱᴛᴀʀᴛ ᴅᴏᴡɴʟᴏᴀᴅɪɴɢ ᴛʜᴇʀᴇ.\n⚠️ यह फ़ाइल थोड़ी देर में स्वचालित रूप से हटा दी जाएगी, इसलिए इसे अपने saved massage पर अग्रेषित करें और फिर डाउनलोड करें।</i></b>",
+        f"<b><u>⚠️❗️IMPORTANT WARNING❗️⚠️</u></b>\n\n"
+f"THIS MOVIE FILE/VIDEO WILL BE <b>AUTOMATICALLY DELETED</b> IN <b><u><code>{get_time(DELETE_TIME)}</code></u></b> 🫥 "
+"(DUE TO COPYRIGHT ISSUES).\n\n"
+f"<b><i>PLEASE FORWARD THIS FILE TO SOMEWHERE ELSE AND START DOWNLOADING THERE.\n\n"
+f"⚠️ यह फ़ाइल <u><code>{get_time(DELETE_TIME)}</code></u> में स्वचालित रूप से हटा दी जाएगी, इसलिए इसे अपने SAVED MESSAGES पर अग्रेषित करें और फिर डाउनलोड करें।</i></b>",
         quote=True
     )     
     await asyncio.sleep(DELETE_TIME)
