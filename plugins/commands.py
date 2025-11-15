@@ -366,7 +366,7 @@ async def start(client, message):
                     reply_markup=InlineKeyboardMarkup(btn)
                 )
                 filesarr.append(msg)
-            k = await client.send_message(chat_id=message.from_user.id, text=f"<b><u>f"<b><u>⚠️❗️IMPORTANT WARNING❗️⚠️</u></b>\n\n"
+            k = await client.send_message(chat_id=message.from_user.id, text=f"<b><u>f"<b><u>❗⚠️IMPORTANT WARNING⚠️❗️</u></b>\n\n"
 f"THIS MOVIE FILE/VIDEO WILL BE <b>AUTOMATICALLY DELETED</b> IN <b><u><code>{get_time(DELETE_TIME)}</code></u></b> 🫥 "
 "(DUE TO COPYRIGHT ISSUES).\n\n"
 f"<b><i>PLEASE FORWARD THIS FILE TO SOMEWHERE ELSE AND START DOWNLOADING THERE.\n\n"
@@ -428,7 +428,7 @@ f"⚠️ यह फ़ाइल <u><code>{get_time(DELETE_TIME)}</code></u> म�
                 reply_markup=InlineKeyboardMarkup(btn)
             )
             k = await msg.reply(
-                f"<b><u>⚠️❗️IMPORTANT WARNING❗️⚠️</u></b>\n\n"
+                f"<b><u>❗️⚠️IMPORTANT WARNING⚠️❗️</u></b>\n\n"
 f"THIS MOVIE FILE/VIDEO WILL BE <b>AUTOMATICALLY DELETED</b> IN <b><u><code>{get_time(DELETE_TIME)}</code></u></b> 🫥 "
 "(DUE TO COPYRIGHT ISSUES).\n\n"
 f"<b><i>PLEASE FORWARD THIS FILE TO SOMEWHERE ELSE AND START DOWNLOADING THERE.\n\n"
@@ -486,7 +486,7 @@ f"⚠️ यह फ़ाइल <u><code>{get_time(DELETE_TIME)}</code></u> म�
         reply_markup=InlineKeyboardMarkup(btn)
     )
     k = await msg.reply(
-        f"<b><u>⚠️❗️IMPORTANT WARNING❗️⚠️</u></b>\n\n"
+        f"<b><u>❗️⚠️IMPORTANT WARNING⚠️❗️</u></b>\n\n"
 f"THIS MOVIE FILE/VIDEO WILL BE <b>AUTOMATICALLY DELETED</b> IN <b><u><code>{get_time(DELETE_TIME)}</code></u></b> 🫥 "
 "(DUE TO COPYRIGHT ISSUES).\n\n"
 f"<b><i>PLEASE FORWARD THIS FILE TO SOMEWHERE ELSE AND START DOWNLOADING THERE.\n\n"
