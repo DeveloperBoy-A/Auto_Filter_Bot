@@ -307,6 +307,8 @@ async def _process_with_lock(bot, filename, caption, media_info, base_name, proc
         movie_doc["files"].append(file_data)
         schedule_update(bot, base_name)
 
+from pyrogram.types import InputMediaPhoto
+
 async def send_movie_update(bot, base_name):
     max_retries = 3
     base_delay = 5
@@ -322,26 +324,28 @@ async def send_movie_update(bot, base_name):
                     '🗃️ Gᴇᴛ Fɪʟᴇ 🗃️',
                     url=f"https://t.me/{temp.U_NAME}?start=getfile-{base_name.replace(' ', '-')}"
                 )],
-                [
-                    InlineKeyboardButton('♻️ Hᴏᴡ Tᴏ Dᴏᴡɴʟᴏᴀᴅ ♻️', url="https://t.me/newmovies_support/653")
-                ],
-                [
-                    InlineKeyboardButton('🔰MOVIE SEARCH GROUP🔰', url="https://t.me/newmovieswebseries_group")
-                ]
-            ])
+            [
+                InlineKeyboardButton('♻️ Hᴏᴡ Tᴏ Dᴏᴡɴʟᴏᴀᴅ ♻️', url="https://t.me/newmovies_support/653"
+                )],
+            [
+                InlineKeyboardButton('🔰MOVIE SEARCH GROUP🔰', url="https://t.me/newmovieswebseries_group"
+                )
+            ]])
 
             if movie_doc.get("poster_url") and not LINK_PREVIEW:
                 resized_poster = await fetch_image(
-                    movie_doc["poster_url"], 
+                    movie_doc["poster_url"],
                     size=(2560, 1440) if LANDSCAPE_POSTER and TMDB_POSTER and not error_tmdb else (853, 1280)
                 )
+                
+                # Spoiler-compatible send
+                media = InputMediaPhoto(media=resized_poster, spoiler=True)
                 msg = await bot.send_photo(
                     chat_id=MOVIE_UPDATE_CHANNEL,
-                    photo=resized_poster,
+                    photo=media,
                     caption=text,
                     reply_markup=buttons,
-                    parse_mode=enums.ParseMode.HTML,
-                    spoiler=True  # Spoiler automatically enabled for poster
+                    parse_mode=enums.ParseMode.HTML
                 )
                 is_photo = True
             else:
