@@ -33,7 +33,7 @@ IGNORE_WORDS = {
     "japanese", "nf", "netflix", "sonyliv", "sony", "sliv", "amzn", "prime", 
     "primevideo", "hotstar", "zee5", "jio", "jhs", "aha", "hbo", "paramount", 
     "apple", "hoichoi", "sunnxt", "viki"
-}|BAD_WORDS
+} | BAD_WORDS
 
 # Constants
 CAPTION_LANGUAGES = {
@@ -78,16 +78,14 @@ QUALITY_PATTERN = re.compile(
     re.IGNORECASE
 )
 YEAR_PATTERN = re.compile(r"(?<![A-Za-z0-9])(?:19|20)\d{2}(?![A-Za-z0-9])")
-RANGE_REGEX = re.compile(r'\bS(\d{1,2})[^\w\n\r]*E(?:p(?:isode)?)?0*(\d{1,2})\s*(?:to|-)\s*(?:E(?:p(?:isode)?)?)?0*(\d{1,2})',re.IGNORECASE)
+RANGE_REGEX = re.compile(r'\bS(\d{1,2})[^\w\n\r]*E(?:p(?:isode)?)?0*(\d{1,2})\s*(?:to|-)\s*(?:E(?:p(?:isode)?)?)?0*(\d{1,2})', re.IGNORECASE)
 SINGLE_REGEX = re.compile(r'\bS(\d{1,2})[^\w\n\r]*E(?:p(?:isode)?)?0*(\d{1,3})', re.IGNORECASE)
 NAMED_REGEX = re.compile(r'Season\s*0*(\d{1,2})[\s\-,:]*Ep(?:isode)?\s*0*(\d{1,3})', re.IGNORECASE)
-EP_ONLY_RANGE = re.compile(r'\b(?:EP|Episode)0*(\d{1,3})\s*-\s*0*(\d{1,3})\b',re.IGNORECASE)
-
+EP_ONLY_RANGE = re.compile(r'\b(?:EP|Episode)0*(\d{1,3})\s*-\s*0*(\d{1,3})\b', re.IGNORECASE)
 
 MEDIA_FILTER = filters.document | filters.video | filters.audio
 locks = defaultdict(asyncio.Lock)
 pending_updates = {}
-
 
 def clean_mentions_links(text: str) -> str:
     return CLEAN_PATTERN.sub("", text or "").strip()
@@ -126,7 +124,6 @@ def schedule_update(bot, base_name, delay=5):
     if handle := pending_updates.get(base_name):
         if not handle.cancelled():
             handle.cancel()
-
     loop = asyncio.get_event_loop()
     pending_updates[base_name] = loop.call_later(
         delay,
@@ -180,7 +177,6 @@ def extract_media_info(filename: str, caption: str):
     base_name = normalize(remove_ignored_words(normalize(base_raw)))
     if year and year not in base_name:
         base_name += f" {year}"
-
     if base_name.endswith(")"):
         base_name = re.sub(r"\s+\(\d{4}\)$", "", base_name)
         if year:
@@ -198,11 +194,11 @@ def extract_media_info(filename: str, caption: str):
         "language": language
     }
 
+# ----------------- Media Handler -----------------
 @Client.on_message(filters.chat(CHANNELS) & MEDIA_FILTER)
 async def media_handler(bot, message):
     media = next(
-        (getattr(message, ft) for ft in ("document", "video", "audio")
-         if getattr(message, ft, None)),
+        (getattr(message, ft) for ft in ("document", "video", "audio") if getattr(message, ft, None)),
         None
     )
     if not media:
@@ -220,6 +216,7 @@ async def media_handler(bot, message):
     except Exception:
         logger.exception("Error processing media")
 
+# ----------------- Processing -----------------
 async def process_and_send_update(bot, filename, caption):
     try:
         media_info = extract_media_info(filename, caption)
@@ -234,79 +231,7 @@ async def process_and_send_update(bot, filename, caption):
     except Exception as e:
         logger.exception("Processing failed: %s", e)
 
-async def _process_with_lock(bot, filename, caption, media_info, base_name, processed):
-    if not hasattr(db, 'movie_updates'):
-        db.movie_updates = db.db.movie_updates
-
-    movie_doc = await db.movie_updates.find_one({"_id": base_name})
-    global error_tmdb
-    error_tmdb=False
-    file_data = {
-        "filename": filename,
-        "processed": processed,
-        "quality": media_info["quality"],
-        "language": media_info["language"],
-        "ott_platform": media_info["ott_platform"],
-        "timestamp": datetime.now(),
-        "tag": media_info["tag"],
-        "season": media_info["season"],
-        "episode": media_info["episode"]
-    }
-
-    if not movie_doc:
-        if TMDB_POSTER:
-            details = await get_movie_detailsx(base_name)
-            if details.get("error"):
-                error_tmdb=True
-                logger.info("TMDB error switching to IMDB")
-                details = await get_movie_details(base_name) or {}
-        else:
-            details = await get_movie_details(base_name) or {}
-
-        raw_genres = details.get("genres", "N/A")
-        if isinstance(raw_genres, str):
-            genre_list = [g.strip() for g in raw_genres.split(",")]
-            genres = ", ".join(g for g in genre_list if g in STANDARD_GENRES) or "N/A"
-        else:
-            genres = ", ".join(g for g in raw_genres if g in STANDARD_GENRES) or "N/A"
-        movie_doc = {
-            "_id": base_name,
-            "files": [file_data],
-            "poster_url": details.get("backdrop_url") if LANDSCAPE_POSTER and TMDB_POSTER and not error_tmdb else details.get("poster_url"),
-            "genres": genres,
-            "rating": details.get("rating", "N/A"),
-            "imdb_url": details.get("url", "")if not TMDB_POSTER else details.get("tmdb_url"),
-            "year": media_info["year"] or details.get("year"),
-            "tag": media_info["tag"],
-            "ott_platform": media_info["ott_platform"],
-            "message_id": None,
-            "is_photo": False
-        }
-        try:
-            await db.movie_updates.insert_one(movie_doc)
-            await send_movie_update(bot, base_name)
-            movie_doc = await db.movie_updates.find_one({"_id": base_name})
-        except DuplicateKeyError:
-            movie_doc = await db.movie_updates.find_one({"_id": base_name})
-            if movie_doc:
-                if any(f["filename"] == filename for f in movie_doc["files"]):
-                    return
-                await db.movie_updates.update_one(
-                    {"_id": base_name},
-                    {"$push": {"files": file_data}}
-                )
-                movie_doc["files"].append(file_data)
-                schedule_update(bot, base_name)
-    else:
-        if any(f["filename"] == filename for f in movie_doc["files"]):
-            return
-        await db.movie_updates.update_one(
-            {"_id": base_name},
-            {"$push": {"files": file_data}}
-        )
-        movie_doc["files"].append(file_data)
-        schedule_update(bot, base_name)
-
+# ----------------- Sending Movie Update -----------------
 async def send_movie_update(bot, base_name):
     max_retries = 3
     base_delay = 5
@@ -317,41 +242,33 @@ async def send_movie_update(bot, base_name):
                 return None
 
             text = generate_movie_message(movie_doc, base_name)
-            buttons = InlineKeyboardMarkup([[
-                InlineKeyboardButton(
-                    '🗃️ Gᴇᴛ Fɪʟᴇ 🗃️',
-                    url=f"https://t.me/{temp.U_NAME}?start=getfile-{base_name.replace(' ', '-')}"
-                )],
-            [
-                InlineKeyboardButton('♻️ Hᴏᴡ Tᴏ Dᴏᴡɴʟᴏᴀᴅ ♻️', url="https://t.me/newmovies_support/653"
-                )],
-                                            [
-                InlineKeyboardButton('🔰MOVIE SEARCH GROUP🔰', url="https://t.me/newmovieswebseries_group"
-                )
-            ]])
+            buttons = InlineKeyboardMarkup([
+                [InlineKeyboardButton('🗃️ Gᴇᴛ Fɪʟᴇ 🗃️', url=f"https://t.me/{temp.U_NAME}?start=getfile-{base_name.replace(' ', '-')}" )],
+                [InlineKeyboardButton('♻️ Hᴏᴡ Tᴏ Dᴏᴡɴʟᴏᴀᴅ ♻️', url="https://t.me/newmovies_support/653")],
+                [InlineKeyboardButton('🔰MOVIE SEARCH GROUP🔰', url="https://t.me/newmovieswebseries_group")]
+            ])
 
             if movie_doc.get("poster_url") and not LINK_PREVIEW:
-    resized_poster = await fetch_image(
-        movie_doc["poster_url"],
-        size=(2560, 1440) if LANDSCAPE_POSTER and TMDB_POSTER and not error_tmdb else (853, 1280)
-    )
-
-    msg = await bot.send_photo(
-        chat_id=MOVIE_UPDATE_CHANNEL,
-        photo=resized_poster,
-        caption=text,
-        reply_markup=buttons,
-        parse_mode=enums.ParseMode.HTML,
-        has_spoiler=True
-    )
-    is_photo = True
-else:
-    send_params = {
-        "chat_id": MOVIE_UPDATE_CHANNEL,
-        "text": text,
-        "reply_markup": buttons,
-        "parse_mode": enums.ParseMode.HTML
-    }
+                resized_poster = await fetch_image(
+                    movie_doc["poster_url"],
+                    size=(2560, 1440) if LANDSCAPE_POSTER and TMDB_POSTER and not error_tmdb else (853, 1280)
+                )
+                msg = await bot.send_photo(
+                    chat_id=MOVIE_UPDATE_CHANNEL,
+                    photo=resized_poster,
+                    caption=text,
+                    reply_markup=buttons,
+                    parse_mode=enums.ParseMode.HTML,
+                    has_spoiler=True
+                )
+                is_photo = True
+            else:
+                send_params = {
+                    "chat_id": MOVIE_UPDATE_CHANNEL,
+                    "text": text,
+                    "reply_markup": buttons,
+                    "parse_mode": enums.ParseMode.HTML
+                }
                 if movie_doc.get("poster_url") and LINK_PREVIEW:
                     send_params["invert_media"] = ABOVE_PREVIEW
                 msg = await bot.send_message(**send_params)
@@ -370,6 +287,7 @@ else:
             break
     return None
 
+# ----------------- Updating Movie Message -----------------
 async def update_movie_message(bot, base_name):
     try:
         movie_doc = await db.movie_updates.find_one({"_id": base_name})
@@ -377,18 +295,11 @@ async def update_movie_message(bot, base_name):
             return
 
         text = generate_movie_message(movie_doc, base_name)
-        buttons = InlineKeyboardMarkup([[
-                InlineKeyboardButton(
-                    '🗃️ Gᴇᴛ Fɪʟᴇ 🗃️',
-                    url=f"https://t.me/{temp.U_NAME}?start=getfile-{base_name.replace(' ', '-')}"
-                )],
-            [
-                InlineKeyboardButton('♻️ Hᴏᴡ Tᴏ Dᴏᴡɴʟᴏᴀᴅ ♻️', url="https://t.me/newmovies_support/653"
-                )],
-                                            [
-                InlineKeyboardButton('🔰MOVIE SEARCH GROUP🔰', url="https://t.me/newmovieswebseries_group"
-                )
-            ]])
+        buttons = InlineKeyboardMarkup([
+            [InlineKeyboardButton('🗃️ Gᴇᴛ Fɪʟᴇ 🗃️', url=f"https://t.me/{temp.U_NAME}?start=getfile-{base_name.replace(' ', '-')}" )],
+            [InlineKeyboardButton('♻️ Hᴏᴡ Tᴏ Dᴏᴡɴʟᴏᴀᴅ ♻️', url="https://t.me/newmovies_support/653")],
+            [InlineKeyboardButton('🔰MOVIE SEARCH GROUP🔰', url="https://t.me/newmovieswebseries_group")]
+        ])
         message_id = movie_doc.get("message_id")
         is_photo = movie_doc.get("is_photo", False)
 
@@ -434,6 +345,7 @@ async def update_movie_message(bot, base_name):
     except Exception as e:
         logger.error(f"Failed to update movie message: {e}")
 
+# ----------------- Generate Movie Message -----------------
 def generate_movie_message(movie_doc, base_name):
     all_qualities = set()
     all_languages = set()
@@ -463,7 +375,6 @@ def generate_movie_message(movie_doc, base_name):
         for season, episodes in sorted(episodes_by_season.items(), key=lambda x: int(x[0])):
             singles = []
             ranges = []
-
             for ep in episodes:
                 if "-" in ep:
                     ranges.append(ep)
@@ -472,7 +383,6 @@ def generate_movie_message(movie_doc, base_name):
                         singles.append(int(ep))
                     except ValueError:
                         ranges.append(ep)
-
             singles.sort()
             collapsed = []
             start = end = None
