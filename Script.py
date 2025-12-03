@@ -218,7 +218,7 @@ Mᴇꜱꜱᴀɢᴇ : <b>{}</b>"""
 
     
     MOVIE_UPDATE_NOTIFY_TXT = """
-</b> 【<code>{filename}</code></b>】✅🆕️
+<b>【{filename}】</b> ✅🆕️
 
 🎭 Gᴇɴʀᴇs : <b>{genres}</b>
 📺 ᴏᴛᴛ    : <b>{ott}</b>
@@ -227,7 +227,8 @@ Mᴇꜱꜱᴀɢᴇ : <b>{}</b>"""
 🔥 Rᴀᴛɪɴɢ   : <b>{rating}</b>
 📢  : {episodes}
 
- \n<blockquote>🌿 Powered by : <a href="https://t.me/+MINAQiQyVq8wMWRl">[🔰𝑵𝒆𝒘 𝒎𝒐𝒗𝒊𝒆 & 𝒘𝒆𝒃 𝒔𝒆𝒓𝒊𝒆𝒔🔰]</a></blockquote></b>"""
+<blockquote>🌿 Powered by : <a href="https://t.me/+MINAQiQyVq8wMWRl">[🔰𝑵𝒆𝒘 𝒎𝒐𝒗𝒊𝒆 & 𝒘𝒆𝒃 𝒔𝒆𝒓𝒊𝒆𝒔🔰]</a></blockquote>
+"""
 
 
     IMDB_TEMPLATE_TXT = """
