@@ -331,22 +331,27 @@ async def send_movie_update(bot, base_name):
             ]])
 
             if movie_doc.get("poster_url") and not LINK_PREVIEW:
-                resized_poster = await fetch_image(movie_doc["poster_url"], size=(2560, 1440) if LANDSCAPE_POSTER and TMDB_POSTER and not error_tmdb else (853, 1280))
-                msg = await bot.send_photo(
-                    chat_id=MOVIE_UPDATE_CHANNEL,
-                    photo=resized_poster,
-                    caption=text,
-                    reply_markup=buttons,
-                    parse_mode=enums.ParseMode.HTML
-                )
-                is_photo = True
-            else:
-                send_params = {
-                    "chat_id": MOVIE_UPDATE_CHANNEL,
-                    "text": text,
-                    "reply_markup": buttons,
-                    "parse_mode": enums.ParseMode.HTML
-                }
+    resized_poster = await fetch_image(
+        movie_doc["poster_url"],
+        size=(2560, 1440) if LANDSCAPE_POSTER and TMDB_POSTER and not error_tmdb else (853, 1280)
+    )
+
+    msg = await bot.send_photo(
+        chat_id=MOVIE_UPDATE_CHANNEL,
+        photo=resized_poster,
+        caption=text,
+        reply_markup=buttons,
+        parse_mode=enums.ParseMode.HTML,
+        has_spoiler=True
+    )
+    is_photo = True
+else:
+    send_params = {
+        "chat_id": MOVIE_UPDATE_CHANNEL,
+        "text": text,
+        "reply_markup": buttons,
+        "parse_mode": enums.ParseMode.HTML
+    }
                 if movie_doc.get("poster_url") and LINK_PREVIEW:
                     send_params["invert_media"] = ABOVE_PREVIEW
                 msg = await bot.send_message(**send_params)
