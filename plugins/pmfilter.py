@@ -1695,7 +1695,18 @@ async def auto_filter(client, msg, spoll=False):
         if len(message.text) < 100:
             search = message.text
             search = search.lower()
-            m = await message.reply_text(f'**🔎 sᴇᴀʀᴄʜɪɴɢ** `{search}`', reply_to_message_id=message.id)
+            # ⛔ पुरानी लाइन हटाओ:
+# m = await message.reply_text(f'**🔎 sᴇᴀʀᴄʜɪɴɢ** `{search}`', reply_to_message_id=message.id)
+
+# ✅ New Sticker + Searching Text
+sticker_msg = await message.reply_sticker(
+    "CAACAgUAAxkBAAIBQ2ZzN7gvToYtL6vhfVqlhK2XxPxNAAJbAQACVp29V5uL2VNxM6wSMwQ"  # <-- working sticker file_id
+)
+
+m = await message.reply_text(
+    f"**🔍 Searching...** `{search}`", 
+    reply_to_message_id=message.id
+)
             find = search.split(" ")
             search = ""
             removes = ["in", "upload", "series", "full",
@@ -1730,7 +1741,18 @@ async def auto_filter(client, msg, spoll=False):
     else:
         message = msg.message.reply_to_message
         search, files, offset, total_results = spoll
-        m = await message.reply_text(f'**🔎 sᴇᴀʀᴄʜɪɴɢ** `{search}`', reply_to_message_id=message.id)
+        # ⛔ पुरानी लाइन हटाओ:
+# m = await message.reply_text(f'**🔎 sᴇᴀʀᴄʜɪɴɢ** `{search}`', reply_to_message_id=message.id)
+
+# ✅ New Sticker + Searching Text
+sticker_msg = await message.reply_sticker(
+    "CAACAgUAAxkBAAIBQ2ZzN7gvToYtL6vhfVqlhK2XxPxNAAJbAQACVp29V5uL2VNxM6wSMwQ"  # <-- working sticker file_id
+)
+
+m = await message.reply_text(
+    f"**🔍 Searching...** `{search}`", 
+    reply_to_message_id=message.id
+)
         settings = await get_settings(message.chat.id)
         await msg.message.delete()
     key = f"{message.chat.id}-{message.id}"
