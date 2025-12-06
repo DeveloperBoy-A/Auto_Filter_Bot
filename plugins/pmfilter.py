@@ -1769,17 +1769,22 @@ async def auto_filter(client, msg, spoll=False):
             else:
                 return
         else:
-            # spoll branch
-            message = msg.message.reply_to_message
-            search, files, offset, total_results = spoll
-            m = await message.reply_text(f'🔎 sᴇᴀʀᴄʜɪɴɢ {search}', reply_to_message_id=message.id)
-            settings = await get_settings(message.chat.id)
-            await msg.message.delete()
+    # spoll branch
+    if not getattr(msg, "message", None) or not getattr(msg.message, "reply_to_message", None):
+        return
+    message = msg.message.reply_to_message
+    search, files, offset, total_results = spoll
 
-                key = f"{message.chat.id}-{message.id}"
-        FRESH[key] = search
-        temp.GETALL[key] = files
-        temp.SHORT[message.from_user.id] = message.chat.id
+    m = await message.reply_text(
+        f'🔎 sᴇᴀʀᴄʜɪɴɢ {search}', reply_to_message_id=message.id
+    )
+    settings = await get_settings(message.chat.id)
+    await msg.message.delete()
+
+    key = f"{message.chat.id}-{message.id}"
+    FRESH[key] = search
+    temp.GETALL[key] = files
+    temp.SHORT[message.from_user.id] = message.chat.id
 
         if settings.get('button'):
             btn = [
