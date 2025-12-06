@@ -1704,11 +1704,6 @@ async def auto_filter(client, msg, spoll=False):
                 "CAACAgUAAxkBAAIBQ2ZzN7gvToYtL6vhfVqlhK2XxPxNAAJbAQACVp29V5uL2VNxM6wSMwQ"
             )
 
-            m = await message.reply_text(
-                f"**🔍 Searching...** `{search}`",
-                reply_to_message_id=message.id
-            )
-
             find = search.split(" ")
             search = ""
 
@@ -1790,11 +1785,6 @@ async def auto_filter(client, msg, spoll=False):
         # ✅ New Sticker + Searching Text
         sticker_msg = await message.reply_sticker(
             "CAACAgUAAxkBAAIBQ2ZzN7gvToYtL6vhfVqlhK2XxPxNAAJbAQACVp29V5uL2VNxM6wSMwQ"
-        )
-
-        m = await message.reply_text(
-            f"**🔍 Searching...** `{search}`",
-            reply_to_message_id=message.id
         )
 
         settings = await get_settings(message.chat.id)
