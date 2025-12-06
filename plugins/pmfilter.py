@@ -1783,24 +1783,27 @@ async def auto_filter(client, msg, spoll=False):
     else:
         message = msg.message.reply_to_message
         search, files, offset, total_results = spoll
+
         # ⛔ पुरानी लाइन हटाओ:
-# m = await message.reply_text(f'**🔎 sᴇᴀʀᴄʜɪɴɢ** `{search}`', reply_to_message_id=message.id)
+        # m = await message.reply_text(f'**🔎 sᴇᴀʀᴄʜɪɴɢ** `{search}`', reply_to_message_id=message.id)
 
-# ✅ New Sticker + Searching Text
-sticker_msg = await message.reply_sticker(
-    "CAACAgUAAxkBAAIBQ2ZzN7gvToYtL6vhfVqlhK2XxPxNAAJbAQACVp29V5uL2VNxM6wSMwQ"  # <-- working sticker file_id
-)
+        # ✅ New Sticker + Searching Text
+        sticker_msg = await message.reply_sticker(
+            "CAACAgUAAxkBAAIBQ2ZzN7gvToYtL6vhfVqlhK2XxPxNAAJbAQACVp29V5uL2VNxM6wSMwQ"
+        )
 
-m = await message.reply_text(
-    f"**🔍 Searching...** `{search}`", 
-    reply_to_message_id=message.id
-)
+        m = await message.reply_text(
+            f"**🔍 Searching...** `{search}`",
+            reply_to_message_id=message.id
+        )
+
         settings = await get_settings(message.chat.id)
         await msg.message.delete()
-    key = f"{message.chat.id}-{message.id}"
-    FRESH[key] = search
-    temp.GETALL[key] = files
-    temp.SHORT[message.from_user.id] = message.chat.id
+
+        key = f"{message.chat.id}-{message.id}"
+        FRESH[key] = search
+        temp.GETALL[key] = files
+        temp.SHORT[message.from_user.id] = message.chat.id
     if settings.get('button'):
         btn = [
             [
