@@ -1686,27 +1686,69 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
 async def auto_filter(client, msg, spoll=False):
     curr_time = datetime.now(pytz.timezone('Asia/Kolkata')).time()
+
     if not spoll:
         message = msg
+
         if message.text.startswith("/"):
             return
+
         if re.findall(r"((^\/|^,|^!|^\.|^[\U0001F600-\U000E007F]).*)", message.text):
             return
+
         if len(message.text) < 100:
-            search = message.text
-            search = search.lower()
-            # ⛔ पुरानी लाइन हटाओ:
-# m = await message.reply_text(f'**🔎 sᴇᴀʀᴄʜɪɴɢ** `{search}`', reply_to_message_id=message.id)
+            search = message.text.lower()
 
-# ✅ New Sticker + Searching Text
-sticker_msg = await message.reply_sticker(
-    "CAACAgUAAxkBAAIBQ2ZzN7gvToYtL6vhfVqlhK2XxPxNAAJbAQACVp29V5uL2VNxM6wSMwQ"  # <-- working sticker file_id
-)
+            # ✅ Sticker + Searching Text — Correct Indentation
+            sticker_msg = await message.reply_sticker(
+                "CAACAgUAAxkBAAIBQ2ZzN7gvToYtL6vhfVqlhK2XxPxNAAJbAQACVp29V5uL2VNxM6wSMwQ"
+            )
 
-m = await message.reply_text(
-    f"**🔍 Searching...** `{search}`", 
-    reply_to_message_id=message.id
-)
+            m = await message.reply_text(
+                f"**🔍 Searching...** `{search}`",
+                reply_to_message_id=message.id
+            )
+
+            find = search.split(" ")
+            search = ""
+
+            removes = ["in", "upload", "series", "full",
+                       "horror", "thriller", "mystery", "print", "file"]
+
+            for x in find:
+                if x in removes:
+                    continue
+                else:
+                    search = search + x + " "
+
+            search = re.sub(
+                r"\b(pl(i|e)*?(s|z+|ease|se|ese|(e+)s(e)?)|((send|snd|giv(e)?|gib)(\sme)?)|movie(s)?|new|latest|bro|bruh|broh|helo|that|find|dubbed|link|venum|iruka|pannunga|pannungga|anuppunga|anupunga|anuppungga|anupungga|film|undo|kitti|kitty|tharu|kittumo|kittum|movie|any(one)|with\ssubtitle(s)?)",
+                "",
+                search,
+                flags=re.IGNORECASE
+            )
+            search = re.sub(r"\s+", " ", search).strip()
+            search = search.replace("-", " ").replace(":", "")
+
+            files, offset, total_results = await get_search_results(
+                message.chat.id, search, offset=0, filter=True
+            )
+
+            settings = await get_settings(message.chat.id)
+
+            if not files:
+                if settings["spell_check"]:
+                    ai_sts = await m.edit(
+                        '🤖 ᴘʟᴇᴀꜱᴇ ᴡᴀɪᴛ, ᴀɪ ɪꜱ ᴄʜᴇᴄᴋɪɴɢ ʏᴏᴜʀ ꜱᴘᴇʟʟɪɴɢ...'
+                    )
+                    is_misspelled = await ai_spell_check(
+                        chat_id=message.chat.id, wrong_name=search
+                    )
+
+                    if is_misspelled:
+                        await ai_sts.edit(
+                            f'✅ Aɪ Sᴜɢɢᴇsᴛᴇᴅ: <code>{is_misspelled}</code>\n🔍 Searching for it...'
+                        )
             find = search.split(" ")
             search = ""
             removes = ["in", "upload", "series", "full",
