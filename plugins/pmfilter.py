@@ -1699,10 +1699,7 @@ async def auto_filter(client, msg, spoll=False):
         if len(message.text) < 100:
             search = message.text.lower()
 
-            # ✅ Sticker + Searching Text — Correct Indentation
-            sticker_msg = await message.reply_sticker(
-                "CAACAgUAAxkBAAIBQ2ZzN7gvToYtL6vhfVqlhK2XxPxNAAJbAQACVp29V5uL2VNxM6wSMwQ"
-            )
+            m = await message.reply_text(f'**🔎 sᴇᴀʀᴄʜɪɴɢ** `{search}`', reply_to_message_id=message.id)
 
             find = search.split(" ")
             search = ""
@@ -1779,13 +1776,7 @@ async def auto_filter(client, msg, spoll=False):
         message = msg.message.reply_to_message
         search, files, offset, total_results = spoll
 
-        # ⛔ पुरानी लाइन हटाओ:
-        # m = await message.reply_text(f'**🔎 sᴇᴀʀᴄʜɪɴɢ** `{search}`', reply_to_message_id=message.id)
-
-        # ✅ New Sticker + Searching Text
-        sticker_msg = await message.reply_sticker(
-            "CAACAgUAAxkBAAIBQ2ZzN7gvToYtL6vhfVqlhK2XxPxNAAJbAQACVp29V5uL2VNxM6wSMwQ"
-        )
+        m = await message.reply_text(f'**🔎 sᴇᴀʀᴄʜɪɴɢ** `{search}`', reply_to_message_id=message.id)
 
         settings = await get_settings(message.chat.id)
         await msg.message.delete()
