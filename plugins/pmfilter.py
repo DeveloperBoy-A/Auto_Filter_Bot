@@ -1776,13 +1776,14 @@ async def auto_filter(client, msg, spoll=False):
             settings = await get_settings(message.chat.id)
             await msg.message.delete()
 
-        key = f"{message.chat.id}-{message.id}"
+                key = f"{message.chat.id}-{message.id}"
         FRESH[key] = search
         temp.GETALL[key] = files
         temp.SHORT[message.from_user.id] = message.chat.id
-    if settings.get('button'):
-        btn = [
-            [
+
+        if settings.get('button'):
+            btn = [
+                [
                 InlineKeyboardButton(text=f"🔗 {get_size(file.file_size)} ≽ " + clean_filename(
                     file.file_name), callback_data=f'file#{file.file_id}'),
             ]
