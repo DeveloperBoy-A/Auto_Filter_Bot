@@ -137,7 +137,7 @@ async def imdb_poster_handler(client, message, text):
     poster_bytes = await fetch_image(details.get("poster_url")) if details else None
 
     if poster_bytes:
-        # Save to temp file
+        # Save BytesIO to temporary file
         with tempfile.NamedTemporaryFile(suffix=".jpg") as tmp:
             img = Image.open(poster_bytes)
             img.save(tmp.name)
