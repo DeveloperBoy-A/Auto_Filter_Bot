@@ -20,12 +20,26 @@ warnings.simplefilter("ignore", Image.DecompressionBombWarning)
 
 def api_safe_query(query: str):
     q = query
+
+    # remove usernames
+    q = re.sub(r'@\w+', '', q)
+
+    # remove leading symbols like -, _
+    q = re.sub(r'^[\-\_]+', '', q)
+
+    # remove season / episode
     q = re.sub(r'\bS\d{1,2}E\d{1,2}\b', '', q, flags=re.I)
     q = re.sub(r'\bS\d{1,2}\b', '', q, flags=re.I)
     q = re.sub(r'\bE\d{1,2}\b', '', q, flags=re.I)
     q = re.sub(r'season\s*\d+', '', q, flags=re.I)
-    q = re.sub(r'\.', ' ', q)
+
+    # dots → space
+    q = q.replace('.', ' ')
+
+    # cleanup spaces & symbols
+    q = re.sub(r'[^a-zA-Z0-9 ]+', '', q)
     q = re.sub(r'\s+', ' ', q)
+
     return q.strip()
 
 
@@ -61,9 +75,6 @@ async def fetch_image(url, size=(860, 1200)):
 # =====================================================
 
 async def get_movie_detailsx(query, id=False, file=None):
-    """
-    channel.py expects THIS NAME
-    """
     base_url = "https://bharath-boy-api.vercel.app/api/movie-posters"
     safe_query = api_safe_query(query)
 
@@ -79,13 +90,13 @@ async def get_movie_detailsx(query, id=False, file=None):
                     logger.error(
                         f"API request failed [{resp.status}] for query={safe_query}\n{text}"
                     )
-                    return None
+                    return {}   # 🔥 IMPORTANT
 
                 data = await resp.json()
 
     except Exception as e:
         logger.error(f"TMDB API error: {e}")
-        return None
+        return {}   # 🔥 IMPORTANT
 
     return {
         "title": data.get("title"),
@@ -104,15 +115,12 @@ async def get_movie_detailsx(query, id=False, file=None):
 # =====================================================
 
 async def get_movie_details(query, id=False, file=None):
-    """
-    channel.py expects THIS NAME
-    """
     try:
         title = api_safe_query(query)
 
         results = ia.search_movie(title, results=10)
         if not results:
-            return None
+            return {}   # 🔥 IMPORTANT
 
         movie = ia.get_movie(results[0].movieID)
         ia.update(movie, info=["main", "vote details"])
@@ -133,4 +141,4 @@ async def get_movie_details(query, id=False, file=None):
 
     except Exception as e:
         logger.error(f"IMDB error: {e}")
-        return None
+        return {}   # 🔥 IMPORTANT
