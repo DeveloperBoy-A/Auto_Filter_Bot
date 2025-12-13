@@ -18,26 +18,7 @@ warnings.simplefilter("ignore", Image.DecompressionBombWarning)
 # UTILS
 # =====================================================
 
-ANIME_KEYWORDS = [
-    "anime", "naruto", "one piece", "chainsaw man",
-    "attack on titan", "demon slayer",
-    "jujutsu kaisen", "bleach", "death note"
-]
-
-
-def list_to_str(lst):
-    return ", ".join(map(str, lst)) if lst else ""
-
-
-def is_anime(title: str) -> bool:
-    t = title.lower()
-    return any(k in t for k in ANIME_KEYWORDS)
-
-
 def api_safe_query(query: str):
-    """
-    API ke liye season / episode hatao
-    """
     q = query
     q = re.sub(r'\bS\d{1,2}E\d{1,2}\b', '', q, flags=re.I)
     q = re.sub(r'\bS\d{1,2}\b', '', q, flags=re.I)
@@ -48,21 +29,8 @@ def api_safe_query(query: str):
     return q.strip()
 
 
-def extract_from_filename(name: str):
-    """
-    Movie.Name.S01E02.1080p.mkv -> Movie Name S01
-    """
-    clean = re.sub(r'\.(mkv|mp4|avi|mov|webm)$', '', name, flags=re.I)
-    season = re.search(r'(S\d{1,2})', clean, re.I)
-    title = api_safe_query(clean)
-
-    if season:
-        return f"{title} {season.group(1).upper()}"
-    return title
-
-
 # =====================================================
-# IMAGE FETCH
+# IMAGE FETCH  (channel.py expects this)
 # =====================================================
 
 async def fetch_image(url, size=(860, 1200)):
@@ -73,7 +41,6 @@ async def fetch_image(url, size=(860, 1200)):
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as resp:
                 if resp.status != 200:
-                    logger.error(f"Poster fetch failed [{resp.status}]")
                     return None
 
                 img = Image.open(BytesIO(await resp.read()))
@@ -90,53 +57,28 @@ async def fetch_image(url, size=(860, 1200)):
 
 
 # =====================================================
-# IMDB FETCH (NON-ANIME)
+# TMDB / POSTER API  (NAME FIXED)
 # =====================================================
 
-async def get_imdb_details(query):
-    try:
-        results = ia.search_movie(query, results=10)
-        if not results:
-            return None
-
-        movie = ia.get_movie(results[0].movieID)
-        ia.update(movie, info=["main", "vote details"])
-
-        plot = movie.get("plot")
-        plot = plot[0] if plot else movie.get("plot outline")
-
-        return {
-            "title": movie.get("title"),
-            "year": movie.get("year"),
-            "rating": movie.get("rating"),
-            "votes": movie.get("votes"),
-            "plot": plot,
-            "poster_url": movie.get("full-size cover url"),
-            "imdb_id": f"tt{movie.movieID}",
-            "kind": movie.get("kind")
-        }
-
-    except Exception as e:
-        logger.error(f"IMDB error: {e}")
-        return None
-
-
-# =====================================================
-# TMDB / POSTER API (MOVIE + ANIME)
-# =====================================================
-
-async def get_tmdb_details(query):
+async def get_movie_detailsx(query, id=False, file=None):
+    """
+    channel.py expects THIS NAME
+    """
     base_url = "https://bharath-boy-api.vercel.app/api/movie-posters"
+    safe_query = api_safe_query(query)
 
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(
                 base_url,
-                params={"query": query, "api_key": TMDB_API_KEY}
+                params={"query": safe_query, "api_key": TMDB_API_KEY}
             ) as resp:
 
                 if resp.status != 200:
-                    logger.error(f"TMDB API failed [{resp.status}] for {query}")
+                    text = await resp.text()
+                    logger.error(
+                        f"API request failed [{resp.status}] for query={safe_query}\n{text}"
+                    )
                     return None
 
                 data = await resp.json()
@@ -158,40 +100,37 @@ async def get_tmdb_details(query):
 
 
 # =====================================================
-# MAIN DREAMXFUTURES HANDLER
+# IMDB FALLBACK  (NAME FIXED)
 # =====================================================
 
-async def imdb_poster_handler(client, message, text):
+async def get_movie_details(query, id=False, file=None):
     """
-    Dreamxfutures entry point
+    channel.py expects THIS NAME
     """
+    try:
+        title = api_safe_query(query)
 
-    query = extract_from_filename(text)
-    api_query = api_safe_query(query)
+        results = ia.search_movie(title, results=10)
+        if not results:
+            return None
 
-    # Anime → TMDB only
-    if is_anime(query):
-        details = await get_tmdb_details(api_query)
-    else:
-        details = await get_tmdb_details(api_query)
-        if not details:
-            details = await get_imdb_details(api_query)
+        movie = ia.get_movie(results[0].movieID)
+        ia.update(movie, info=["main", "vote details"])
 
-    caption = f"🎬 **{query}**\n\n"
+        plot = movie.get("plot")
+        plot = plot[0] if plot else movie.get("plot outline")
 
-    if details:
-        caption += f"⭐ Rating: {details.get('rating', 'N/A')}\n"
-        caption += f"📅 Year: {details.get('year', 'N/A')}\n\n"
-        caption += details.get("plot", "") or ""
+        return {
+            "title": movie.get("title"),
+            "year": movie.get("year"),
+            "rating": movie.get("rating"),
+            "votes": movie.get("votes"),
+            "plot": plot,
+            "poster_url": movie.get("full-size cover url"),
+            "kind": movie.get("kind"),
+            "imdb_id": f"tt{movie.movieID}"
+        }
 
-    poster = await fetch_image(details.get("poster_url")) if details else None
-
-    if poster:
-        await client.send_photo(
-            chat_id=message.chat.id,
-            photo=poster,
-            caption=caption,
-            has_spoiler=POSTER_SPOILER
-        )
-    else:
-        await message.reply_text(caption)
+    except Exception as e:
+        logger.error(f"IMDB error: {e}")
+        return None
