@@ -119,7 +119,8 @@ async def get_movie_details(query, id=False, file=None):
 
 
 # ---------------------- HANDLER ----------------------
-from pyrogram.types import InputFile
+import tempfile
+from PIL import Image
 
 async def imdb_poster_handler(client, message, text):
     query = api_safe_query(text)
@@ -133,16 +134,18 @@ async def imdb_poster_handler(client, message, text):
         caption += f"📅 Year: {details.get('year', 'N/A')}\n\n"
         caption += details.get("plot", "") or ""
 
-    # fetch image as BytesIO (required for spoiler)
     poster_bytes = await fetch_image(details.get("poster_url")) if details else None
 
     if poster_bytes:
-        # send as InputFile with spoiler enabled
-        await client.send_photo(
-            chat_id=message.chat.id,
-            photo=InputFile(poster_bytes, filename="poster.jpg"),
-            caption=caption,
-            has_spoiler=True
-        )
+        # Save to temp file
+        with tempfile.NamedTemporaryFile(suffix=".jpg") as tmp:
+            img = Image.open(poster_bytes)
+            img.save(tmp.name)
+            await client.send_photo(
+                chat_id=message.chat.id,
+                photo=tmp.name,
+                caption=caption,
+                has_spoiler=True
+            )
     else:
         await message.reply_text(caption)
