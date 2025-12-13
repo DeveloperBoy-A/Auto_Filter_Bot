@@ -96,7 +96,8 @@ LANDSCAPE_POSTER = bool(environ.get('LANDSCAPE_POSTER', True)) # Shows landscape
 DREAMXBOTZ_IMAGE_FETCH = True
 TMDB_API_KEY = "a02fd334c1aad2e413e6f57a0be2ef27"
 
-POSTER_SPOILER = True   # True = spoiler ON | False = OFF
+POSTER_SPOILER= bool(environ.get('POSTER_SPOILER', True))  # On (True) / Off (False)
+
 # ============================
 # Verification Settings
 # ============================
