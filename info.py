@@ -92,6 +92,11 @@ TMDB_API_KEY = environ.get('TMDB_API_KEY', 'a02fd334c1aad2e413e6f57a0be2ef27') #
 TMDB_POSTER = bool(environ.get('TMDB_POSTER', "True")) # Shows TMDB poster in notification msg
 LANDSCAPE_POSTER = bool(environ.get('LANDSCAPE_POSTER', True)) # Shows landscape poster in notification msg
 
+# Poster settings
+DREAMXBOTZ_IMAGE_FETCH = True
+TMDB_API_KEY = "a02fd334c1aad2e413e6f57a0be2ef27"
+
+POSTER_SPOILER = True   # True = spoiler ON | False = OFF
 # ============================
 # Verification Settings
 # ============================
@@ -146,6 +151,7 @@ INDEX_REQ_CHANNEL = int(environ.get('INDEX_REQ_CHANNEL', LOG_CHANNEL))  # Index 
 NO_RESULTS_MSG = bool(environ.get("NO_RESULTS_MSG", True))  # True if you want no results messages in Log Channel
 MAX_BTN = is_enabled((environ.get('MAX_BTN', "True")), True)    # Max Button On (True) / Off (False)
 P_TTI_SHOW_OFF = is_enabled((environ.get('P_TTI_SHOW_OFF', "False")), False)    # P_TTI_SHOW_OFF On (True) / Off (False)
+
 IMDB = is_enabled((environ.get('IMDB', "False")), False)    # IMDB Results On (True) / Off (False)
 AUTO_FFILTER = is_enabled((environ.get('AUTO_FFILTER', "True")), True) # Auto Filter On (True) / Off (False)
 AUTO_DELETE = is_enabled((environ.get('AUTO_DELETE', "True")), True) # Auto Delete On (True) / Off (False)
