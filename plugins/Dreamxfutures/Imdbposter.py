@@ -6,58 +6,37 @@ from io import BytesIO
 from PIL import Image
 from imdb import Cinemagoer
 
-from info import DREAMXBOTZ_IMAGE_FETCH, TMDB_API_KEY, POSTER_SPOILER
+from info import DREAMXBOTZ_IMAGE_FETCH, TMDB_API_KEY
 
 logger = logging.getLogger(__name__)
 ia = Cinemagoer()
 
+LONG_IMDB_DESCRIPTION = False
+
 Image.MAX_IMAGE_PIXELS = None
 warnings.simplefilter("ignore", Image.DecompressionBombWarning)
 
-# =====================================================
-# UTILS
-# =====================================================
 
-def api_safe_query(query: str):
-    q = query
+def list_to_str(lst):
+    if lst:
+        return ", ".join(map(str, lst))
+    return ""
 
-    # remove usernames
-    q = re.sub(r'@\w+', '', q)
-
-    # remove leading symbols like -, _
-    q = re.sub(r'^[\-\_]+', '', q)
-
-    # remove season / episode
-    q = re.sub(r'\bS\d{1,2}E\d{1,2}\b', '', q, flags=re.I)
-    q = re.sub(r'\bS\d{1,2}\b', '', q, flags=re.I)
-    q = re.sub(r'\bE\d{1,2}\b', '', q, flags=re.I)
-    q = re.sub(r'season\s*\d+', '', q, flags=re.I)
-
-    # dots → space
-    q = q.replace('.', ' ')
-
-    # cleanup spaces & symbols
-    q = re.sub(r'[^a-zA-Z0-9 ]+', '', q)
-    q = re.sub(r'\s+', ' ', q)
-
-    return q.strip()
-
-
-# =====================================================
-# IMAGE FETCH  (channel.py expects this)
-# =====================================================
 
 async def fetch_image(url, size=(860, 1200)):
-    if not DREAMXBOTZ_IMAGE_FETCH or not url:
+    if not DREAMXBOTZ_IMAGE_FETCH:
+        logger.info("Image fetching is disabled.")
         return None
 
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(url) as resp:
-                if resp.status != 200:
+            async with session.get(url) as response:
+                if response.status != 200:
+                    logger.error(f"Failed to fetch image: {response.status}")
                     return None
 
-                img = Image.open(BytesIO(await resp.read()))
+                data = await response.read()
+                img = Image.open(BytesIO(data))
                 img = img.resize(size, Image.LANCZOS)
 
                 out = BytesIO()
@@ -65,80 +44,117 @@ async def fetch_image(url, size=(860, 1200)):
                 out.seek(0)
                 return out
 
+    except aiohttp.ClientError as e:
+        logger.error(f"HTTP error in fetch_image: {e}")
+    except IOError as e:
+        logger.error(f"I/O error in fetch_image: {e}")
     except Exception as e:
-        logger.error(f"fetch_image error: {e}")
-        return None
+        logger.error(f"Unexpected error in fetch_image: {e}")
 
+    return None
 
-# =====================================================
-# TMDB / POSTER API  (NAME FIXED)
-# =====================================================
-
-async def get_movie_detailsx(query, id=False, file=None):
-    base_url = "https://bharath-boy-api.vercel.app/api/movie-posters"
-    safe_query = api_safe_query(query)
-
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                base_url,
-                params={"query": safe_query, "api_key": TMDB_API_KEY}
-            ) as resp:
-
-                if resp.status != 200:
-                    text = await resp.text()
-                    logger.error(
-                        f"API request failed [{resp.status}] for query={safe_query}\n{text}"
-                    )
-                    return {}   # 🔥 IMPORTANT
-
-                data = await resp.json()
-
-    except Exception as e:
-        logger.error(f"TMDB API error: {e}")
-        return {}   # 🔥 IMPORTANT
-
-    return {
-        "title": data.get("title"),
-        "year": data.get("year"),
-        "rating": data.get("rating"),
-        "votes": data.get("votes"),
-        "plot": data.get("plot"),
-        "poster_url": data.get("poster_url"),
-        "tmdb_id": data.get("tmdb_id"),
-        "imdb_id": data.get("imdb_id")
-    }
-
-
-# =====================================================
-# IMDB FALLBACK  (NAME FIXED)
-# =====================================================
 
 async def get_movie_details(query, id=False, file=None):
     try:
-        title = api_safe_query(query)
+        if not id:
+            query = query.strip().lower()
+            title = query
 
-        results = ia.search_movie(title, results=10)
-        if not results:
-            return {}   # 🔥 IMPORTANT
+            year = re.findall(r'[1-2]\d{3}$', query)
+            if year:
+                year = year[0]
+                title = query.replace(year, "").strip()
+            elif file:
+                year = re.findall(r'[1-2]\d{3}', file)
+                year = year[0] if year else None
+            else:
+                year = None
 
-        movie = ia.get_movie(results[0].movieID)
-        ia.update(movie, info=["main", "vote details"])
+            results = ia.search_movie(title, results=10)
+            if not results:
+                return None
+
+            if year:
+                results = [r for r in results if str(r.get('year')) == str(year)] or results
+
+            results = [r for r in results if r.get('kind') in ('movie', 'tv series')] or results
+            movieid = results[0].movieID
+        else:
+            movieid = query
+
+        movie = ia.get_movie(movieid)
+        ia.update(movie, info=['main', 'vote details'])
+
+        date = (
+            movie.get("original air date")
+            or movie.get("year")
+            or "N/A"
+        )
 
         plot = movie.get("plot")
-        plot = plot[0] if plot else movie.get("plot outline")
+        if plot:
+            plot = plot[0]
+        else:
+            plot = movie.get("plot outline")
+
+        if plot and len(plot) > 800:
+            plot = plot[:800] + "..."
 
         return {
             "title": movie.get("title"),
             "year": movie.get("year"),
-            "rating": movie.get("rating"),
+            "rating": movie.get("rating", "N/A"),
             "votes": movie.get("votes"),
+            "genres": list_to_str(movie.get("genres")),
+            "runtime": list_to_str(movie.get("runtimes")),
+            "countries": list_to_str(movie.get("countries")),
+            "languages": list_to_str(movie.get("languages")),
+            "director": list_to_str(movie.get("director")),
+            "writer": list_to_str(movie.get("writer")),
+            "cast": list_to_str(movie.get("cast")),
             "plot": plot,
+            "release_date": date,
             "poster_url": movie.get("full-size cover url"),
-            "kind": movie.get("kind"),
-            "imdb_id": f"tt{movie.movieID}"
+            "imdb_id": f"tt{movie.get('imdbID')}",
+            "url": f"https://www.imdb.com/title/tt{movie.get('imdbID')}"
         }
 
     except Exception as e:
-        logger.error(f"IMDB error: {e}")
-        return {}   # 🔥 IMPORTANT
+        logger.error(f"get_movie_details error: {e}")
+        return None
+
+
+async def get_movie_detailsx(query):
+    base_url = "https://bharath-boy-api.vercel.app/api/movie-posters"
+    q = str(query).strip()
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            params = {"query": q, "api_key": TMDB_API_KEY}
+            async with session.get(base_url, params=params) as resp:
+                if resp.status != 200:
+                    logger.error(f"API failed [{resp.status}]")
+                    return None
+                data = await resp.json()
+
+    except Exception as e:
+        logger.error(f"get_movie_detailsx error: {e}")
+        return None
+
+    details = {
+        "title": data.get("title"),
+        "year": data.get("year"),
+        "rating": data.get("rating"),
+        "votes": data.get("votes"),
+        "runtime": data.get("runtime"),
+        "genres": data.get("genres"),
+        "languages": data.get("languages"),
+        "countries": data.get("countries"),
+        "plot": data.get("plot"),
+        "poster_url": data.get("poster_url"),
+        "imdb_id": data.get("imdb_id"),
+        "tmdb_id": data.get("tmdb_id"),
+        "tmdb_url": data.get("url"),
+    }
+
+    return details
