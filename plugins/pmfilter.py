@@ -1785,16 +1785,19 @@ settings = await get_settings(message.chat.id)
 
 if not files:
     if settings["spell_check"]:
-        ...
-                    ai_sts = await m.edit('🤖 ᴘʟᴇᴀꜱᴇ ᴡᴀɪᴛ, ᴀɪ ɪꜱ ᴄʜᴇᴄᴋɪɴɢ ʏᴏᴜʀ ꜱᴘᴇʟʟɪɴɢ...')
-                    is_misspelled = await ai_spell_check(chat_id=message.chat.id, wrong_name=search)
-                    if is_misspelled:
-                        await ai_sts.edit(f'✅ Aɪ Sᴜɢɢᴇsᴛᴇᴅ: <code>{is_misspelled}</code>\n🔍 Searching for it...')
-                        message.text = is_misspelled
-                        await ai_sts.delete()
-                        return await auto_filter(client, message)
-                    await ai_sts.delete()
-                    return await advantage_spell_chok(client, message)
+        ai_sts = await m.edit(
+            '🤖 ᴘʟᴇᴀꜱᴇ ᴡᴀɪᴛ, ᴀɪ ɪꜱ ᴄʜᴇᴄᴋɪɴɢ ʏᴏᴜʀ ꜱᴘᴇʟʟɪɴɢ...'
+        )
+        is_misspelled = await ai_spell_check(chat_id=message.chat.id, wrong_name=search)
+        if is_misspelled:
+            await ai_sts.edit(
+                f'✅ Aɪ Sᴜɢɢᴇsᴛᴇᴅ: <code>{is_misspelled}</code>\n🔍 Searching for it...'
+            )
+            message.text = is_misspelled
+            await ai_sts.delete()
+            return await auto_filter(client, message)
+        await ai_sts.delete()
+        return await advantage_spell_chok(client, message)
                 else:
                     await m.delete()
                     return await advantage_spell_chok(client, message)
