@@ -1834,7 +1834,7 @@ if not files:
         btn.insert(0,
                    [
                        InlineKeyboardButton(
-                           "⚜️ 𝐑𝐞𝐦𝐨𝐯𝐞 𝐚𝐝𝐬 ⚜️", url=f"https://t.me/{temp.U_NAME}?start=premium"),
+                           "⚜️ 𝐑𝐞𝐦𝐨𝐯𝐞 𝐚𝐝s ⚜️", url=f"https://t.me/{temp.U_NAME}?start=premium"),
                        InlineKeyboardButton(
                            "Sᴇɴᴅ Aʟʟ", callback_data=f"sendfiles#{key}")
 
@@ -1854,9 +1854,8 @@ if not files:
         btn.insert(0,
                    [
                        InlineKeyboardButton(
-                           "⚜️ 𝐑𝐞𝐦𝐨𝐯𝐞 𝐚𝐝𝐬 ⚜️", url=f"https://t.me/{temp.U_NAME}?start=premium"),
-                       InlineKeyboardButton(
-                           "Sᴇɴᴅ Aʟʟ", callback_data=f"sendfiles#{key}")
+                           "⚜️ 𝐑𝐞𝐦𝐨𝐯𝐞 𝐚𝐝s ⚜️", url=f"https://t.me/{temp.U_NAME}?start=premium"),
+                       InlineKeyboardButton("Sᴇɴᴅ Aʟʟ", callback_data=f"sendfiles#{key}")
                    ])
 
     if offset != "":
@@ -1980,7 +1979,6 @@ if not files:
                 await save_group_settings(message.chat.id, 'auto_delete', True)
                 await asyncio.sleep(DELETE_TIME)
                 await dxb.delete()
-                await message.delete()
     else:
         dxb = await message.reply_text(text=cap, reply_markup=InlineKeyboardMarkup(btn), disable_web_page_preview=True, parse_mode=enums.ParseMode.HTML)
         await m.delete()
