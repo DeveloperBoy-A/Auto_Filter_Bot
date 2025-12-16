@@ -19,6 +19,59 @@ import re
 import math
 import random
 import pytz
+
+QUALITY_ORDER = [
+    "webrip",
+    "bluray",
+    "hdrip",
+    "web-dl",
+    "webdl",
+    "hdts",
+    "cam"
+]
+
+def quality_rank(name: str):
+    name = name.lower()
+    for i, q in enumerate(QUALITY_ORDER):
+        if q in name:
+            return i
+    return len(QUALITY_ORDER)
+
+def sort_files_by_quality(files):
+    return sorted(files, key=lambda f: quality_rank(f.file_name))
+def sort_by_relevance(files, search):
+    search = search.lower()
+
+    exact = []
+    partial = []
+
+    for f in files:
+        name = f.file_name.lower()
+        if search in name:
+            exact.append(f)
+        else:
+            partial.append(f)
+
+    # pehle exact match, phir baaki
+    return exact + partial
+
+def sort_by_relevance(files, search):
+    search = search.lower()
+
+    exact = []
+    partial = []
+
+    for f in files:
+        name = f.file_name.lower()
+        if search in name:
+            exact.append(f)
+        else:
+            partial.append(f)
+
+    # pehle exact match, phir baaki
+    return exact + partial
+
+
 from datetime import datetime, timedelta
 lock = asyncio.Lock()
 
@@ -157,11 +210,20 @@ async def next_page(bot, query):
     if not search:
         await query.answer(script.OLD_ALRT_TXT.format(query.from_user.first_name), show_alert=True)
         return
-    files, n_offset, total = await get_search_results(query.message.chat.id, search, offset=offset, filter=True)
-    try:
-        n_offset = int(n_offset)
-    except:
-        n_offset = 0
+    files, n_offset, total = await get_search_results(
+    query.message.chat.id, search, offset=offset, filter=True
+)
+
+# 🔥 FIRST: exact name priority
+files = sort_by_relevance(files, search)
+
+# 🔥 SECOND: quality priority
+files = sort_files_by_quality(files)
+
+try:
+    n_offset = int(n_offset)
+except:
+    n_offset = 0
 
     if not files:
         return
@@ -1709,10 +1771,21 @@ async def auto_filter(client, msg, spoll=False):
             search = re.sub(r"\s+", " ", search).strip()
             search = search.replace("-", " ")
             search = search.replace(":", "")
-            files, offset, total_results = await get_search_results(message.chat.id, search, offset=0, filter=True)
-            settings = await get_settings(message.chat.id)
-            if not files:
-                if settings["spell_check"]:
+            files, offset, total_results = await get_search_results(
+    message.chat.id, search, offset=0, filter=True
+)
+
+# 🔥 1️⃣ Exact name / relevance first
+files = sort_by_relevance(files, search)
+
+# 🔥 2️⃣ Quality order
+files = sort_files_by_quality(files)
+
+settings = await get_settings(message.chat.id)
+
+if not files:
+    if settings["spell_check"]:
+        ...
                     ai_sts = await m.edit('🤖 ᴘʟᴇᴀꜱᴇ ᴡᴀɪᴛ, ᴀɪ ɪꜱ ᴄʜᴇᴄᴋɪɴɢ ʏᴏᴜʀ ꜱᴘᴇʟʟɪɴɢ...')
                     is_misspelled = await ai_spell_check(chat_id=message.chat.id, wrong_name=search)
                     if is_misspelled:
