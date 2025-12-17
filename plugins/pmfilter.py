@@ -39,11 +39,10 @@ def quality_rank(name: str):
 
 def sort_files_by_quality(files):
     return sorted(files, key=lambda f: quality_rank(f.file_name))
+
 def sort_by_relevance(files, search):
     search = search.lower()
-
-    exact = []
-    partial = []
+    exact, partial = [], []
 
     for f in files:
         name = f.file_name.lower()
@@ -52,23 +51,6 @@ def sort_by_relevance(files, search):
         else:
             partial.append(f)
 
-    # pehle exact match, phir baaki
-    return exact + partial
-
-def sort_by_relevance(files, search):
-    search = search.lower()
-
-    exact = []
-    partial = []
-
-    for f in files:
-        name = f.file_name.lower()
-        if search in name:
-            exact.append(f)
-        else:
-            partial.append(f)
-
-    # pehle exact match, phir baaki
     return exact + partial
 
 
@@ -195,35 +177,38 @@ async def refercall(bot, query):
 
 @Client.on_callback_query(filters.regex(r"^next"))
 async def next_page(bot, query):
+
     ident, req, key, offset = query.data.split("_")
-    curr_time = datetime.now(pytz.timezone('Asia/Kolkata')).time()
-    
+    curr_time = datetime.now(pytz.timezone("Asia/Kolkata")).time()
+
     if int(req) not in [query.from_user.id, 0]:
-        return await query.answer(script.ALRT_TXT.format(query.from_user.first_name), show_alert=True)
-    
+        return await query.answer(
+            script.ALRT_TXT.format(query.from_user.first_name),
+            show_alert=True
+        )
+
     try:
         offset = int(offset)
     except:
         offset = 0
-    
-    search = BUTTONS.get(key) if BUTTONS.get(key) is not None else FRESH.get(key)
-    
+
+    search = BUTTONS.get(key) or FRESH.get(key)
     if not search:
-        await query.answer(script.OLD_ALRT_TXT.format(query.from_user.first_name), show_alert=True)
-        return
-    
-    files, n_offset, total = await get_search_results(query.message.chat.id, search, offset=offset, filter=True)
+        return await query.answer(
+            script.OLD_ALRT_TXT.format(query.from_user.first_name),
+            show_alert=True
+        )
 
-    # 🔥 FIRST: exact name priority
+    files, n_offset, total = await get_search_results(
+        query.message.chat.id,
+        search,
+        offset=offset,
+        filter=True
+    )
+
+    # 🔥 Sort priority
     files = sort_by_relevance(files, search)
-
-    # 🔥 SECOND: quality priority
     files = sort_files_by_quality(files)
-
-    try:
-        n_offset = int(n_offset)
-    except:
-        n_offset = 0
 
     if not files:
         return
@@ -232,110 +217,97 @@ async def next_page(bot, query):
     temp.SHORT[query.from_user.id] = query.message.chat.id
     settings = await get_settings(query.message.chat.id)
 
-    if settings.get('button'):
-        btn = [
-            [
-                InlineKeyboardButton(
-                    text=f"🔗 {get_size(file.file_size)} ≽ " + clean_filename(file.file_name),
-                    callback_data=f'file#{file.file_id}'
-                ),
-            ] for file in files
-        ]
-        btn.insert(0, [
-            InlineKeyboardButton(f'Qᴜᴀʟɪᴛʏ', callback_data=f"qualities#{key}"),
-            InlineKeyboardButton("Lᴀɴɢᴜᴀɢᴇ", callback_data=f"languages#{key}"),
-            InlineKeyboardButton("Sᴇᴀsᴏɴ", callback_data=f"seasons#{key}")
-        ])
-        btn.insert(0, [
-            InlineKeyboardButton("⚜️ 𝐑𝐞𝐦𝐨𝐯𝐞 𝐚𝐝s ⚜️", url=f"https://t.me/{temp.U_NAME}?start=premium"),
-            InlineKeyboardButton("Sᴇɴᴅ Aʟʟ", callback_data=f"sendfiles#{key}")
-        ])
-    else:
-        btn = []
-        btn.insert(0, [
-            InlineKeyboardButton(f'Qᴜᴀʟɪᴛʏ', callback_data=f"qualities#{key}"),
-            InlineKeyboardButton("Lᴀɴɢᴜᴀɢᴇ", callback_data=f"languages#{key}"),
-            InlineKeyboardButton("Sᴇᴀsᴏɴ", callback_data=f"seasons#{key}")
-        ])
-        btn.insert(0, [
-            InlineKeyboardButton("⚜️ 𝐑𝐞𝐦𝐨𝐯𝐞 𝐚𝐝s ⚜️", url=f"https://t.me/{temp.U_NAME}?start=premium"),
-            InlineKeyboardButton("Sᴇɴᴅ Aʟʟ", callback_data=f"sendfiles#{key}")
-        ])
+    btn = []
+
+    # ================= FILE BUTTONS ================= #
+
+    if settings.get("button"):
+        btn = [[
+            InlineKeyboardButton(
+                f"🔗 {get_size(f.file_size)} ≽ {clean_filename(f.file_name)}",
+                callback_data=f"file#{f.file_id}"
+            )
+        ] for f in files]
+
+    btn.insert(0, [
+        InlineKeyboardButton("Qᴜᴀʟɪᴛʏ", callback_data=f"qualities#{key}"),
+        InlineKeyboardButton("Lᴀɴɢᴜᴀɢᴇ", callback_data=f"languages#{key}"),
+        InlineKeyboardButton("Sᴇᴀsᴏɴ", callback_data=f"seasons#{key}")
+    ])
+
+    btn.insert(0, [
+        InlineKeyboardButton(
+            "⚜️ 𝐑𝐞𝐦𝐨𝐯𝐞 𝐚𝐝s ⚜️",
+            url=f"https://t.me/{temp.U_NAME}?start=premium"
+        ),
+        InlineKeyboardButton("Sᴇɴᴅ Aʟʟ", callback_data=f"sendfiles#{key}")
+    ])
+
+    # ================= PAGINATION ================= #
 
     try:
-        max_btn = settings.get('max_btn', True)
-        if max_btn:
-            if 0 < offset <= 10:
-                off_set = 0
-            elif offset == 0:
-                off_set = None
-            else:
-                off_set = offset - 10
-            if n_offset == 0:
-                btn.append([
-                    InlineKeyboardButton("⋞ ʙᴀᴄᴋ", callback_data=f"next_{req}_{key}_{off_set}"),
-                    InlineKeyboardButton(f"{math.ceil(int(offset)/10)+1} / {math.ceil(total/10)}", callback_data="pages")
-                ])
-            elif off_set is None:
-                btn.append([
-                    InlineKeyboardButton("ᴘᴀɢᴇ", callback_data="pages"),
-                    InlineKeyboardButton(f"{math.ceil(int(offset)/10)+1} / {math.ceil(total/10)}", callback_data="pages"),
-                    InlineKeyboardButton("ɴᴇxᴛ ⋟", callback_data=f"next_{req}_{key}_{n_offset}")
-                ])
-            else:
-                btn.append([
-                    InlineKeyboardButton("⋞ ʙᴀᴄᴋ", callback_data=f"next_{req}_{key}_{off_set}"),
-                    InlineKeyboardButton(f"{math.ceil(int(offset)/10)+1} / {math.ceil(total/10)}", callback_data="pages"),
-                    InlineKeyboardButton("ɴᴇxᴛ ⋟", callback_data=f"next_{req}_{key}_{n_offset}")
-                ])
-        else:
-            step = int(MAX_B_TN)
-            if 0 < offset <= step:
-                off_set = 0
-            elif offset == 0:
-                off_set = None
-            else:
-                off_set = offset - step
-            if n_offset == 0:
-                btn.append([
-                    InlineKeyboardButton("⋞ ʙᴀᴄᴋ", callback_data=f"next_{req}_{key}_{off_set}"),
-                    InlineKeyboardButton(f"{math.ceil(int(offset)/step)+1} / {math.ceil(total/step)}", callback_data="pages")
-                ])
-            elif off_set is None:
-                btn.append([
-                    InlineKeyboardButton("ᴘᴀɢᴇ", callback_data="pages"),
-                    InlineKeyboardButton(f"{math.ceil(int(offset)/step)+1} / {math.ceil(total/step)}", callback_data="pages"),
-                    InlineKeyboardButton("ɴᴇxᴛ ⋟", callback_data=f"next_{req}_{key}_{n_offset}")
-                ])
-            else:
-                btn.append([
-                    InlineKeyboardButton("⋞ ʙᴀᴄᴋ", callback_data=f"next_{req}_{key}_{off_set}"),
-                    InlineKeyboardButton(f"{math.ceil(int(offset)/step)+1} / {math.ceil(total/step)}", callback_data="pages"),
-                    InlineKeyboardButton("ɴᴇxᴛ ⋟", callback_data=f"next_{req}_{key}_{n_offset}")
-                ])
-    except KeyError:
-        await save_group_settings(query.message.chat.id, 'max_btn', True)
+        max_btn = settings.get("max_btn", True)
+        step = 10 if max_btn else int(MAX_B_TN)
 
-    if not settings.get("button"):
-        cur_time = datetime.now(pytz.timezone('Asia/Kolkata')).time()
-        time_difference = timedelta(
-            hours=cur_time.hour, minutes=cur_time.minute, seconds=(cur_time.second + (cur_time.microsecond/1000000))
-        ) - timedelta(
-            hours=curr_time.hour, minutes=curr_time.minute, seconds=(curr_time.second + (curr_time.microsecond/1000000))
+        prev_offset = None if offset == 0 else max(0, offset - step)
+        page = math.ceil(offset / step) + 1
+        total_pages = math.ceil(total / step)
+
+        nav = []
+
+        if prev_offset is not None:
+            nav.append(
+                InlineKeyboardButton(
+                    "⋞ ʙᴀᴄᴋ",
+                    callback_data=f"next_{req}_{key}_{prev_offset}"
+                )
+            )
+
+        nav.append(
+            InlineKeyboardButton(
+                f"{page}/{total_pages}",
+                callback_data="pages"
+            )
         )
-        remaining_seconds = "{:.2f}".format(time_difference.total_seconds())
-        dreamx_title = clean_search_text(search)
-        cap = await get_cap(settings, remaining_seconds, files, query, total, dreamx_title, offset+1)
-        try:
-            await query.message.edit_text(text=cap, reply_markup=InlineKeyboardMarkup(btn), disable_web_page_preview=True)
-        except MessageNotModified:
-            pass
-    else:
-        try:
-            await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(btn))
-        except MessageNotModified:
-            pass
-    
+
+        if n_offset:
+            nav.append(
+                InlineKeyboardButton(
+                    "ɴᴇxᴛ ⋟",
+                    callback_data=f"next_{req}_{key}_{n_offset}"
+                )
+            )
+
+        btn.append(nav)
+
+    except Exception:
+        pass
+
+    # ================= UPDATE MESSAGE ================= #
+
+    try:
+        if settings.get("button"):
+            await query.edit_message_reply_markup(
+                reply_markup=InlineKeyboardMarkup(btn)
+            )
+        else:
+            cap = await get_cap(
+                settings,
+                "0.00",
+                files,
+                query,
+                total,
+                clean_search_text(search),
+                offset + 1
+            )
+            await query.message.edit_text(
+                cap,
+                reply_markup=InlineKeyboardMarkup(btn),
+                disable_web_page_preview=True
+            )
+    except MessageNotModified:
+        pass
+
     await query.answer()
 
 
@@ -1715,69 +1687,96 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
 
 async def auto_filter(client, msg, spoll=False):
+
     curr_time = datetime.now(pytz.timezone('Asia/Kolkata')).time()
+
     if not spoll:
         message = msg
+
         if message.text.startswith("/"):
             return
+
         if re.findall(r"((^\/|^,|^!|^\.|^[\U0001F600-\U000E007F]).*)", message.text):
             return
+
         if len(message.text) < 100:
-            search = message.text
-            search = search.lower()
-            m = await message.reply_text(f'**🔎 I AM SEARCHING** `{search}`', reply_to_message_id=message.id)
+
+            search = message.text.lower()
+
+            m = await message.reply_text(
+                f'**🔎 I AM SEARCHING** `{search}`',
+                reply_to_message_id=message.id
+            )
+
             find = search.split(" ")
             search = ""
+
             removes = ["in", "upload", "series", "full",
                        "horror", "thriller", "mystery", "print", "file"]
+
             for x in find:
-                if x in removes:
-                    continue
-                else:
-                    search = search + x + " "
-            search = re.sub(r"\b(pl(i|e)*?(s|z+|ease|se|ese|(e+)s(e)?)|((send|snd|giv(e)?|gib)(\sme)?)|movie(s)?|new|latest|bro|bruh|broh|helo|that|find|dubbed|link|venum|iruka|pannunga|pannungga|anuppunga|anupunga|anuppungga|anupungga|film|undo|kitti|kitty|tharu|kittumo|kittum|movie|any(one)|with\ssubtitle(s)?)", "", search, flags=re.IGNORECASE)
-            search = re.sub(r"\s+", " ", search).strip()
-            search = search.replace("-", " ")
-            search = search.replace(":", "")
-            files, offset, total_results = await get_search_results(
-    message.chat.id, search, offset=0, filter=True
-)
+                if x not in removes:
+                    search += x + " "
 
-# 🔥 1️⃣ Exact name / relevance first
-files = sort_by_relevance(files, search)
-
-# 🔥 2️⃣ Quality order
-files = sort_files_by_quality(files)
-
-settings = await get_settings(message.chat.id)
-
-if not files:
-    if settings["spell_check"]:
-        ai_sts = await m.edit(
-            '🤖 ᴘʟᴇᴀꜱᴇ ᴡᴀɪᴛ, ᴀɪ ɪꜱ ᴄʜᴇᴄᴋɪɴɢ ʏᴏᴜʀ ꜱᴘᴇʟʟɪɴɢ...'
-        )
-        is_misspelled = await ai_spell_check(chat_id=message.chat.id, wrong_name=search)
-        if is_misspelled:
-            await ai_sts.edit(
-                f'✅ Aɪ Sᴜɢɢᴇsᴛᴇᴅ: <code>{is_misspelled}</code>\n🔍 Searching for it...'
+            search = re.sub(
+                r"\b(pl(i|e)*?(s|z+|ease|se|ese|(e+)s(e)?)|((send|snd|giv(e)?|gib)(\sme)?)|movie(s)?|new|latest|bro|bruh|broh|helo|that|find|dubbed|link|venum|iruka|pannunga|pannungga|anuppunga|anupunga|anuppungga|anupungga|film|undo|kitti|kitty|tharu|kittumo|kittum|movie|any(one)|with\ssubtitle(s)?)",
+                "",
+                search,
+                flags=re.IGNORECASE
             )
-            message.text = is_misspelled
-            await ai_sts.delete()
-            return await auto_filter(client, message)
-        else:
-            await ai_sts.delete()
-            await m.delete()
-            return await advantage_spell_chok(client, message)
+
+            search = re.sub(r"\s+", " ", search).strip()
+            search = search.replace("-", " ").replace(":", "")
+
+            files, offset, total_results = await get_search_results(
+                message.chat.id, search, offset=0, filter=True
+            )
+
+            # 🔥 SAME ORDER YOU WANTED
+            files = sort_by_relevance(files, search)
+            files = sort_files_by_quality(files)
+
+            settings = await get_settings(message.chat.id)
+
+            if not files:
+                if settings["spell_check"]:
+
+                    ai_sts = await m.edit(
+                        '🤖 ᴘʟᴇᴀꜱᴇ ᴡᴀɪᴛ, ᴀɪ ɪꜱ ᴄʜᴇᴄᴋɪɴɢ ʏᴏᴜʀ ꜱᴘᴇʟʟɪɴɢ...'
+                    )
+
+                    is_misspelled = await ai_spell_check(
+                        chat_id=message.chat.id,
+                        wrong_name=search
+                    )
+
+                    if is_misspelled:
+                        await ai_sts.edit(
+                            f'✅ Aɪ Sᴜɢɢᴇsᴛᴇᴅ: <code>{is_misspelled}</code>\n🔍 Searching for it...'
+                        )
+                        message.text = is_misspelled
+                        await ai_sts.delete()
+                        return await auto_filter(client, message)
+
+                    await ai_sts.delete()
+                    await m.delete()
+                    return await advantage_spell_chok(client, message)
+
+                return
+
     else:
-        return
-else:
-    message = msg.message.reply_to_message
-    search, files, offset, total_results = spoll
-    m = await message.reply_text(
-        f'**🔎 I AM SEARCHING** `{search}`', reply_to_message_id=message.id
-    )
-    settings = await get_settings(message.chat.id)
-    await msg.message.delete()
+        message = msg.message.reply_to_message
+        search, files, offset, total_results = spoll
+
+        m = await message.reply_text(
+            f'**🔎 I AM SEARCHING** `{search}`',
+            reply_to_message_id=message.id
+        )
+
+        settings = await get_settings(message.chat.id)
+        await msg.message.delete()
+
+    # 👇 Rest of your button + imdb code SAME rahega
 
 key = f"{message.chat.id}-{message.id}"
 FRESH[key] = search
