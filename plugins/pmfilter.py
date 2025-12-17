@@ -298,7 +298,7 @@ async def next_page(bot, query):
                 query,
                 total,
                 clean_search_text(search),
-                offset + 1
+                offset + 0
             )
             await query.message.edit_text(
                 cap,
