@@ -1687,7 +1687,6 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
 
 async def auto_filter(client, msg, spoll=False):
-
     curr_time = datetime.now(pytz.timezone('Asia/Kolkata')).time()
 
     if not spoll:
@@ -1700,9 +1699,7 @@ async def auto_filter(client, msg, spoll=False):
             return
 
         if len(message.text) < 100:
-
             search = message.text.lower()
-
             m = await message.reply_text(
                 f'**🔎 I AM SEARCHING** `{search}`',
                 reply_to_message_id=message.id
@@ -1710,9 +1707,7 @@ async def auto_filter(client, msg, spoll=False):
 
             find = search.split(" ")
             search = ""
-
-            removes = ["in", "upload", "series", "full",
-                       "horror", "thriller", "mystery", "print", "file"]
+            removes = ["in", "upload", "series", "full", "horror", "thriller", "mystery", "print", "file"]
 
             for x in find:
                 if x not in removes:
@@ -1724,7 +1719,6 @@ async def auto_filter(client, msg, spoll=False):
                 search,
                 flags=re.IGNORECASE
             )
-
             search = re.sub(r"\s+", " ", search).strip()
             search = search.replace("-", " ").replace(":", "")
 
@@ -1732,24 +1726,20 @@ async def auto_filter(client, msg, spoll=False):
                 message.chat.id, search, offset=0, filter=True
             )
 
-            # 🔥 SAME ORDER YOU WANTED
+            # 🔥 Exact name / relevance first
             files = sort_by_relevance(files, search)
+            # 🔥 Quality order
             files = sort_files_by_quality(files)
 
             settings = await get_settings(message.chat.id)
 
             if not files:
-                if settings["spell_check"]:
-
+                if settings.get("spell_check"):
                     ai_sts = await m.edit(
                         '🤖 ᴘʟᴇᴀꜱᴇ ᴡᴀɪᴛ, ᴀɪ ɪꜱ ᴄʜᴇᴄᴋɪɴɢ ʏᴏᴜʀ ꜱᴘᴇʟʟɪɴɢ...'
                     )
 
-                    is_misspelled = await ai_spell_check(
-                        chat_id=message.chat.id,
-                        wrong_name=search
-                    )
-
+                    is_misspelled = await ai_spell_check(chat_id=message.chat.id, wrong_name=search)
                     if is_misspelled:
                         await ai_sts.edit(
                             f'✅ Aɪ Sᴜɢɢᴇsᴛᴇᴅ: <code>{is_misspelled}</code>\n🔍 Searching for it...'
@@ -1761,122 +1751,78 @@ async def auto_filter(client, msg, spoll=False):
                     await ai_sts.delete()
                     await m.delete()
                     return await advantage_spell_chok(client, message)
-
                 return
-
     else:
         message = msg.message.reply_to_message
         search, files, offset, total_results = spoll
-
         m = await message.reply_text(
             f'**🔎 I AM SEARCHING** `{search}`',
             reply_to_message_id=message.id
         )
-
         settings = await get_settings(message.chat.id)
         await msg.message.delete()
 
-    # 👇 Rest of your button + imdb code SAME rahega
+    # 👇 Button creation & IMDB fetch
+    key = f"{message.chat.id}-{message.id}"
+    FRESH[key] = search
+    temp.GETALL[key] = files
+    temp.SHORT[message.from_user.id] = message.chat.id
 
-key = f"{message.chat.id}-{message.id}"
-FRESH[key] = search
-temp.GETALL[key] = files
-temp.SHORT[message.from_user.id] = message.chat.id
-
-if settings.get('button'):
-    btn = [
-        [
-            InlineKeyboardButton(
-                text=f"🔗 {get_size(file.file_size)} ≽ " + clean_filename(file.file_name),
-                callback_data=f'file#{file.file_id}'
-            ),
-        ]
-        for file in files
-    ]
-    btn.insert(
-        0,
-        [
-            InlineKeyboardButton(f'Qᴜᴀʟɪᴛʏ', callback_data=f"qualities#{key}"),
-            InlineKeyboardButton("Lᴀɴɢᴜᴀɢᴇ", callback_data=f"languages#{key}"),
-            InlineKeyboardButton("Sᴇᴀsᴏɴ", callback_data=f"seasons#{key}")
-        ]
-    )
-    btn.insert(
-        0,
-        [
-            InlineKeyboardButton(
-                "⚜️ 𝐑𝐞𝐦𝐨𝐯𝐞 𝐚𝐝s ⚜️", url=f"https://t.me/{temp.U_NAME}?start=premium"
-            ),
-            InlineKeyboardButton("Sᴇɴᴅ Aʟʟ", callback_data=f"sendfiles#{key}")
-        ]
-    )
-else:
-    btn = []
-    btn.insert(
-        0,
-        [
-            InlineKeyboardButton(f'Qᴜᴀʟɪᴛʏ', callback_data=f"qualities#{key}"),
-            InlineKeyboardButton("Lᴀɴɢᴜᴀɢᴇ", callback_data=f"languages#{key}"),
-            InlineKeyboardButton("Sᴇᴀsᴏɴ", callback_data=f"seasons#{key}")
-        ]
-    )
-    btn.insert(
-        0,
-        [
-            InlineKeyboardButton(
-                "⚜️ 𝐑𝐞𝐦𝐨𝐯𝐞 𝐚𝐝s ⚜️", url=f"https://t.me/{temp.U_NAME}?start=premium"
-            ),
-            InlineKeyboardButton("Sᴇɴᴅ Aʟʟ", callback_data=f"sendfiles#{key}")
-        ]
-    )
-
-if offset != "":
-    req = message.from_user.id if message.from_user else 0
-    try:
-        if settings['max_btn']:
-            btn.append(
-                [
-                    InlineKeyboardButton("ᴘᴀɢᴇ", callback_data="pages"),
-                    InlineKeyboardButton(
-                        text=f"1/{math.ceil(int(total_results)/10)}", callback_data="pages"
-                    ),
-                    InlineKeyboardButton(text="ɴᴇxᴛ ⋟", callback_data=f"next_{req}_{key}_{offset}")
-                ]
-            )
-        else:
-            btn.append(
-                [
-                    InlineKeyboardButton("ᴘᴀɢᴇ", callback_data="pages"),
-                    InlineKeyboardButton(
-                        text=f"1/{math.ceil(int(total_results)/int(MAX_B_TN))}", callback_data="pages"
-                    ),
-                    InlineKeyboardButton(text="ɴᴇxᴛ ⋟", callback_data=f"next_{req}_{key}_{offset}")
-                ]
-            )
-    except KeyError:
-        await save_group_settings(message.chat.id, 'max_btn', True)
-        btn.append(
+    if settings.get('button'):
+        btn = [
             [
-                InlineKeyboardButton("ᴘᴀɢᴇ", callback_data="pages"),
-                InlineKeyboardButton(text=f"1/{math.ceil(int(total_results)/10)}", callback_data="pages"),
-                InlineKeyboardButton(text="ɴᴇxᴛ ⋟", callback_data=f"next_{req}_{key}_{offset}")
+                InlineKeyboardButton(
+                    text=f"🔗 {get_size(file.file_size)} ≽ {clean_filename(file.file_name)}",
+                    callback_data=f'file#{file.file_id}'
+                )
+            ] for file in files
+        ]
+        btn.insert(0, [
+            InlineKeyboardButton('Qᴜᴀʟɪᴛʏ', callback_data=f"qualities#{key}"),
+            InlineKeyboardButton('Lᴀɴɢᴜᴀɢᴇ', callback_data=f"languages#{key}"),
+            InlineKeyboardButton('Sᴇᴀsᴏɴ', callback_data=f"seasons#{key}")
+        ])
+        btn.insert(0, [
+            InlineKeyboardButton("⚜️ 𝐑𝐞𝐦𝐨𝐯𝐞 𝐚𝐝s ⚜️", url=f"https://t.me/{temp.U_NAME}?start=premium"),
+            InlineKeyboardButton("Sᴇɴᴅ Aʟʟ", callback_data=f"sendfiles#{key}")
+        ])
+    else:
+        btn = [
+            [
+                InlineKeyboardButton('Qᴜᴀʟɪᴛʏ', callback_data=f"qualities#{key}"),
+                InlineKeyboardButton('Lᴀɴɢᴜᴀɢᴇ', callback_data=f"languages#{key}"),
+                InlineKeyboardButton('Sᴇᴀsᴏɴ', callback_data=f"seasons#{key}")
+            ],
+            [
+                InlineKeyboardButton("⚜️ 𝐑𝐞𝐦𝐨𝐯𝐞 𝐚𝐝s ⚜️", url=f"https://t.me/{temp.U_NAME}?start=premium"),
+                InlineKeyboardButton("Sᴇɴᴅ Aʟʟ", callback_data=f"sendfiles#{key}")
             ]
-        )
-else:
-    btn.append([InlineKeyboardButton(text="↭ ɴᴏ ᴍᴏʀᴇ ᴘᴀɢᴇꜱ ᴀᴠᴀɪʟᴀʙʟᴇ ↭", callback_data="pages")])
+        ]
 
-    imdb = await get_poster(search, file=(files[0]).file_name) if settings["imdb"] else None
+    if offset != "":
+        req = message.from_user.id if message.from_user else 0
+        try:
+            step = 10 if settings.get('max_btn') else int(MAX_B_TN)
+            btn.append([
+                InlineKeyboardButton("⋞ ʙᴀᴄᴋ", callback_data=f"next_{req}_{key}_{max(0,int(offset)-step)}") if int(offset)>0 else InlineKeyboardButton("ᴘᴀɢᴇ", callback_data="pages"),
+                InlineKeyboardButton(f"{math.ceil(int(offset)/step)+1} / {math.ceil(total_results/step)}", callback_data="pages"),
+                InlineKeyboardButton("ɴᴇxᴛ ⋟", callback_data=f"next_{req}_{key}_{offset + step}") if (offset + step)<total_results else InlineKeyboardButton("↭ ɴᴏ ᴍᴏʀᴇ ᴘᴀɢᴇꜱ ᴀᴠᴀɪʟᴀʙʟᴇ ↭", callback_data="pages")
+            ])
+        except KeyError:
+            await save_group_settings(message.chat.id, 'max_btn', True)
+    else:
+        btn.append([InlineKeyboardButton(text="↭ ɴᴏ ᴍᴏʀᴇ ᴘᴀɢᴇꜱ ᴀᴠᴀɪʟᴀʙʟᴇ ↭", callback_data="pages")])
 
+    imdb = await get_poster(search, file=files[0].file_name) if settings.get("imdb") else None
     cur_time = datetime.now(pytz.timezone('Asia/Kolkata')).time()
-    time_difference = timedelta(hours=cur_time.hour, minutes=cur_time.minute, seconds=(cur_time.second+(cur_time.microsecond/1000000))) - \
-        timedelta(hours=curr_time.hour, minutes=curr_time.minute,
-                  seconds=(curr_time.second+(curr_time.microsecond/1000000)))
+    time_difference = timedelta(
+        hours=cur_time.hour, minutes=cur_time.minute, seconds=(cur_time.second + (cur_time.microsecond / 1000000))
+    ) - timedelta(
+        hours=curr_time.hour, minutes=curr_time.minute, seconds=(curr_time.second + (curr_time.microsecond / 1000000))
+    )
     remaining_seconds = "{:.2f}".format(time_difference.total_seconds())
-    TEMPLATE = script.IMDB_TEMPLATE_TXT
-    settings = await get_settings(message.chat.id)
-    if settings['template']:
-        TEMPLATE = settings['template']
 
+    TEMPLATE = settings.get('template') if settings.get('template') else script.IMDB_TEMPLATE_TXT
     if imdb:
         cap = TEMPLATE.format(
             query=search,
