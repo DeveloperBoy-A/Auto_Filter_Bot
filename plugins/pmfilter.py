@@ -1786,7 +1786,7 @@ async def auto_filter(client, msg, spoll=False):
     if offset != "":
         req = message.from_user.id if message.from_user else 0
         try:
-    if settings.get('max_btn'):
+        if settings.get('max_btn'):
         btn.append(
             [
                 InlineKeyboardButton("ᴘᴀɢᴇ", callback_data="pages"),
