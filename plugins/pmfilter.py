@@ -1799,18 +1799,19 @@ async def auto_filter(client, msg, spoll=False):
         except KeyError:
             await save_group_settings(message.chat.id, 'max_btn', True)
             btn.append(
-                [InlineKeyboardButton("ᴘᴀɢᴇ", callback_data="pages"), InlineKeyboardButton(
-                    text=f"1/{math.ceil(int(total_results)/10)}", callback_data="pages"), InlineKeyboardButton(text="ɴᴇxᴛ ⋟", callback_data=f"next_{req}_{key}_{offset}")]
-            )
-    else:
-        btn.append([InlineKeyboardButton(
-            text="↭ ɴᴏ ᴍᴏʀᴇ ᴘᴀɢᴇꜱ ᴀᴠᴀɪʟᴀʙʟᴇ ↭", callback_data="pages")])
+[
+InlineKeyboardButton(
+text="↭ ɴᴏ ᴍᴏʀᴇ ᴘᴀɢᴇꜱ ᴀᴠᴀɪʟᴀʙʟᴇ ↭",
+callback_data="pages"
+)
+]
+)
 
-    imdb = None
-if settings.get("imdb") and len(files) < 20:
+imdb = None
+if settings.get("imdb") and files and len(files) < 20:
     imdb = await get_poster(
         search,
-        file=(files[0]).file_name
+        file=files[0].file_name
     )
 
     cur_time = datetime.now(pytz.timezone('Asia/Kolkata')).time()
