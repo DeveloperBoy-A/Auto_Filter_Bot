@@ -138,6 +138,12 @@ Nᴀᴍᴇ - {}
 
 <blockquote>👇 नीचे दिए गए विकल्पों में से movie के नाम की सही spelling चुनें</blockquote>"""
 
+    DEL_MSG = """f"<b><u>❗️⚠️ IMPORTANT WARNING ⚠️❗️</u></b>\n\n"
+f"THIS MOVIE FILE/VIDEO WILL BE <b>AUTOMATICALLY DELETED</b> IN <b><u><code>{get_time(DELETE_TIME)}</code></u></b> 🫥 "
+"(DUE TO COPYRIGHT ISSUES).\n\n"
+f"<b><i>PLEASE FORWARD THIS FILE TO SOMEWHERE ELSE AND START DOWNLOADING THERE.\n\n"
+f"<blockquote>⚠️ यह फ़ाइल  <u><code>{get_time(DELETE_TIME)}</code></u> में स्वचालित रूप से हटा दी जाएगी, इसलिए इसे अपने  SAVED MESSAGES पर अग्रेषित करें और फिर डाउनलोड करें।</i></b></blockquote>"""
+
 
     I_CUDNT = """<b>sᴏʀʀʏ ɴᴏ ꜰɪʟᴇs ᴡᴇʀᴇ ꜰᴏᴜɴᴅ ꜰᴏʀ ʏᴏᴜʀ ʀᴇǫᴜᴇꜱᴛ {} 😕
 
