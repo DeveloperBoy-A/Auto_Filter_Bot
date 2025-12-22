@@ -58,7 +58,7 @@ class script(object):
 ▫ ғʀᴇᴇ & ᴇᴀsʏ ᴛᴏ ᴜsᴇ.
 ▫ 𝟸𝟺x𝟽 sᴇʀᴠɪᴄᴇs ᴀᴠᴀɪʟᴀʙʟᴇ.</b>"""
 
-    MULTI_STATUS_TXT = """<b>╭────[ 🗃〄 ᴅᴀᴛᴀʙᴀsᴇ 1 〄🗃] ────⍟</b>
+    MULTI_STATUS_TXT = """<b><blockquote>🌿 ᴍᴀɪɴᴛᴀɪɴᴇᴅ ʙʏ : <a href="https://t.me/its_ankit_meena907">𝐃𝐞𝐯𝐞𝐥𝐨𝐩𝐞𝐫_𝐁𝐨𝐲™(𝓐𝓷𝓴𝓲𝓽_𝓜𝓮𝓮𝓷𝓪😝)</a></blockquote>/n╭────[ 🗃 ᴅᴀᴛᴀʙᴀsᴇ 1 🗃] ────⍟</b>
 │
 ├⋟ ᴀʟʟ ᴜsᴇʀs ⋟ <code>{}</code>
 ├⋟ ᴀʟʟ ɢʀᴏᴜᴘs ⋟ <code>{}</code>
@@ -67,7 +67,7 @@ class script(object):
 ├⋟ ᴜsᴇᴅ sᴛᴏʀᴀɢᴇ ⋟ <code>{}</code>
 ├⋟ ꜰʀᴇᴇ sᴛᴏʀᴀɢᴇ ⋟ <code>{}</code>
 │
-<b>├────[ 🗳〄 ᴅᴀᴛᴀʙᴀsᴇ 2 〄🗳 ]────⍟</b>   
+<b>├────[ 🗃️ ᴅᴀᴛᴀʙᴀsᴇ 2 🗃️ ]────⍟</b>   
 │
 ├⋟ ᴀʟʟ ꜰɪʟᴇs ⋟ <code>{}</code>
 ├⋟ ꜱɪᴢᴇ ⋟ <code>{}</code>
