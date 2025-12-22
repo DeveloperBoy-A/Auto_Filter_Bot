@@ -214,7 +214,7 @@ Nᴀᴍᴇ : {}
 
 Mᴇꜱꜱᴀɢᴇ : <b>{}</b>"""
     
-    CAPTION = """<b><a href="https://t.me/newmovieswebseries_group">🗃️{file_size}🗃️{file_name}</a>  ❣️[@Newmovie_sbot] </b>\n\n<b>⚜️ Powered by 𝖩𝗈𝗂𝗇✅➥ : <a href="https://t.me/+MINAQiQyVq8wMWRl">[ 🔰𝑵𝒆𝒘 𝒎𝒐𝒗𝒊𝒆 & 𝒘𝒆𝒃 𝒔𝒆𝒓𝒊𝒆𝒔🔰 ]</a></b>"""
+    CAPTION = """<b><a href="https://t.me/newmovieswebseries_group">{file_name}</a>  ❣️[@Tokyo_Updates] </b>\n\n<b>⚜️ Powered by 𝖩𝗈𝗂𝗇✅➥ : <a href="https://t.me/+MINAQiQyVq8wMWRl">[ 🔰𝑵𝒆𝒘 𝒎𝒐𝒗𝒊𝒆 & 𝒘𝒆𝒃 𝒔𝒆𝒓𝒊𝒆𝒔🔰 ]</a></b>"""
 
     
     MOVIE_UPDATE_NOTIFY_TXT = """
