@@ -1,4 +1,4 @@
-pyrofork==2.3.45
+pyrofork==2.3.69
 tgcrypto-pyrofork
 pymongo==4.13.2
 motor==3.7.1
@@ -7,12 +7,8 @@ umongo
 requests
 bs4
 shortzy
-datetime
 pytz
 aiohttp
-pyrogram
-tgcrypto
-
 
 # Other tools
 opencv-python-headless==4.8.1.78
@@ -32,18 +28,9 @@ ffmpeg-python==0.2.0
 jinja2
 apscheduler
 pyshorteners
-pyromod
 colorama
 fuzzywuzzy
-Levenshtein==0.24.0
-
+python-Levenshtein==0.27.1
 
 # Git-based Packages
-git+https://github.com/theamanchaudhary/cinemagoer
-gunicorn==20.1.0 
-werkzeug==3.0.6 
-Flask 
-itsdangerous==2.0.1 
-python-Levenshtein 
-
- 
+git+https://github.com/DreamXBotz/cinemagoer
