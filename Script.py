@@ -59,13 +59,14 @@ class script(object):
 ▫ 𝟸𝟺x𝟽 sᴇʀᴠɪᴄᴇs ᴀᴠᴀɪʟᴀʙʟᴇ.</b>"""
 
     MULTI_STATUS_TXT = """<b><blockquote>🌿 ᴍᴀɪɴᴛᴀɪɴᴇᴅ ʙʏ : 𝐃𝐞𝐯𝐞𝐥𝐨𝐩𝐞𝐫_𝐁𝐨𝐲™(𝓐𝓷𝓴𝓲𝓽_𝓜𝓮𝓮𝓷𝓪😝)</a></blockquote>
-╭────[ 👨‍❤️‍👨 ᴜsᴇʀs ᴅᴀᴛᴀʙᴀsᴇ 👨‍❤️‍👨 ] ────⍟
+╭──[ 👨‍❤️‍👨 ᴜsᴇʀs ᴅᴀᴛᴀʙᴀsᴇ 👨‍❤️‍👨 ] ──⍟
 │
 ├⋟ ᴀʟʟ ᴜsᴇʀs ⋟ {0}
 ├⋟ ᴀʟʟ ɢʀᴏᴜᴘs ⋟ {1}
 ├⋟ ᴘʀᴇᴍɪᴜᴍ ᴜꜱᴇʀꜱ ⋟ {2}
 │
 ├────[ 🗃 ᴅᴀᴛᴀʙᴀsᴇ 1 🗃 ]────⍟
+│
 ├⋟ ᴀʟʟ ꜰɪʟᴇs ⋟ {3}
 ├⋟ ᴜsᴇᴅ sᴛᴏʀᴀɢᴇ ⋟ {4}
 ├⋟ ᴄʟᴜsᴛᴇʀ sᴛᴏʀᴀɢᴇ - {5} / 512.00 MB
@@ -89,13 +90,14 @@ class script(object):
 ╰─────────────────────⍟</b>"""
 
     STATUS_TXT = """<b>
-╭────[ 👨‍❤️‍👨 ᴜsᴇʀs ᴅᴀᴛᴀʙᴀsᴇ 👨‍❤️‍👨 ]────⍟
+╭──[ 👨‍❤️‍👨 ᴜsᴇʀs ᴅᴀᴛᴀʙᴀsᴇ 👨‍❤️‍👨 ]──⍟
 │
 ├⋟ ᴀʟʟ ᴜsᴇʀs ⋟ {0}
 ├⋟ ᴀʟʟ ɢʀᴏᴜᴘs ⋟ {1}
 ├⋟ ᴘʀᴇᴍɪᴜᴍ ᴜꜱᴇʀꜱ ⋟ {2}
 │
 ├────[ 🗃 ᴅᴀᴛᴀʙᴀsᴇ 🗃 ]────⍟
+│
 ├⋟ ᴀʟʟ ꜰɪʟᴇs ⋟ {3}
 ├⋟ ᴜsᴇᴅ sᴛᴏʀᴀɢᴇ ⋟ {4}
 ├⋟ ᴄʟᴜsᴛᴇʀ sᴛᴏʀᴀɢᴇ - {5} / 512.00 MB
@@ -229,7 +231,13 @@ Nᴀᴍᴇ : {}
 
 Mᴇꜱꜱᴀɢᴇ : <b>{}</b>"""
 
-    CAPTION = """<b><a href="https://t.me/newmovieswebseries_group">{file_name}</a>  ❣️[@Tokyo_Updates] </b>\n\n<b>⚜️ Powered by 𝖩𝗈𝗂𝗇✅➥ : <a href="https://t.me/+MINAQiQyVq8wMWRl">[ 🔰𝑵𝒆𝒘 𝒎𝒐𝒗𝒊𝒆 & 𝒘𝒆𝒃 𝒔𝒆𝒓𝒊𝒆𝒔🔰 ]</a></b>"""
+    CAPTION = """/set_cap <b><a href="https://t.me/newmovieswebseries_group">🗃️{file_size}🗃️ {file_name}{quality}{language}{audio}
+</a>~❣️[@Newmovie_sbot]</b>
+
+<b>⚜️ Powered by 𝖩𝗈𝗂𝗇✅➥ : <a href="https://t.me/+MINAQiQyVq8wMWRl">[ 🔰𝑵𝒆𝒘 𝒎𝒐𝒗𝒊𝒆 & 𝒘𝒆𝒃 𝒔𝒆𝒓𝒊𝒆𝒔🔰 ]</a></b>
+★━━━━━━━━━━━━━━━━━━━★
+🔥STAY WITH US & SAVE YOUR MONEY🔥
+➳⃝⃝❤️ Rᴇᴀᴄᴛ, sᴀᴠᴇ & sʜᴀʀᴇ"""
 
 
     MOVIE_UPDATE_NOTIFY_TXT = """
