@@ -317,18 +317,15 @@ async def start(client, message):
             files = temp.GETALL.get(file_id)
             if not files:
                 return await message.reply('<b><i>ɴᴏ ꜱᴜᴄʜ ꜰɪʟᴇ ᴇxɪꜱᴛꜱ !</b></i>')
-
-        filesarr = []
-        for file in files:
-            file_id = file.file_id
-            files_ = await get_file_details(file_id)
-            files1 = files_[0]
-
-            title = clean_filename(files1.file_name)
-            size = get_size(files1.file_size)
-            f_caption = files1.caption
-
-            settings = await get_settings(int(grp_id))
+            filesarr = []
+            for file in files:
+                file_id = file.file_id
+                files_ = await get_file_details(file_id)
+                files1 = files_[0]
+                title = clean_filename(files1.file_name)
+                size = get_size(files1.file_size)
+                f_caption = files1.caption
+                settings = await get_settings(int(grp_id))
             DREAMX_CAPTION = settings.get('caption', CUSTOM_FILE_CAPTION)
 
             # OPTIONAL FIELDS
