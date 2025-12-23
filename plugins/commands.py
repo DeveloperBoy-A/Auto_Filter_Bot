@@ -408,21 +408,43 @@ async def start(client, message):
                 reply_markup=InlineKeyboardMarkup(btn))
 
             filetype = msg.media
-            file = getattr(msg, filetype.value)
-            title = clean_filename(file.file_name)
-            size=get_size(file.file_size)
-            f_caption = f"<code>{title}</code>"
-            settings = await get_settings(int(grp_id))
-            DREAMX_CAPTION = settings.get('caption', CUSTOM_FILE_CAPTION)
-            if DREAMX_CAPTION:
-                try:
-                    f_caption=DREAMX_CAPTION.format(file_name= '' if title is None else title, file_size='' if size is None else size, file_caption='')
-                except:
-                    return
-            await msg.edit_caption(
-                f_caption,
-                reply_markup=InlineKeyboardMarkup(btn)
-            )
+file = getattr(msg, filetype.value)
+
+# BASIC INFO (SAFE)
+title = clean_filename(file.file_name) or ""
+size = get_size(file.file_size) if file.file_size else ""
+
+# DEFAULT FALLBACK CAPTION
+f_caption = f"<code>{title}</code>"
+
+settings = await get_settings(int(grp_id))
+DREAMX_CAPTION = settings.get("caption") or CUSTOM_FILE_CAPTION
+
+# OPTIONAL FIELDS (SAFE – kabhi error nahi)
+quality = getattr(file, "quality", "")
+season = getattr(file, "season", "")
+language = getattr(file, "language", "")
+audio = getattr(file, "audio", "")
+
+if DREAMX_CAPTION:
+    try:
+        f_caption = DREAMX_CAPTION.format_map({
+            "file_name": title,
+            "file_size": size,
+            "file_caption": "",
+            "quality": quality,
+            "season": season,
+            "language": language,
+            "audio": audio
+        })
+    except Exception as e:
+        logger.exception(e)
+        f_caption = f"<code>{title}</code>"  # FINAL SAFE FALLBACK
+
+await msg.edit_caption(
+    f_caption,
+    reply_markup=InlineKeyboardMarkup(btn)
+)
             k = await msg.reply(
                 f"<b><u>❗️⚠️ IMPORTANT WARNING ⚠️❗️</u></b>\n\n"
 f"THIS MOVIE FILE/VIDEO WILL BE <b>AUTOMATICALLY DELETED</b> IN <b><u><code>{get_time(DELETE_TIME)}</code></u></b> 🫥 "
