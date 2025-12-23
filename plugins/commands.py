@@ -314,9 +314,9 @@ async def start(client, message):
 
     if data.startswith("allfiles"):
         try:
-        files = temp.GETALL.get(file_id)
-        if not files:
-            return await message.reply('<b><i>ɴᴏ ꜱᴜᴄʜ ꜰɪʟᴇ ᴇxɪꜱᴛꜱ !</b></i>')
+            files = temp.GETALL.get(file_id)
+            if not files:
+                return await message.reply('<b><i>ɴᴏ ꜱᴜᴄʜ ꜰɪʟᴇ ᴇxɪꜱᴛꜱ !</b></i>')
 
         filesarr = []
         for file in files:
