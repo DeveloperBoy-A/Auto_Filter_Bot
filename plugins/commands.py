@@ -312,71 +312,45 @@ async def start(client, message):
             print(f"Error In Verification - {e}")
             pass
 
+    # Now, await the file details task
+    files_ = await file_details_task
+
     if data.startswith("allfiles"):
         try:
             files = temp.GETALL.get(file_id)
             if not files:
                 return await message.reply('<b><i>ɴᴏ ꜱᴜᴄʜ ꜰɪʟᴇ ᴇxɪꜱᴛꜱ !</b></i>')
             filesarr = []
+            cover = None
             for file in files:
                 file_id = file.file_id
                 files_ = await get_file_details(file_id)
                 files1 = files_[0]
                 title = clean_filename(files1.file_name)
+                cover = files1.cover
                 size = get_size(files1.file_size)
                 f_caption = files1.caption
                 settings = await get_settings(int(grp_id))
                 DREAMX_CAPTION = settings.get('caption', CUSTOM_FILE_CAPTION)
-                # OPTIONAL FIELDS (SAFE)
-                quality = getattr(files1, "quality", "")
-                season = getattr(files1, "season", "")
-                language = getattr(files1, "language", "")
-                audio = getattr(files1, "audio", "")
                 if DREAMX_CAPTION:
                     try:
-                        f_caption=DREAMX_CAPTION.format(file_name= '' if title is None else title, file_size='' if size is None else size,
-quality='' if quality is None else quality,
-language='' if language is None else language,
-season='' if season is None else season,
-audio='' if season is None else audio,
-file_caption='' if f_caption is None else f_caption)
+                        f_caption=DREAMX_CAPTION.format(file_name= '' if title is None else title, file_size='' if size is None else size, file_caption='' if f_caption is None else f_caption)
                     except Exception as e:
                         logger.exception(e)
                         f_caption = f_caption
                 if f_caption is None:
                     f_caption = f"{clean_filename(files1.file_name)}"
-
-                if STREAM_MODE and not PREMIUM_STREAM_MODE:
-
-                    btn = [
-                        [InlineKeyboardButton('🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️', callback_data=f'generate_stream_link:{file_id}')],
-                        [InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]  # Keep this line unchanged  
-                    ]
-                elif STREAM_MODE and PREMIUM_STREAM_MODE:
-
-                    if not await db.has_premium_access(message.from_user.id):
-
-                        btn = [
-                            [InlineKeyboardButton('🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️', callback_data=f'prestream')],
-                            [InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]  # Keep this line unchanged  
-                        ]
-                    else:
-
-                        btn = [
-                            [InlineKeyboardButton('🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️', callback_data=f'generate_stream_link:{file_id}')],
-                            [InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]  # Keep this line unchanged  
-                        ]
-                else:
-                    btn = [[InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]]
+                btn = await stream_buttons(message.from_user.id, file_id)
                 msg = await client.send_cached_media(
                     chat_id=message.from_user.id,
+                    cover=cover,
                     file_id=file_id,
                     caption=f_caption,
                     protect_content=settings.get('file_secure', PROTECT_CONTENT),
                     reply_markup=InlineKeyboardMarkup(btn)
                 )
                 filesarr.append(msg)
-            k = await client.send_message(chat_id=message.from_user.id, text=f"<b><u>❗️⚠️ IMPORTANT WARNING ⚠️❗️</u></b>\n\nᴛʜɪꜱ ᴍᴏᴠɪᴇ ꜰɪʟᴇ/ᴠɪᴅᴇᴏ ᴡɪʟʟ ʙᴇ AUTOMATICALLY DELETED ɪɴ <b><u><code>{get_time(DELETE_TIME)}</code></u> 🫥 <i></b>(ᴅᴜᴇ ᴛᴏ ᴄᴏᴘʏʀɪɢʜᴛ ɪꜱꜱᴜᴇꜱ)</i>.\n\n<b><i>ᴘʟᴇᴀꜱᴇ ꜰᴏʀᴡᴀʀᴅ ᴛʜɪꜱ ꜰɪʟᴇ ᴛᴏ ꜱᴏᴍᴇᴡʜᴇʀᴇ ᴇʟꜱᴇ ᴀɴᴅ ꜱᴛᴀʀᴛ ᴅᴏᴡɴʟᴏᴀᴅɪɴɢ ᴛʜᴇʀᴇ.\n\n⚠️ यह फ़ाइल थोड़ी देर में स्वचालित रूप से हटा दी जाएगी, इसलिए इसे अपने saved massage पर अग्रेषित करें और फिर डाउनलोड करें।</i></b>")
+            k = await client.send_message(chat_id=message.from_user.id, text=script.DEL_MSG.format(get_time(DELETE_TIME)), parse_mode=enums.ParseMode.HTML)
             await asyncio.sleep(DELETE_TIME)
             for x in filesarr:
                 await x.delete()
@@ -387,32 +361,18 @@ file_caption='' if f_caption is None else f_caption)
             return
 
     user = message.from_user.id
-    files_ = await get_file_details(file_id)
     settings = await get_settings(int(grp_id))
     if not files_:
         pre, file_id = ((base64.urlsafe_b64decode(data + "=" * (-len(data) % 4))).decode("ascii")).split("_", 1)
         try:
-            if STREAM_MODE and not PREMIUM_STREAM_MODE:
-                btn = [
-                    [InlineKeyboardButton('🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️', callback_data=f'generate_stream_link:{file_id}')],
-                    [InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]  # Keep this line unchanged  
-                ]
-            elif STREAM_MODE and PREMIUM_STREAM_MODE:
-                if not await db.has_premium_access(message.from_user.id):
-                   btn = [
-                        [InlineKeyboardButton('🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️', callback_data=f'prestream')],
-                        [InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]  # Keep this line unchanged  
-                    ]
-                else:
-                    btn = [
-                        [InlineKeyboardButton('🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️', callback_data=f'generate_stream_link:{file_id}')],
-                        [InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]  # Keep this line unchanged  
-                    ]
-            else:
-
-                btn = [[InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]] 
+            cover = None
+            if COVERX:
+                details= await get_file_details(file_id)
+                cover = details.get('cover', None)
+            btn = await stream_buttons(message.from_user.id, file_id)
             msg = await client.send_cached_media(
                 chat_id=message.from_user.id,
+                cover=cover,
                 file_id=file_id,
                 protect_content=settings.get('file_secure', PROTECT_CONTENT),
                 reply_markup=InlineKeyboardMarkup(btn))
@@ -424,32 +384,17 @@ file_caption='' if f_caption is None else f_caption)
             f_caption = f"<code>{title}</code>"
             settings = await get_settings(int(grp_id))
             DREAMX_CAPTION = settings.get('caption', CUSTOM_FILE_CAPTION)
-            # OPTIONAL FIELDS (SAFE)
-            quality = getattr(files1, "quality", "")
-            season = getattr(files1, "season", "")
-            language = getattr(files1, "language", "")
-            audio = getattr(files1, "audio", "")
             if DREAMX_CAPTION:
                 try:
-                    f_caption=DREAMX_CAPTION.format(file_name= '' if title is None else title, file_size='' if size is None else size,
-quality='' if quality is None else quality,
-language='' if language is None else language,
-season='' if season is None else season,
-audio='' if season is None else audio,
-file_caption='')
+                    f_caption=DREAMX_CAPTION.format(file_name= '' if title is None else title, file_size='' if size is None else size, file_caption='')
                 except:
                     return
             await msg.edit_caption(
                 f_caption,
                 reply_markup=InlineKeyboardMarkup(btn)
             )
-            k = await msg.reply(
-                f"<b><u>❗️⚠️ IMPORTANT WARNING ⚠️❗️</u></b>\n\n"
-f"THIS MOVIE FILE/VIDEO WILL BE <b>AUTOMATICALLY DELETED</b> IN <b><u><code>{get_time(DELETE_TIME)}</code></u></b> 🫥 "
-"(DUE TO COPYRIGHT ISSUES).\n\n"
-f"<b><i>PLEASE FORWARD THIS FILE TO SOMEWHERE ELSE AND START DOWNLOADING THERE.\n\n"
-f"⚠️ यह फ़ाइल  <u><code>{get_time(DELETE_TIME)}</code></u> में स्वचालित रूप से हटा दी जाएगी, इसलिए इसे अपने  SAVED MESSAGES पर अग्रेषित करें और फिर डाउनलोड करें।</i></b>",
-                quote=True
+            k = await msg.reply(script.DEL_MSG.format(get_time(DELETE_TIME)),
+                quote=True, parse_mode=enums.ParseMode.HTML
             )
             await asyncio.sleep(DELETE_TIME)
             await msg.delete()
@@ -463,66 +408,56 @@ f"⚠️ यह फ़ाइल  <u><code>{get_time(DELETE_TIME)}</code></u> म
     files = files_[0]
     title = clean_filename(files.file_name)
     size = get_size(files.file_size)
+    cover = files.cover if files.cover else None
     f_caption = files.caption
     settings = await get_settings(int(grp_id))            
     DREAMX_CAPTION = settings.get('caption', CUSTOM_FILE_CAPTION)
-    # OPTIONAL FIELDS (SAFE)
-    quality = getattr(files1, "quality", "")
-    season = getattr(files1, "season", "")
-    language = getattr(files1, "language", "")
-    audio = getattr(files1, "audio", "")
     if DREAMX_CAPTION:
         try:
-            f_caption=DREAMX_CAPTION.format(file_name= '' if title is None else title, file_size='' if size is None else size,
-quality='' if quality is None else quality,
-language='' if language is None else language,
-season='' if season is None else season,
-audio='' if season is None else audio,
-file_caption='' if f_caption is None else f_caption)
+            f_caption=DREAMX_CAPTION.format(file_name= '' if title is None else title, file_size='' if size is None else size, file_caption='' if f_caption is None else f_caption)
         except Exception as e:
             logger.exception(e)
             f_caption = f_caption
 
     if f_caption is None:
         f_caption = clean_filename(files.file_name)
-
-    if STREAM_MODE and not PREMIUM_STREAM_MODE:
-        btn = [
-            [InlineKeyboardButton('🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️', callback_data=f'generate_stream_link:{file_id}')],
-            [InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]  # Keep this line unchanged  
-        ]
-    elif STREAM_MODE and PREMIUM_STREAM_MODE:
-        if not await db.has_premium_access(message.from_user.id):
-            btn = [
-                [InlineKeyboardButton('🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️', callback_data=f'prestream')],
-                [InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]  # Keep this line unchanged  
-            ]
-        else:
-            btn = [
-                [InlineKeyboardButton('🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️', callback_data=f'generate_stream_link:{file_id}')],
-                [InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]  # Keep this line unchanged  
-            ]
-    else:
-        btn = [[InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]]
+    btn = await stream_buttons(message.from_user.id, file_id)
     msg = await client.send_cached_media(
         chat_id=message.from_user.id,
         file_id=file_id,
+        cover=cover,
         caption=f_caption,
         protect_content=settings.get('file_secure', PROTECT_CONTENT),
         reply_markup=InlineKeyboardMarkup(btn)
     )
-    k = await msg.reply(
-        f"<b><u>❗️⚠️ IMPORTANT WARNING ⚠️❗️</u></b>\n\n"
-f"THIS MOVIE FILE/VIDEO WILL BE <b>AUTOMATICALLY DELETED</b> IN <b><u><code>{get_time(DELETE_TIME)}</code></u></b> 🫥 "
-"(DUE TO COPYRIGHT ISSUES).\n\n"
-f"<b><i>PLEASE FORWARD THIS FILE TO SOMEWHERE ELSE AND START DOWNLOADING THERE.\n\n"
-f"⚠️ यह फ़ाइल  <u><code>{get_time(DELETE_TIME)}</code></u> में स्वचालित रूप से हटा दी जाएगी, इसलिए इसे अपने  SAVED MESSAGES पर अग्रेषित करें और फिर डाउनलोड करें।</i></b>",
-        quote=True
+    k = await msg.reply(script.DEL_MSG.format(get_time(DELETE_TIME)),
+        quote=True, parse_mode=enums.ParseMode.HTML
     )     
     await asyncio.sleep(DELETE_TIME)
     await msg.delete()
     await k.edit_text("<b>ʏᴏᴜʀ ᴠɪᴅᴇᴏ / ꜰɪʟᴇ ɪꜱ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ᴅᴇʟᴇᴛᴇᴅ !!</b>")
     return
+
+async def stream_buttons(user_id: int, file_id: str):
+    if STREAM_MODE and not PREMIUM_STREAM_MODE:
+        return [
+            [InlineKeyboardButton('🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️', callback_data=f'generate_stream_link:{file_id}')],
+            [InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]
+        ]
+    elif STREAM_MODE and PREMIUM_STREAM_MODE:
+        if not await db.has_premium_access(user_id):
+            return [
+                [InlineKeyboardButton('🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️', callback_data='prestream')],
+                [InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]
+            ]
+        else:
+            return [
+                [InlineKeyboardButton('🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️', callback_data=f'generate_stream_link:{file_id}')],
+                [InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]
+            ]
+    else:
+        return [[InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]]
+
 
 @Client.on_message(filters.command('logs') & filters.user(ADMINS))
 async def log_file(bot, message):
