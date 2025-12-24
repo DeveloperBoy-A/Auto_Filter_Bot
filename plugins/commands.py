@@ -424,11 +424,11 @@ file_caption='' if f_caption is None else f_caption)
             f_caption = f"<code>{title}</code>"
             settings = await get_settings(int(grp_id))
             DREAMX_CAPTION = settings.get('caption', CUSTOM_FILE_CAPTION)
-                # OPTIONAL FIELDS (SAFE)
-                quality = getattr(files1, "quality", "")
-                season = getattr(files1, "season", "")
-                language = getattr(files1, "language", "")
-                audio = getattr(files1, "audio", "")
+            # OPTIONAL FIELDS (SAFE)
+            quality = getattr(files1, "quality", "")
+            season = getattr(files1, "season", "")
+            language = getattr(files1, "language", "")
+            audio = getattr(files1, "audio", "")
             if DREAMX_CAPTION:
                 try:
                     f_caption=DREAMX_CAPTION.format(file_name= '' if title is None else title, file_size='' if size is None else size,
