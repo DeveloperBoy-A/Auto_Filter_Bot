@@ -312,106 +312,69 @@ async def start(client, message):
             print(f"Error In Verification - {e}")
             pass
 
-if data.startswith("allfiles"):
-    try:
-        files = temp.GETALL.get(file_id)
-        if not files:
-            return await message.reply('<b><i>ɴᴏ ꜱᴜᴄʜ ꜰɪʟᴇ ᴇxɪꜱᴛꜱ !</b></i>')
+    if data.startswith("allfiles"):
+        try:
+            files = temp.GETALL.get(file_id)
+            if not files:
+                return await message.reply('<b><i>ɴᴏ ꜱᴜᴄʜ ꜰɪʟᴇ ᴇxɪꜱᴛꜱ !</b></i>')
+            filesarr = []
+            for file in files:
+                file_id = file.file_id
+                files_ = await get_file_details(file_id)
+                files1 = files_[0]
+                title = clean_filename(files1.file_name)
+                size = get_size(files1.file_size)
+                f_caption = files1.caption
+                settings = await get_settings(int(grp_id))
+                DREAMX_CAPTION = settings.get('caption', CUSTOM_FILE_CAPTION)
+                if DREAMX_CAPTION:
+                    try:
+                        f_caption=DREAMX_CAPTION.format(file_name= '' if title is None else title, file_size='' if size is None else size, file_caption='' if f_caption is None else f_caption)
+                    except Exception as e:
+                        logger.exception(e)
+                        f_caption = f_caption
+                if f_caption is None:
+                    f_caption = f"{clean_filename(files1.file_name)}"
 
-        filesarr = []
-        for file in files:
-            file_id = file.file_id
-            files_ = await get_file_details(file_id)
-            files1 = files_[0]
+                if STREAM_MODE and not PREMIUM_STREAM_MODE:
 
-            title = clean_filename(files1.file_name)
-            size = get_size(files1.file_size)
-            f_caption = files1.caption
-
-            settings = await get_settings(int(grp_id))
-            DREAMX_CAPTION = settings.get('caption', CUSTOM_FILE_CAPTION)
-
-            if DREAMX_CAPTION:
-                try:
-                    f_caption = DREAMX_CAPTION.format(
-                        file_name='' if title is None else title,
-                        file_size='' if size is None else size,
-                        file_caption='' if f_caption is None else f_caption
-                    )
-                except Exception as e:
-                    logger.exception(e)
-
-            if f_caption is None:
-                f_caption = clean_filename(files1.file_name)
-
-            if STREAM_MODE and not PREMIUM_STREAM_MODE:
-                btn = [
-                    [InlineKeyboardButton(
-                        '🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️',
-                        callback_data=f'generate_stream_link:{file_id}'
-                    )],
-                    [InlineKeyboardButton(
-                        '📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌',
-                        url=UPDATE_CHNL_LNK
-                    )]
-                ]
-
-            elif STREAM_MODE and PREMIUM_STREAM_MODE:
-                if not await db.has_premium_access(message.from_user.id):
                     btn = [
-                        [InlineKeyboardButton(
-                            '🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️',
-                            callback_data='prestream'
-                        )],
-                        [InlineKeyboardButton(
-                            '📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌',
-                            url=UPDATE_CHNL_LNK
-                        )]
+                        [InlineKeyboardButton('🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️', callback_data=f'generate_stream_link:{file_id}')],
+                        [InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]  # Keep this line unchanged  
                     ]
+                elif STREAM_MODE and PREMIUM_STREAM_MODE:
+
+                    if not await db.has_premium_access(message.from_user.id):
+
+                        btn = [
+                            [InlineKeyboardButton('🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️', callback_data=f'prestream')],
+                            [InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]  # Keep this line unchanged  
+                        ]
+                    else:
+
+                        btn = [
+                            [InlineKeyboardButton('🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️', callback_data=f'generate_stream_link:{file_id}')],
+                            [InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]  # Keep this line unchanged  
+                        ]
                 else:
-                    btn = [
-                        [InlineKeyboardButton(
-                            '🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️',
-                            callback_data=f'generate_stream_link:{file_id}'
-                        )],
-                        [InlineKeyboardButton(
-                            '📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌',
-                            url=UPDATE_CHNL_LNK
-                        )]
-                    ]
-            else:
-                btn = [[InlineKeyboardButton(
-                    '📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌',
-                    url=UPDATE_CHNL_LNK
-                )]]
-
-            msg = await client.send_cached_media(
-                chat_id=message.from_user.id,
-                file_id=file_id,
-                caption=f_caption,
-                protect_content=settings.get('file_secure', PROTECT_CONTENT),
-                reply_markup=InlineKeyboardMarkup(btn)
-            )
-
-            filesarr.append(msg)
-
-            k = await msg.reply(
-                script.DEL_MSG.format(get_time(DELETE_TIME)),
-                quote=True,
-                parse_mode=enums.ParseMode.HTML
-            )
-
+                    btn = [[InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]]
+                msg = await client.send_cached_media(
+                    chat_id=message.from_user.id,
+                    file_id=file_id,
+                    caption=f_caption,
+                    protect_content=settings.get('file_secure', PROTECT_CONTENT),
+                    reply_markup=InlineKeyboardMarkup(btn)
+                )
+                filesarr.append(msg)
+            k = await client.send_message(chat_id=message.from_user.id, text=f"<b><u>❗️⚠️ IMPORTANT WARNING ⚠️❗️</u></b>\n\nᴛʜɪꜱ ᴍᴏᴠɪᴇ ꜰɪʟᴇ/ᴠɪᴅᴇᴏ ᴡɪʟʟ ʙᴇ AUTOMATICALLY DELETED ɪɴ <b><u><code>{get_time(DELETE_TIME)}</code></u> 🫥 <i></b>(ᴅᴜᴇ ᴛᴏ ᴄᴏᴘʏʀɪɢʜᴛ ɪꜱꜱᴜᴇꜱ)</i>.\n\n<b><i>ᴘʟᴇᴀꜱᴇ ꜰᴏʀᴡᴀʀᴅ ᴛʜɪꜱ ꜰɪʟᴇ ᴛᴏ ꜱᴏᴍᴇᴡʜᴇʀᴇ ᴇʟꜱᴇ ᴀɴᴅ ꜱᴛᴀʀᴛ ᴅᴏᴡɴʟᴏᴀᴅɪɴɢ ᴛʜᴇʀᴇ.\n\n⚠️ यह फ़ाइल थोड़ी देर में स्वचालित रूप से हटा दी जाएगी, इसलिए इसे अपने saved massage पर अग्रेषित करें और फिर डाउनलोड करें।</i></b>")
             await asyncio.sleep(DELETE_TIME)
-            await msg.delete()
-            await k.edit_text(
-                "<b>ʏᴏᴜʀ ᴠɪᴅᴇᴏ / ꜰɪʟᴇ ɪꜱ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ᴅᴇʟᴇᴛᴇᴅ !!</b>"
-            )
-
-        return
-
-    except Exception as e:
-        logger.exception(e)
-        return
+            for x in filesarr:
+                await x.delete()
+            await k.edit_text("<b>ʏᴏᴜʀ ᴀʟʟ ᴠɪᴅᴇᴏꜱ/ꜰɪʟᴇꜱ ᴀʀᴇ ᴅᴇʟᴇᴛᴇᴅ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ !\nᴋɪɴᴅʟʏ ꜱᴇᴀʀᴄʜ ᴀɢᴀɪɴ</b>")
+            return
+        except Exception as e:
+            logger.exception(e)
+            return
 
     user = message.from_user.id
     files_ = await get_file_details(file_id)
@@ -460,12 +423,17 @@ if data.startswith("allfiles"):
                 f_caption,
                 reply_markup=InlineKeyboardMarkup(btn)
             )
-            k = await msg.reply(script.DEL_MSG.format(get_time(DELETE_TIME)),
-        quote=True, parse_mode=enums.ParseMode.HTML
-    )     
-    await asyncio.sleep(DELETE_TIME)
-    await msg.delete()
-    await k.edit_text("<b>ʏᴏᴜʀ ᴠɪᴅᴇᴏ / ꜰɪʟᴇ ɪꜱ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ᴅᴇʟᴇᴛᴇᴅ !!</b>")
+            k = await msg.reply(
+                f"<b><u>❗️⚠️ IMPORTANT WARNING ⚠️❗️</u></b>\n\n"
+f"THIS MOVIE FILE/VIDEO WILL BE <b>AUTOMATICALLY DELETED</b> IN <b><u><code>{get_time(DELETE_TIME)}</code></u></b> 🫥 "
+"(DUE TO COPYRIGHT ISSUES).\n\n"
+f"<b><i>PLEASE FORWARD THIS FILE TO SOMEWHERE ELSE AND START DOWNLOADING THERE.\n\n"
+f"⚠️ यह फ़ाइल  <u><code>{get_time(DELETE_TIME)}</code></u> में स्वचालित रूप से हटा दी जाएगी, इसलिए इसे अपने  SAVED MESSAGES पर अग्रेषित करें और फिर डाउनलोड करें।</i></b>",
+                quote=True
+            )
+            await asyncio.sleep(DELETE_TIME)
+            await msg.delete()
+            await k.edit_text("<b>ʏᴏᴜʀ ᴠɪᴅᴇᴏ / ꜰɪʟᴇ ɪꜱ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ᴅᴇʟᴇᴛᴇᴅ !!</b>")
             return
         except Exception as e:
             logger.exception(e)
@@ -513,8 +481,13 @@ if data.startswith("allfiles"):
         protect_content=settings.get('file_secure', PROTECT_CONTENT),
         reply_markup=InlineKeyboardMarkup(btn)
     )
-    k = await msg.reply(script.DEL_MSG.format(get_time(DELETE_TIME)),
-        quote=True, parse_mode=enums.ParseMode.HTML
+    k = await msg.reply(
+        f"<b><u>❗️⚠️ IMPORTANT WARNING ⚠️❗️</u></b>\n\n"
+f"THIS MOVIE FILE/VIDEO WILL BE <b>AUTOMATICALLY DELETED</b> IN <b><u><code>{get_time(DELETE_TIME)}</code></u></b> 🫥 "
+"(DUE TO COPYRIGHT ISSUES).\n\n"
+f"<b><i>PLEASE FORWARD THIS FILE TO SOMEWHERE ELSE AND START DOWNLOADING THERE.\n\n"
+f"⚠️ यह फ़ाइल  <u><code>{get_time(DELETE_TIME)}</code></u> में स्वचालित रूप से हटा दी जाएगी, इसलिए इसे अपने  SAVED MESSAGES पर अग्रेषित करें और फिर डाउनलोड करें।</i></b>",
+        quote=True
     )     
     await asyncio.sleep(DELETE_TIME)
     await msg.delete()
