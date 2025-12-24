@@ -879,11 +879,11 @@ async def cb_handler(client: Client, query: CallbackQuery):
             f_caption = f"{files.file_name}"
         await query.answer(url=f"href='https://telegram.me/{temp.U_NAME}?start=file_{query.message.chat.id}_{file.file_id}")
 
-elif query.data.startswith("autofilter_delete"):
-    await Media.collection.drop()
-    if MULTIPLE_DB:
-        await Media2.collection.drop()
-    await query.answer("Eᴠᴇʀʏᴛʜɪɴɢ's Gᴏɴᴇ")
+    elif query.data.startswith("autofilter_delete"):
+        await Media.collection.drop()
+        if MULTIPLE_DB:    
+            await Media2.collection.drop()
+        await query.answer("Eᴠᴇʀʏᴛʜɪɴɢ's Gᴏɴᴇ")
         await query.message.edit('ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ᴅᴇʟᴇᴛᴇᴅ ᴀʟʟ ɪɴᴅᴇxᴇᴅ ꜰɪʟᴇꜱ ✅')
 
     elif query.data.startswith("checksub"):
