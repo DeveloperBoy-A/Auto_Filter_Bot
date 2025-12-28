@@ -228,14 +228,17 @@ async def start(client, message):
         _, grp_id, file_id = data.split("_", 2)
         grp_id = int(grp_id)
     except:
-        _, grp_id, file_id = "", 0, data
+        grp_id = 0
+        file_id = data
+
+    # Fetch file details concurrently with user checks
+    file_details_task = asyncio.create_task(get_file_details(file_id))
 
     if not await db.has_premium_access(message.from_user.id): 
         try:
             btn = []
-            chat = int(data.split("_", 2)[1])
+            chat = grp_id
             settings      = await get_settings(chat)
-            fsub_channels = list(dict.fromkeys((settings.get('fsub', []) if settings else [])+ AUTH_CHANNELS)) 
 
             if fsub_channels:
                 btn += await is_subscribed(client, message.from_user.id, fsub_channels)
@@ -380,7 +383,7 @@ async def start(client, message):
     files_ = await get_file_details(file_id)
     settings = await get_settings(int(grp_id))
     if not files_:
-        pre, file_id = ((base64.urlsafe_b64decode(data + "=" * (-len(data) % 4))).decode("ascii")).split("_", 1)
+        pre, file_id = ((base64.urlsafe_b64decode(data + "=" * (-len(data) % 4))).decode("utf-8")).split("_", 1)
         try:
             if STREAM_MODE and not PREMIUM_STREAM_MODE:
                 btn = [
