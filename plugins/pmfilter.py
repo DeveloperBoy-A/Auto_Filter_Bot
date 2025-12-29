@@ -1441,7 +1441,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
     elif query.data == "donation":
         buttons = [[
-                InlineKeyboardButton('🌲 Sᴇɴᴅ Dᴏɴᴀᴛᴇ Sᴄʀᴇᴇɴsʜᴏᴛ Hᴇʀᴇ', url=OWNER_LNK)
+                InlineKeyboardButton('📸 Sᴇɴᴅ Dᴏɴᴀᴛᴇ Sᴄʀᴇᴇɴsʜᴏᴛ Hᴇʀᴇ', url=OWNER_LNK)
             ],[
                 InlineKeyboardButton('⇍ ʙᴀᴄᴋ ⇏', callback_data='about')
             ]]
@@ -1574,7 +1574,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         try:
             btn = [[ 
                 InlineKeyboardButton('ꜱᴛᴀʀ', callback_data='star_info'),
-                InlineKeyboardButton('ᴜᴘɪ', callback_data='upi_info')
+                InlineKeyboardButton('ᴜᴘɪ & Qʀ ᴄᴏᴅᴇ', callback_data='upi_info')
             ],[
                 InlineKeyboardButton('⇋ ʙᴀᴄᴋ ᴛᴏ ᴘʀᴇᴍɪᴜᴍ ⇋', callback_data='premium_info')
             ]]
@@ -1582,7 +1582,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
             await client.edit_message_media(
                 chat_id=query.message.chat.id,
                 message_id=query.message.id,
-                media=InputMediaPhoto(media=SUBSCRIPTION, caption=script.PREMIUM_TEXT, parse_mode=enums.ParseMode.HTML),
+                media=InputMediaPhoto(media=QR_CODE, caption=script.PREMIUM_TEXT, parse_mode=enums.ParseMode.HTML),
                 reply_markup=reply_markup
             )
         except Exception as e:
@@ -1591,7 +1591,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
     elif query.data == "upi_info":
         try:
             btn = [[ 
-                InlineKeyboardButton('• ꜱᴇɴᴅ  ᴘᴀʏᴍᴇɴᴛ ꜱᴄʀᴇᴇɴꜱʜᴏᴛ •', url=OWNER_LNK),
+                InlineKeyboardButton('📸• ꜱᴇɴᴅ  ᴘᴀʏᴍᴇɴᴛ ꜱᴄʀᴇᴇɴꜱʜᴏᴛ •📸', url=OWNER_LNK),
             ],[
                 InlineKeyboardButton('⇋ ʙᴀᴄᴋ ⇋', callback_data='buy_info')
             ]]
@@ -1599,7 +1599,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
             await client.edit_message_media(
                 chat_id=query.message.chat.id,
                 message_id=query.message.id,
-                media=InputMediaPhoto(media=SUBSCRIPTION, caption=script.PREMIUM_UPI_TEXT.format(OWNER_UPI_ID), parse_mode=enums.ParseMode.HTML),
+                media=InputMediaPhoto(media=QR_CODE, caption=script.PREMIUM_UPI_TEXT.format(OWNER_UPI_ID), parse_mode=enums.ParseMode.HTML),
                 reply_markup=reply_markup
             )
         except Exception as e:
