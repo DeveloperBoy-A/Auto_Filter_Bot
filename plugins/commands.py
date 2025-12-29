@@ -293,10 +293,12 @@ async def start(client, message):
                 else:
                     howtodownload = settings.get('tutorial_2', TUTORIAL_2) if is_second_shortener else settings.get('tutorial', TUTORIAL)
                 buttons = [[
-                    InlineKeyboardButton(text="♻️ ᴄʟɪᴄᴋ ʜᴇʀᴇ ᴛᴏ ᴠᴇʀɪꜰʏ ♻️", url=verify)
-                ],[
-                    InlineKeyboardButton(text="⁉️ ʜᴏᴡ ᴛᴏ ᴠᴇʀɪꜰʏ ⁉️", url=howtodownload)
-                ]]
+                    InlineKeyboardButton(text="♻️✅ ᴄʟɪᴄᴋ ʜᴇʀᴇ ᴛᴏ ᴠᴇʀɪꜰʏ ✅♻️", url=verify)
+               ],[ 
+                    InlineKeyboardButton(text="🎦❓ʜᴏᴡ ᴛᴏ ᴠᴇʀɪꜰʏ ᴠɪᴅᴇᴏ❓🎦", url=howtodownload),
+                
+                InlineKeyboardButton(text="😁 ʙᴜʏ sᴜʙsᴄʀɪᴘᴛɪᴏɴ - ɴᴏ ɴᴇᴇᴅ ᴛᴏ ᴠᴇʀɪғʏ 😁", callback_data='buy_info'),
+            ]]
                 reply_markup=InlineKeyboardMarkup(buttons)
                 if await db.user_verified(user_id): 
                     msg = script.THIRDT_VERIFICATION_TEXT
