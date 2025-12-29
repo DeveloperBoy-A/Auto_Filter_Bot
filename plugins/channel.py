@@ -520,16 +520,24 @@ CHANNEL_ID = -1002413838031
 async def add_button(client, message):
     if message.chat.id == CHANNEL_ID:
         button = InlineKeyboardMarkup(
-            [[InlineKeyboardButton("🔰 ᴍᴏᴠɪᴇ ꜱᴇᴀʀᴄʜ ɢʀᴏᴜᴘ 🔰", url="https://t.me/newmovieswebseries_group")],
-                                            [
-                InlineKeyboardButton("
-📢ɴᴇᴡ ᴍᴏᴠɪᴇ ɴᴏᴛɪꜰɪᴄᴀᴛɪᴏɴ ᴄʜᴀɴɴᴇʟ📢", url="https://t.me/+KZSznD7dPDIxNWY9"
-                )
-            ]]
+            [
+                [
+                    InlineKeyboardButton(
+                        "🔰 ᴍᴏᴠɪᴇ ꜱᴇᴀʀᴄʜ ɢʀᴏᴜᴘ 🔰",
+                        url="https://t.me/newmovieswebseries_group"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        "📢 ɴᴇᴡ ᴍᴏᴠɪᴇ ɴᴏᴛɪꜰɪᴄᴀᴛɪᴏɴ ᴄʜᴀɴɴᴇʟ 📢",
+                        url="https://t.me/+KZSznD7dPDIxNWY9"
+                    )
+                ]
+            ]
         )
 
         try:
-            # Try to add the button to the message
+            # Add the button to the message
             await message.edit_reply_markup(reply_markup=button)
             await asyncio.sleep(0.5)  # Small delay to handle rapid messages
         except Exception as e:
