@@ -383,7 +383,7 @@ async def update_movie_message(bot, base_name):
                 InlineKeyboardButton('♻️ Hᴏᴡ Tᴏ Dᴏᴡɴʟᴏᴀᴅ ♻️', url="https://t.me/newmovies_support/653"
                 )],
                                             [
-                InlineKeyboardButton('🔰MOVIE SEARCH GROUP🔰', url="https://t.me/newmovieswebseries_group"
+                InlineKeyboardButton('🔰 ᴍᴏᴠɪᴇ ꜱᴇᴀʀᴄʜ ɢʀᴏᴜᴘ 🔰', url="https://t.me/newmovieswebseries_group"
                 )
             ]])
         message_id = movie_doc.get("message_id")
@@ -520,7 +520,15 @@ CHANNEL_ID = -1002413838031
 async def add_button(client, message):
     if message.chat.id == CHANNEL_ID:
         button = InlineKeyboardMarkup(
-            [[InlineKeyboardButton("🔰𝗠𝗼𝘃𝗶𝗲 𝗦𝗲𝗮𝗿𝗰𝗵 𝗚𝗿𝗼𝘂𝗽🔰", url="https://t.me/newmovieswebseries_group")]]
+            [[InlineKeyboardButton("╔══════════════════╗
+   🔰 ᴍᴏᴠɪᴇ ꜱᴇᴀʀᴄʜ ɢʀᴏᴜᴘ 🔰
+╚══════════════════╝", url="https://t.me/newmovieswebseries_group")],
+                                            [
+                InlineKeyboardButton('╔══════════════════════════════════╗
+ 📢 ɴᴇᴡ ᴍᴏᴠɪᴇ ɴᴏᴛɪꜰɪᴄᴀᴛɪᴏɴ ᴄʜᴀɴɴᴇʟ 📢
+╚══════════════════════════════════╝', url="https://t.me/+KZSznD7dPDIxNWY9"
+                )
+            ]]
         )
 
         try:
