@@ -520,13 +520,10 @@ CHANNEL_ID = -1002413838031
 async def add_button(client, message):
     if message.chat.id == CHANNEL_ID:
         button = InlineKeyboardMarkup(
-            [[InlineKeyboardButton(""" ╔══════════════════╗
-          🔰 ᴍᴏᴠɪᴇ ꜱᴇᴀʀᴄʜ ɢʀᴏᴜᴘ 🔰
-       ╚══════════════════╝""", url="https://t.me/newmovieswebseries_group")],
+            [[InlineKeyboardButton(""🔰 ᴍᴏᴠɪᴇ ꜱᴇᴀʀᴄʜ ɢʀᴏᴜᴘ 🔰"", url="https://t.me/newmovieswebseries_group")],
                                             [
-                InlineKeyboardButton(""" ╔════════════════════╗
-📢ɴᴇᴡ ᴍᴏᴠɪᴇ ɴᴏᴛɪꜰɪᴄᴀᴛɪᴏɴ ᴄʜᴀɴɴᴇʟ📢
-  ╚════════════════════╝""", url="https://t.me/+KZSznD7dPDIxNWY9"
+                InlineKeyboardButton(""
+📢ɴᴇᴡ ᴍᴏᴠɪᴇ ɴᴏᴛɪꜰɪᴄᴀᴛɪᴏɴ ᴄʜᴀɴɴᴇʟ📢"", url="https://t.me/+KZSznD7dPDIxNWY9"
                 )
             ]]
         )
