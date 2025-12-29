@@ -241,7 +241,7 @@ Mᴇꜱꜱᴀɢᴇ : <b>{}</b>"""
 
 
     MOVIE_UPDATE_NOTIFY_TXT = """
-<b>【{title}】</b> ✅🆕️
+<b>【{filename}】</b> ✅🆕️
 
 🎭 Gᴇɴʀᴇs : <b>{genres}</b>
 📺 ᴏᴛᴛ    : <b>{ott}</b>
