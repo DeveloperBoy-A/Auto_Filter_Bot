@@ -1,3 +1,7 @@
+from pyrogram.errors import MessageNotModified
+from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
+from pyrogram import enums
+import logging
 from utils import get_size, is_subscribed, is_req_subscribed, group_setting_buttons, get_poster, temp, get_settings, save_group_settings, get_cap, imdb, is_check_admin, extract_request_content, log_error, clean_filename, generate_season_variations, clean_search_text
 import tracemalloc
 from fuzzywuzzy import process
@@ -1559,7 +1563,8 @@ async def cb_handler(client: Client, query: CallbackQuery):
             ],[            
                 InlineKeyboardButton('⇋ ʙᴀᴄᴋ ᴛᴏ ʜᴏᴍᴇ ⇋', callback_data='start')
             ]]
-            reply_markup = InlineKeyboardMarkup(btn)                        
+            reply_markup = InlineKeyboardMarkup(btn)
+        try:                        
             await client.edit_message_media(
                 chat_id=query.message.chat.id,
                 message_id=query.message.id,
@@ -1579,6 +1584,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 InlineKeyboardButton('⇋ ʙᴀᴄᴋ ᴛᴏ ᴘʀᴇᴍɪᴜᴍ ⇋', callback_data='premium_info')
             ]]
             reply_markup = InlineKeyboardMarkup(btn)
+        try:
             await client.edit_message_media(
                 chat_id=query.message.chat.id,
                 message_id=query.message.id,
@@ -1596,6 +1602,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 InlineKeyboardButton('⇋ ʙᴀᴄᴋ ⇋', callback_data='buy_info')
             ]]
             reply_markup = InlineKeyboardMarkup(btn)
+        try:
             await client.edit_message_media(
                 chat_id=query.message.chat.id,
                 message_id=query.message.id,
