@@ -1582,7 +1582,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
             await client.edit_message_media(
                 chat_id=query.message.chat.id,
                 message_id=query.message.id,
-                media=InputMediaPhoto(media=QR_CODE, caption=script.PREMIUM_TEXT, parse_mode=enums.ParseMode.HTML),
+                media=InputMediaPhoto(media=SUBSCRIPTION, caption=script.PREMIUM_TEXT, parse_mode=enums.ParseMode.HTML),
                 reply_markup=reply_markup
             )
         except Exception as e:
@@ -1599,7 +1599,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
             await client.edit_message_media(
                 chat_id=query.message.chat.id,
                 message_id=query.message.id,
-                media=InputMediaPhoto(media=QR_CODE, caption=script.PREMIUM_UPI_TEXT.format(OWNER_UPI_ID), parse_mode=enums.ParseMode.HTML),
+                media=InputMediaPhoto(media=QR_CODE, caption=script.PREMIUM_UPI_TEXT.format(OWNER_UPI_ID,QR_CODE), parse_mode=enums.ParseMode.HTML),
                 reply_markup=reply_markup
             )
         except Exception as e:
@@ -1695,7 +1695,7 @@ async def auto_filter(client, msg, spoll=False):
         if len(message.text) < 100:
             search = message.text
             search = search.lower()
-            m = await message.reply_text(f'**🔎 I AM SEARCHING** `{search}`', reply_to_message_id=message.id)
+            m = await message.reply_text(f'**🔎 ɪ ᴀᴍ ꜱᴇᴀʀᴄʜɪɴɢ** `{search}`', reply_to_message_id=message.id)
             find = search.split(" ")
             search = ""
             removes = ["in", "upload", "series", "full",
@@ -1730,7 +1730,7 @@ async def auto_filter(client, msg, spoll=False):
     else:
         message = msg.message.reply_to_message
         search, files, offset, total_results = spoll
-        m = await message.reply_text(f'**🔎 I AM SEARCHING** `{search}`', reply_to_message_id=message.id)
+        m = await message.reply_text(f'**🔎 ɪ ᴀᴍ ꜱᴇᴀʀᴄʜɪɴɢ** `{search}`', reply_to_message_id=message.id)
         settings = await get_settings(message.chat.id)
         await msg.message.delete()
     key = f"{message.chat.id}-{message.id}"
