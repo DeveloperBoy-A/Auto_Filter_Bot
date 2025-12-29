@@ -1,7 +1,4 @@
 from pyrogram.errors import MessageNotModified
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
-from pyrogram import enums
-import logging
 from utils import get_size, is_subscribed, is_req_subscribed, group_setting_buttons, get_poster, temp, get_settings, save_group_settings, get_cap, imdb, is_check_admin, extract_request_content, log_error, clean_filename, generate_season_variations, clean_search_text
 import tracemalloc
 from fuzzywuzzy import process
@@ -1563,14 +1560,15 @@ async def cb_handler(client: Client, query: CallbackQuery):
             ],[            
                 InlineKeyboardButton('⇋ ʙᴀᴄᴋ ᴛᴏ ʜᴏᴍᴇ ⇋', callback_data='start')
             ]]
-            reply_markup = InlineKeyboardMarkup(btn)
-        try:                        
+            reply_markup = InlineKeyboardMarkup(btn)                        
             await client.edit_message_media(
                 chat_id=query.message.chat.id,
                 message_id=query.message.id,
                 media=InputMediaPhoto(media=SUBSCRIPTION, caption=script.BPREMIUM_TXT, parse_mode=enums.ParseMode.HTML),
                 reply_markup=reply_markup
             )
+        except MessageNotModified:
+            pass
         except Exception as e:
             logging.exception("Exception in 'premium_info' callback")
 
@@ -1584,13 +1582,14 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 InlineKeyboardButton('⇋ ʙᴀᴄᴋ ᴛᴏ ᴘʀᴇᴍɪᴜᴍ ⇋', callback_data='premium_info')
             ]]
             reply_markup = InlineKeyboardMarkup(btn)
-        try:
             await client.edit_message_media(
                 chat_id=query.message.chat.id,
                 message_id=query.message.id,
                 media=InputMediaPhoto(media=SUBSCRIPTION, caption=script.PREMIUM_TEXT, parse_mode=enums.ParseMode.HTML),
                 reply_markup=reply_markup
             )
+        except MessageNotModified:
+            pass
         except Exception as e:
             logging.exception("Exception in 'buy_info' callback")
 
@@ -1602,13 +1601,14 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 InlineKeyboardButton('⇋ ʙᴀᴄᴋ ⇋', callback_data='buy_info')
             ]]
             reply_markup = InlineKeyboardMarkup(btn)
-        try:
             await client.edit_message_media(
                 chat_id=query.message.chat.id,
                 message_id=query.message.id,
                 media=InputMediaPhoto(media=QR_CODE, caption=script.PREMIUM_UPI_TEXT.format(OWNER_UPI_ID,QR_CODE), parse_mode=enums.ParseMode.HTML),
                 reply_markup=reply_markup
             )
+        except MessageNotModified:
+            pass
         except Exception as e:
             logging.exception("Exception in 'upi_info' callback")
 
