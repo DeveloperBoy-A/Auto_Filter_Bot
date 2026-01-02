@@ -88,9 +88,7 @@ async def check_db_size(db):
 async def save_file(media):
     """Save file in database, with detailed logging."""
     file_id, file_ref = unpack_new_file_id(media.file_id)
-    file_name = re.sub(
-        r"[_\-\.#+$%^&*()!~`,;:\"'?/<>\[\]{}=|\\]", " ", str(media.file_name)
-    )
+    file_name = str(media.file_name).strip()
     file_name = re.sub(r"\s+", " ", file_name).strip()
     saveMedia = Media
     target_db = "Primary"
