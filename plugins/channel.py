@@ -177,7 +177,7 @@ def extract_media_info(filename: str, caption: str):
                     processed_raw = filename
                     base_raw = filename[:qual_idx]
 
-    base_name = (normalize(base_raw)))
+    base_name = (normalize(base_raw))
     if year and year not in base_name:
         base_name += f" {year}"
 
