@@ -26,7 +26,7 @@ IGNORE_WORDS = {
     "thriller", "war", "western", "hdcam", "hdtc", "camrip", "ts", "tc", 
     "telesync", "dvdscr", "dvdrip", "predvd", "webrip", "web-dl", "tvrip", 
     "hdtv", "web dl", "webdl", "bluray", "brrip", "bdrip", "360p", "480p", 
-    "720p", "1080p", "2160p", "4k", "1440p", "540p", "240p", "140p", "hevc", 
+    , "1080p", "2160p", "4k", "1440p", "540p", "240p", "140p", "hevc", 
     "hdrip", "hin", "hindi", "tam", "tamil", "kan", "kannada", "tel", "telugu", 
     "mal", "malayalam", "eng", "english", "pun", "punjabi", "ben", "bengali", 
     "mar", "marathi", "guj", "gujarati", "urd", "urdu", "kor", "korean", "jpn", 
@@ -142,10 +142,11 @@ def extract_media_info(filename: str, caption: str):
     tag = "#MOVIE"
     processed_raw = base_raw = filename
     quality = get_qualities(caption_clean) or get_qualities(filename.lower()) or "N/A"
-    ott_platform = extract_ott_platform(f"{filename} {caption_clean}")
+    ott_platform = extract_ott_platform(f"{filename.lower()} {caption_clean}")
 
-    lang_keys = {k for k in CAPTION_LANGUAGES if k in caption_clean or k in filename.lower()}
-    language = ", ".join(sorted({CAPTION_LANGUAGES[k] for k in lang_keys})) if lang_keys else "N/A"
+    text_for_lang = f"{filename.lower()} {caption_clean}"
+lang_keys = {k for k in CAPTION_LANGUAGES if k in text_for_lang}
+language = ", ".join(sorted({CAPTION_LANGUAGES[k] for k in lang_keys})) if lang_keys else "N/A"
 
     season, episode = extract_season_episode(filename)
     if season is not None:
@@ -155,7 +156,7 @@ def extract_media_info(filename: str, caption: str):
             start_idx = filename.lower().find(match_str.lower())
             end_idx = start_idx + len(match_str)
             processed_raw = filename
-            base_raw = filename[:start_idx]
+            base_raw = filename
             if year_match := YEAR_PATTERN.search(filename.lower()[end_idx:]):
                 y = year_match.group(0)
                 yi = filename.lower().find(y, end_idx)
@@ -168,16 +169,16 @@ def extract_media_info(filename: str, caption: str):
             year_idx = filename.lower().find(year.lower())
             if year_idx != -1:
                 processed_raw = filename
-                base_raw = filename[:year_idx + 4]
+                base_raw = filename
         else:
             if qual_match := QUALITY_PATTERN.search(unified):
                 qual_str = qual_match.group(0)
                 qual_idx = filename.lower().find(qual_str.lower())
                 if qual_idx != -1:
                     processed_raw = filename
-                    base_raw = filename[:qual_idx]
+                    base_raw = filename
 
-    base_name = (normalize(base_raw))
+    base_name = normalize(base_raw)
     if year and year not in base_name:
         base_name += f" {year}"
 
