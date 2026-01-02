@@ -170,14 +170,21 @@ def extract_media_info(filename: str, caption: str):
             year_idx = filename.lower().find(year.lower())
             if year_idx != -1:
                 processed_raw = filename[:year_idx + 4]
+                    base_raw += f" {y}"
+    else:
+        if year_match := YEAR_PATTERN.search(unified):
+            year = year_match.group(0)
+            year_idx = filename.lower().find(year.lower())
+            if year_idx != -1:
+                processed_raw = filename[:year_idx + 4]
                 base_raw = processed_raw
         else:
-            if qual_match := QUALITY_PATTERN.search(unified):
-                qual_str = qual_match.group(0)
-                qual_idx = filename.lower().find(qual_str.lower())
-                if qual_idx != -1:
-                    # processed_raw = filename[:qual_idx]  <-- Isko hata diya ya comment kar diya
-                    base_raw = filename[:qual_idx] # Sirf grouping ke liye cut karenge
+            if qual_match := QUALITY_PATTERN.search(unified):
+                qual_str = qual_match.group(0)
+                qual_idx = filename.lower().find(qual_str.lower())
+                if qual_idx != -1:
+                   # processed_raw = filename[:qual_idx]
+                    base_raw = processed_raw
 
     base_name = normalize(remove_ignored_words(normalize(base_raw)))
     if year and year not in base_name:
