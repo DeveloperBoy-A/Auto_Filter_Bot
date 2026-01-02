@@ -132,7 +132,7 @@ async def save_file(media):
             f"[ERROR] Failed commit of '{file_name}' to {target_db} DB.", exc_info=e
         )
         return False, 3
-    logger.info(f"[SUCCESS] '{file_name}' saved to {target_db} DB.")
+    logger.info(f"[SUCCESS] '{file_name}' saved | base_name: '{base_name}' | processed: '{processed}' to {target_db} DB.")
     return True, 1
 
 
