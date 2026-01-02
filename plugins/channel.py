@@ -154,7 +154,7 @@ def extract_media_info(filename: str, caption: str):
             match_str = m.group(0)
             start_idx = filename.lower().find(match_str.lower())
             end_idx = start_idx + len(match_str)
-            processed_raw = filename[:end_idx]
+            processed_raw = filename
             base_raw = filename[:start_idx]
             if year_match := YEAR_PATTERN.search(filename.lower()[end_idx:]):
                 y = year_match.group(0)
@@ -167,17 +167,17 @@ def extract_media_info(filename: str, caption: str):
             year = year_match.group(0)
             year_idx = filename.lower().find(year.lower())
             if year_idx != -1:
-                processed_raw = filename[:year_idx + 4]
-                base_raw = processed_raw
+                processed_raw = filename
+                base_raw = filename[:year_idx + 4]
         else:
             if qual_match := QUALITY_PATTERN.search(unified):
                 qual_str = qual_match.group(0)
                 qual_idx = filename.lower().find(qual_str.lower())
                 if qual_idx != -1:
-                    processed_raw = filename[:qual_idx]
-                    base_raw = processed_raw
+                    processed_raw = filename
+                    base_raw = filename[:qual_idx]
 
-    base_name = normalize(remove_ignored_words(normalize(base_raw)))
+    base_name = (normalize(base_raw)))
     if year and year not in base_name:
         base_name += f" {year}"
 
