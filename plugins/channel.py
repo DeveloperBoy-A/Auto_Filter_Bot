@@ -1,8 +1,6 @@
 import re
 import logging
 import asyncio
-from pyrogram import Client, filters
-from pyrogram.types import *
 from datetime import datetime
 from collections import defaultdict
 from plugins.Dreamxfutures.Imdbposter import get_movie_detailsx, fetch_image, get_movie_details
@@ -21,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 # Precomputed sets for faster lookups
 IGNORE_WORDS = {
-    "rarbg", "dub", "sub", "sample", ".mkv", "aac", "combined",
+    "rarbg", "dub", "sub", "sample", "mkv", "aac", "combined",
     "action", "adventure", "animation", "biography", "comedy", "crime", 
     "documentary", "drama", "family", "fantasy", "film-noir", "history", 
     "horror", "music", "musical", "mystery", "romance", "sci-fi", "sport", 
@@ -170,20 +168,13 @@ def extract_media_info(filename: str, caption: str):
             year_idx = filename.lower().find(year.lower())
             if year_idx != -1:
                 processed_raw = filename[:year_idx + 4]
-                    base_raw += f" {y}"
-    else:
-        if year_match := YEAR_PATTERN.search(unified):
-            year = year_match.group(0)
-            year_idx = filename.lower().find(year.lower())
-            if year_idx != -1:
-                processed_raw = filename[:year_idx + 4]
                 base_raw = processed_raw
         else:
             if qual_match := QUALITY_PATTERN.search(unified):
                 qual_str = qual_match.group(0)
                 qual_idx = filename.lower().find(qual_str.lower())
                 if qual_idx != -1:
-                   # processed_raw = filename[:qual_idx]
+                    processed_raw = filename[:qual_idx]
                     base_raw = processed_raw
 
     base_name = normalize(remove_ignored_words(normalize(base_raw)))
