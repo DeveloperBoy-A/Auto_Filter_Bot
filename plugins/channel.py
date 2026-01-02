@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 # Precomputed sets for faster lookups
 IGNORE_WORDS = {
-    "rarbg", "dub", "sub", "sample", "mkv", "aac", "combined",
+    "rarbg", "dub", "sub", "sample", ".mkv", "aac", "combined",
     "action", "adventure", "animation", "biography", "comedy", "crime", 
     "documentary", "drama", "family", "fantasy", "film-noir", "history", 
     "horror", "music", "musical", "mystery", "romance", "sci-fi", "sport", 
