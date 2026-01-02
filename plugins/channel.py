@@ -174,7 +174,7 @@ def extract_media_info(filename: str, caption: str):
                 qual_str = qual_match.group(0)
                 qual_idx = filename.lower().find(qual_str.lower())
                 if qual_idx != -1:
-                   #processed_raw = filename[:qual_idx]
+                    processed_raw = filename[:qual_idx]
                     base_raw = processed_raw
 
     base_name = normalize(remove_ignored_words(normalize(base_raw)))
