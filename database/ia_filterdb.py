@@ -143,9 +143,7 @@ async def save_file(media):
 
 
 
-async def get_search_results(
-    chat_id, query, file_type=None, max_results=10, offset=0, filter=False
-):
+async def get_search_results(chat_id, query, file_type=None, max_results=10, offset=0, filter=False):
     # ----------------------
     # Chat-specific max results
     if chat_id is not None:
@@ -159,74 +157,73 @@ async def get_search_results(
 
     # ----------------------
     # Regex filter creation
+    regex_list = []
     if isinstance(query, list):
-        regex_list = []
         for q in query:
             q = q.strip()
             if not q:
                 continue
-            if " " not in q:
-                raw = r"(\b|[\.\+\-_])" + re.escape(q) + r"(\b|[\.\+\-_])"
-            else:
-                raw = re.escape(q).replace(r"\ ", r".*[\s\.\+\-_()]")
-            regex_list.append(re.compile(raw, re.IGNORECASE))
-
-        if USE_CAPTION_FILTER:
-            filter_mongo = {
-                "$or": [{"file_name": r} for r in regex_list] + [{"caption": r} for r in regex_list]
-            }
-        else:
-            filter_mongo = {"$or": [{"file_name": r} for r in regex_list]}
+            q_escaped = re.escape(q)
+            if " " in q:
+                q_escaped = q_escaped.replace(r"\ ", r".*")
+            regex_list.append(re.compile(q_escaped, re.IGNORECASE))
     else:
-        query = query.strip()
-        if not query:
-            raw_pattern = "."
-        elif " " not in query:
-            raw_pattern = r"(\b|[\.\+\-_])" + query + r"(\b|[\.\+\-_])"
-        else:
-            raw_pattern = query.replace(" ", r".*[\s\.\+\-_()\[\]]")
+        q = query.strip()
+        if not q:
+            q = "."
+        q_escaped = re.escape(q)
+        if " " in q:
+            q_escaped = q_escaped.replace(r"\ ", r".*")
+        regex_list.append(re.compile(q_escaped, re.IGNORECASE))
 
-        try:
-            regex = re.compile(raw_pattern, flags=re.IGNORECASE)
-        except re.error:
-            return [], "", 0
-
-        if USE_CAPTION_FILTER:
-            filter_mongo = {"$or": [{"file_name": regex}, {"caption": regex}]}
-        else:
-            filter_mongo = {"file_name": regex}
+    # ----------------------
+    # Build Mongo filter
+    if USE_CAPTION_FILTER:
+        filter_mongo = {"$or": [{"file_name": r} for r in regex_list] +
+                        [{"caption": {"$exists": True, "$ne": None, "$regex": r}} for r in regex_list]}
+    else:
+        filter_mongo = {"$or": [{"file_name": r} for r in regex_list]}
 
     if file_type:
         filter_mongo["file_type"] = file_type
 
     # ----------------------
-    # Fetch documents
+    # Count total results
     total_results = await Media.count_documents(filter_mongo)
     if MULTIPLE_DB:
         total_results += await Media2.count_documents(filter_mongo)
 
+    # ----------------------
+    # Fetch from Primary DB
     cursor1 = Media.find(filter_mongo).sort("$natural", -1).skip(offset).limit(max_results)
     files1 = await cursor1.to_list(length=max_results)
 
+    # ----------------------
+    # Fetch from Secondary DB if needed
+    files = files1
     if MULTIPLE_DB:
         remaining = max_results - len(files1)
-        cursor2 = Media2.find(filter_mongo).sort("$natural", -1).skip(offset).limit(remaining)
-        files2 = await cursor2.to_list(length=remaining)
-        files = files1 + files2
-    else:
-        files = files1
+        if remaining > 0:
+            # Secondary offset adjusted properly
+            primary_count = await Media.count_documents(filter_mongo)
+            secondary_offset = max(0, offset - primary_count)
+            cursor2 = Media2.find(filter_mongo).sort("$natural", -1).skip(secondary_offset).limit(remaining)
+            files2 = await cursor2.to_list(length=remaining)
+            files += files2
 
+    # ----------------------
+    # Next offset for pagination
     next_offset = offset + len(files)
     if next_offset >= total_results:
         next_offset = ""
 
     # ----------------------
-    # Language detection using file_name + caption
+    # Prepare results with language detection
     results = []
     for file in files:
         title = getattr(file, "file_name", "")
         caption = getattr(file, "caption", "")
-        combined_text = f"{title} {caption}".lower()  # Check both fields
+        combined_text = f"{title} {caption}".lower()
 
         language = "Unknown"
         if "hindi" in combined_text:
