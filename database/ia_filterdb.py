@@ -1,3 +1,4 @@
+from struct import pack, unpack
 from pyrogram.file_id import FileId  
 from typing import Dict, List  
 from collections import defaultdict  
