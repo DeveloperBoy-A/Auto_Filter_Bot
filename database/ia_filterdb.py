@@ -38,8 +38,7 @@ class Media(Document):
     file_ref = fields.StrField(allow_none=True)
     file_name = fields.StrField(required=True)
     file_size = fields.IntField(required=True)
-    language =
-fields.IntField(required=True)
+    language = fields.StrField(required=True)
     file_type = fields.StrField(allow_none=True)
     mime_type = fields.StrField(allow_none=True)
     caption = fields.StrField(allow_none=True)
@@ -55,8 +54,7 @@ class Media2(Document):
     file_ref = fields.StrField(allow_none=True)
     file_name = fields.StrField(required=True)
     file_size = fields.IntField(required=True)
-    language =
-fields.IntField(required=True)
+    language = fields.StrField(required=True)
     file_type = fields.StrField(allow_none=True)
     mime_type = fields.StrField(allow_none=True)
     caption = fields.StrField(allow_none=True)
@@ -93,6 +91,12 @@ async def save_file(media):
     """Save file in database, with detailed logging."""
     file_id, file_ref = unpack_new_file_id(media.file_id)
     file_name = str(media.file_name).strip()
+    file_name = re.sub(
+        r"[_\-\,#+$%^&*()!~`,;:\"'?/<>\[\]{}=|\\]",
+        " ",
+        file_name
+    )
+
     file_name = re.sub(r"\s+", " ", file_name).strip()
     saveMedia = Media
     target_db = "Primary"
