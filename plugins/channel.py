@@ -445,6 +445,7 @@ async def update_movie_message(bot, base_name):
         logger.error(f"Failed to update movie message: {e}")
 
 def generate_movie_message(movie_doc, base_name):
+    title = base_name
     all_qualities = set()
     all_languages = set()
     all_ott_platforms = set()
@@ -512,7 +513,7 @@ def generate_movie_message(movie_doc, base_name):
     return script.MOVIE_UPDATE_NOTIFY_TXT.format(
         poster_url=movie_doc.get("poster_url", ""),
         imdb_url=movie_doc.get("imdb_url", ""),
-        filename=base_name,
+        filename=title,
         tag=primary_tag,
         genres=genres,
         ott=ott_str,
