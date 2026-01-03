@@ -110,10 +110,7 @@ async def save_file(media):
             logger.error(
                 "Error during MULTIPLE_DB check; defaulting to primary DB.", exc_info=e
             )
-
-    # ---------------- Prepare record ----------------
     try:
-        caption = getattr(media.caption, "html", None) or str(media.caption) if media.caption else None
         record = saveMedia(
             file_id=file_id,
             file_ref=file_ref,
