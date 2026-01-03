@@ -140,9 +140,6 @@ def schedule_update(bot, base_name, delay=5):
 
 
 def extract_media_info(filename: str, caption: str):
-    from re import search, sub
-
-    # Normalize filename & caption
     filename = normalize(clean_mentions_links(filename).title())
     caption_clean = clean_mentions_links(caption).lower() if caption else ""
     unified = f"{caption_clean} {filename.lower()}".strip()
@@ -151,57 +148,68 @@ def extract_media_info(filename: str, caption: str):
     tag = "#MOVIE"
     processed_raw = base_raw = filename
 
-    # ----------------------
-    # Quality & OTT
     quality = get_qualities(caption_clean) or get_qualities(filename.lower()) or "N/A"
     ott_platform = extract_ott_platform(f"{filename} {caption_clean}")
 
-    # ----------------------
-    # Language
-    lang_keys = {k for k in CAPTION_LANGUAGES if k in caption_clean or k in filename.lower()}
-    language = ", ".join(sorted({CAPTION_LANGUAGES[k] for k in lang_keys})) if lang_keys else "N/A"
+    lang_keys = {
+        k for k in CAPTION_LANGUAGES
+        if k in caption_clean or k in filename.lower()
+    }
+    language = (
+        ", ".join(sorted({CAPTION_LANGUAGES[k] for k in lang_keys}))
+        if lang_keys else "N/A"
+    )
 
-    # ----------------------
-    # Season/Episode extraction
     season, episode = extract_season_episode(filename)
     if season is not None:
         tag = "#SERIES"
+        if m := (
+            RANGE_REGEX.search(filename)
+            or SINGLE_REGEX.search(filename)
+            or NAMED_REGEX.search(filename)
+            or EP_ONLY_RANGE.search(filename)
+        ):
+            match_str = m.group(0)
+            start_idx = filename.lower().find(match_str.lower())
+            end_idx = start_idx + len(match_str)
 
-    # ----------------------
-    # Base raw clean
-    base_raw = filename
-    base_raw = sub(r'[_\.\-]+', ' ', base_raw)      # Replace dots/underscores/hyphens
-    base_raw = sub(r'\s+', ' ', base_raw).strip()
+            processed_raw = filename[:end_idx]
+            base_raw = filename[:start_idx]
 
-    # ----------------------
-    # Year extract if not found yet
-    if not year and (year_match := YEAR_PATTERN.search(unified)):
-        year = year_match.group(0)
+            if year_match := YEAR_PATTERN.search(filename.lower()[end_idx:]):
+                y = year_match.group(0)
+                yi = filename.lower().find(y, end_idx)
+                if yi != -1:
+                    processed_raw = filename[:yi + 4]
+                    base_raw += f" {y}"
+    else:
+        if year_match := YEAR_PATTERN.search(unified):
+            year = year_match.group(0)
+            year_idx = filename.lower().find(year.lower())
+            if year_idx != -1:
+                processed_raw = filename[:year_idx + 4]
+                base_raw = processed_raw
+        else:
+            if qual_match := QUALITY_PATTERN.search(unified):
+                qual_str = qual_match.group(0)
+                qual_idx = filename.lower().find(qual_str.lower())
+                if qual_idx != -1:
+                    processed_raw = filename[:qual_idx]
+                    base_raw = processed_raw
 
-    # ----------------------
-    # Clean title for base_name
-    clean_title = normalize(remove_ignored_words(normalize(base_raw)))
+    base_name = normalize(remove_ignored_words(normalize(base_raw)))
 
-    # ----------------------
-    # FINAL base_name
-    if season is not None:  # Series
-        base_name = f"{clean_title} {year} S{int(season):02}" if year else f"{clean_title} S{int(season):02}"
-    else:  # Movie
-        base_name = f"{clean_title} {year}" if year else clean_title
+    if year and year not in base_name:
+        base_name += f" {year}"
 
-    # Fallback in case clean_title got empty
-    if not base_name.strip():
-        base_name = filename
-
-    # ----------------------
-    # Add language to processed
-    processed = normalize(processed_raw)
-    if language != "N/A":
-        processed += f" [{language}]"
+    if base_name.endswith(")"):
+        base_name = re.sub(r"\s+\(\d{4}\)$", "", base_name)
+        if year:
+            base_name += f" {year}"
 
     return {
-        "processed": processed,                 # Full filename + language
-        "base_name": base_name,                 # Clean for display/search
+        "processed": normalize(processed_raw),
+        "base_name": base_name,
         "tag": tag,
         "season": season,
         "episode": episode,
@@ -445,7 +453,6 @@ async def update_movie_message(bot, base_name):
         logger.error(f"Failed to update movie message: {e}")
 
 def generate_movie_message(movie_doc, base_name):
-    title = base_name
     all_qualities = set()
     all_languages = set()
     all_ott_platforms = set()
@@ -513,7 +520,7 @@ def generate_movie_message(movie_doc, base_name):
     return script.MOVIE_UPDATE_NOTIFY_TXT.format(
         poster_url=movie_doc.get("poster_url", ""),
         imdb_url=movie_doc.get("imdb_url", ""),
-        filename=title,
+        filename=base_name,
         tag=primary_tag,
         genres=genres,
         ott=ott_str,
