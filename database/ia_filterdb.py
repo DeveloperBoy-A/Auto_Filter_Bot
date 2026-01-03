@@ -146,6 +146,8 @@ async def save_file(media):
 async def get_search_results(
     chat_id, query, file_type=None, max_results=10, offset=0, filter=False
 ):
+    # ----------------------
+    # Chat-specific max results
     if chat_id is not None:
         settings = await get_settings(int(chat_id))
         try:
@@ -154,6 +156,9 @@ async def get_search_results(
             await save_group_settings(int(chat_id), "max_btn", False)
             settings = await get_settings(int(chat_id))
             max_results = 10 if settings.get("max_btn") else int(MAX_B_TN)
+
+    # ----------------------
+    # Regex filter creation
     if isinstance(query, list):
         regex_list = []
         for q in query:
@@ -168,14 +173,10 @@ async def get_search_results(
 
         if USE_CAPTION_FILTER:
             filter_mongo = {
-                "$or": (
-                    [{"file_name": r} for r in regex_list]
-                    + [{"caption": r} for r in regex_list]
-                )
+                "$or": [{"file_name": r} for r in regex_list] + [{"caption": r} for r in regex_list]
             }
         else:
             filter_mongo = {"$or": [{"file_name": r} for r in regex_list]}
-
     else:
         query = query.strip()
         if not query:
@@ -183,9 +184,7 @@ async def get_search_results(
         elif " " not in query:
             raw_pattern = r"(\b|[\.\+\-_])" + query + r"(\b|[\.\+\-_])"
         else:
-            raw_pattern = query.replace(
-                " ", r".*[\s\.\+\-_()\[\]]" 
-            )
+            raw_pattern = query.replace(" ", r".*[\s\.\+\-_()\[\]]")
 
         try:
             regex = re.compile(raw_pattern, flags=re.IGNORECASE)
@@ -196,33 +195,62 @@ async def get_search_results(
             filter_mongo = {"$or": [{"file_name": regex}, {"caption": regex}]}
         else:
             filter_mongo = {"file_name": regex}
+
     if file_type:
         filter_mongo["file_type"] = file_type
+
+    # ----------------------
+    # Fetch documents
     total_results = await Media.count_documents(filter_mongo)
     if MULTIPLE_DB:
         total_results += await Media2.count_documents(filter_mongo)
 
-    # if max_results % 2:
-    #     max_results += 1
-
-    cursor1 = (
-        Media.find(filter_mongo).sort("$natural", -1).skip(offset).limit(max_results)
-    )
+    cursor1 = Media.find(filter_mongo).sort("$natural", -1).skip(offset).limit(max_results)
     files1 = await cursor1.to_list(length=max_results)
 
     if MULTIPLE_DB:
         remaining = max_results - len(files1)
-        cursor2 = (
-            Media2.find(filter_mongo).sort("$natural", -1).skip(offset).limit(remaining)
-        )
+        cursor2 = Media2.find(filter_mongo).sort("$natural", -1).skip(offset).limit(remaining)
         files2 = await cursor2.to_list(length=remaining)
         files = files1 + files2
     else:
         files = files1
+
     next_offset = offset + len(files)
     if next_offset >= total_results:
         next_offset = ""
-    return files, next_offset, total_results
+
+    # ----------------------
+    # Language detection using file_name + caption
+    results = []
+    for file in files:
+        title = getattr(file, "file_name", "")
+        caption = getattr(file, "caption", "")
+        combined_text = f"{title} {caption}".lower()  # Check both fields
+
+        language = "Unknown"
+        if "hindi" in combined_text:
+            language = "Hindi"
+        elif "english" in combined_text:
+            language = "English"
+        elif "tamil" in combined_text:
+            language = "Tamil"
+        elif "kannada" in combined_text:
+            language = "Kannada"
+        elif "malayalam" in combined_text:
+            language = "Malayalam"
+        elif "multi" in combined_text or "dual" in combined_text:
+            language = "Multi"
+
+        results.append({
+            "file_id": getattr(file, "file_id", ""),
+            "file_name": title,
+            "file_size": getattr(file, "file_size", ""),
+            "caption": caption,
+            "language": language
+        })
+
+    return results, next_offset, total_results
 
 async def get_bad_files(query, file_type=None):
     query = query.strip()
