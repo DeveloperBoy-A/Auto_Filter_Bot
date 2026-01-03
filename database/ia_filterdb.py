@@ -142,11 +142,10 @@ async def save_file(media):
     return True, 1
 
 
+
 async def get_search_results(
     chat_id, query, file_type=None, max_results=10, offset=0, filter=False
 ):
-    # ----------------------
-    # Get group settings
     if chat_id is not None:
         settings = await get_settings(int(chat_id))
         try:
@@ -155,9 +154,6 @@ async def get_search_results(
             await save_group_settings(int(chat_id), "max_btn", False)
             settings = await get_settings(int(chat_id))
             max_results = 10 if settings.get("max_btn") else int(MAX_B_TN)
-
-    # ----------------------
-    # Build Mongo regex filter
     if isinstance(query, list):
         regex_list = []
         for q in query:
@@ -169,10 +165,17 @@ async def get_search_results(
             else:
                 raw = re.escape(q).replace(r"\ ", r".*[\s\.\+\-_()]")
             regex_list.append(re.compile(raw, re.IGNORECASE))
+
         if USE_CAPTION_FILTER:
-            filter_mongo = {"$or": ([{"file_name": r} for r in regex_list] + [{"caption": r} for r in regex_list])}
+            filter_mongo = {
+                "$or": (
+                    [{"file_name": r} for r in regex_list]
+                    + [{"caption": r} for r in regex_list]
+                )
+            }
         else:
             filter_mongo = {"$or": [{"file_name": r} for r in regex_list]}
+
     else:
         query = query.strip()
         if not query:
@@ -180,114 +183,46 @@ async def get_search_results(
         elif " " not in query:
             raw_pattern = r"(\b|[\.\+\-_])" + query + r"(\b|[\.\+\-_])"
         else:
-            raw_pattern = query.replace(" ", r".*[\s\.\+\-_()\[\]]")
+            raw_pattern = query.replace(
+                " ", r".*[\s\.\+\-_()\[\]]" 
+            )
+
         try:
             regex = re.compile(raw_pattern, flags=re.IGNORECASE)
         except re.error:
             return [], "", 0
+
         if USE_CAPTION_FILTER:
             filter_mongo = {"$or": [{"file_name": regex}, {"caption": regex}]}
         else:
             filter_mongo = {"file_name": regex}
-
     if file_type:
         filter_mongo["file_type"] = file_type
+    total_results = await Media.count_documents(filter_mongo)
+    if MULTIPLE_DB:
+        total_results += await Media2.count_documents(filter_mongo)
 
-    # ----------------------
-    # Fetch files from DB
-    cursor1 = Media.find(filter_mongo).sort("$natural", -1)
-    files1 = await cursor1.to_list(length=(await Media.count_documents(filter_mongo)))
+    # if max_results % 2:
+    #     max_results += 1
+
+    cursor1 = (
+        Media.find(filter_mongo).sort("$natural", -1).skip(offset).limit(max_results)
+    )
+    files1 = await cursor1.to_list(length=max_results)
 
     if MULTIPLE_DB:
-        cursor2 = Media2.find(filter_mongo).sort("$natural", -1)
-        files2 = await cursor2.to_list(length=(await Media2.count_documents(filter_mongo)))
+        remaining = max_results - len(files1)
+        cursor2 = (
+            Media2.find(filter_mongo).sort("$natural", -1).skip(offset).limit(remaining)
+        )
+        files2 = await cursor2.to_list(length=remaining)
         files = files1 + files2
     else:
         files = files1
-
-    total_results = len(files)
-
-    # ----------------------
-    # Clean file names & detect series
-    cleaned_series = []
-    cleaned_movies = []
-    series_pattern = re.compile(r"(.*?)(?:S(\d{1,2})|Season\s*(\d+))?(?:E(\d{1,2})|Episode\s*(\d+))?", re.IGNORECASE)
-
-    for file in files:
-        # Clean file name
-        is_series = bool(re.search(r"(S\d{1,2}|Season\s*\d+)", file.file_name, re.IGNORECASE))
-        file.file_name = await dreamxbotz_clean_title(file.file_name, is_series=is_series)
-
-        # Series or Movie
-        match = series_pattern.search(file.file_name)
-        if match and (match.group(2) or match.group(3)):  # Season exists
-            season = int(match.group(2) or match.group(3))
-            episode = int(match.group(4) or match.group(5) or 0)
-            title = match.group(1).strip()
-            cleaned_series.append((title.lower(), -season, episode, file))  # -season for last season first
-        else:
-            cleaned_movies.append(file)
-
-    # ----------------------
-    # Sort series & combine with movies
-    cleaned_series.sort(key=lambda x: (x[0], x[1], x[2]))  # Title, last season first, episode ascending
-    sorted_series_files = [f[3] for f in cleaned_series]
-    sorted_files = sorted_series_files + cleaned_movies
-
-    # Pagination
-    paginated_files = sorted_files[offset:offset + max_results]
-    next_offset = offset + len(paginated_files)
+    next_offset = offset + len(files)
     if next_offset >= total_results:
         next_offset = ""
-
-    return paginated_files, next_offset, total_results
-
-
-async def get_bad_files(query, file_type=None):
-    query = query.strip()
-    if not query:
-        raw_pattern = '.'
-    elif ' ' not in query:
-        raw_pattern = r"(\b|[\.\+\-_])" + query + r"(\b|[\.\+\-_])"
-    else:
-        raw_pattern = query.replace(" ", r".*[\s\.\+\-_()]")
-    
-    try:
-        regex = re.compile(raw_pattern, flags=re.IGNORECASE)
-    except re.error:
-        return [], 0
-
-    if USE_CAPTION_FILTER:
-        filter_mongo = {'$or': [{'file_name': regex}, {'caption': regex}]}
-    else:
-        filter_mongo = {'file_name': regex}
-
-    if file_type:
-        filter_mongo['file_type'] = file_type
-
-    # Fetch from primary DB
-    cursor1 = Media.find(filter_mongo).sort('$natural', -1)
-    files1 = await cursor1.to_list(length=(await Media.count_documents(filter_mongo)))
-
-    # Fetch from secondary DB if needed
-    if MULTIPLE_DB:
-        cursor2 = Media2.find(filter_mongo).sort('$natural', -1)
-        files2 = await cursor2.to_list(length=(await Media2.count_documents(filter_mongo)))
-        files = files1 + files2
-    else:
-        files = files1
-
-    # ----------------------
-    # Clean file names
-    cleaned_files = []
-    for file in files:
-        is_series = bool(re.search(r"(S\d{1,2}|Season\s*\d+)", file.file_name, re.IGNORECASE))
-        file.file_name = await dreamxbotz_clean_title(file.file_name, is_series=is_series)
-        cleaned_files.append(file)
-    # ----------------------
-
-    total_results = len(cleaned_files)
-    return cleaned_files, total_results
+    return files, next_offset, total_results
 
 
 async def get_file_details(query):
@@ -317,6 +252,7 @@ def encode_file_id(s: bytes) -> str:
 
 def encode_file_ref(file_ref: bytes) -> str:
     return base64.urlsafe_b64encode(file_ref).decode().rstrip("=")
+
 
 
 def unpack_new_file_id(new_file_id):
