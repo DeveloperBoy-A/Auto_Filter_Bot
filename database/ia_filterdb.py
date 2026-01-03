@@ -84,51 +84,63 @@ async def check_db_size(db):
         print(f"Error Checking Database Size: {e}")
         return 0
 
-
 async def save_file(media):
     """Save file in database, with detailed logging."""
+
     file_id, file_ref = unpack_new_file_id(media.file_id)
+
     file_name = str(media.file_name).strip()
     file_name = re.sub(
         r"[_\-\,#+$%^&*()!~`,;:\"'?/<>\[\]{}=|\\]",
         " ",
         file_name
     )
-
     file_name = re.sub(r"\s+", " ", file_name).strip()
+
     saveMedia = Media
     target_db = "Primary"
+
     if MULTIPLE_DB:
         try:
             exists = await Media.count_documents({"file_id": file_id}, limit=1)
             if exists:
                 logger.info(f"[SKIP] '{file_name}' already in Primary DB.")
                 return False, 0
+
             primary_db_size = await check_db_size(db)
             if primary_db_size >= 407:
                 saveMedia = Media2
                 target_db = "Secondary"
                 logger.warning("Switching to Secondary DB due to size threshold.")
+
         except Exception as e:
             logger.error(
-                "Error during MULTIPLE_DB check; defaulting to primary DB.", exc_info=e
+                "Error during MULTIPLE_DB check; defaulting to primary DB.",
+                exc_info=e
             )
 
-# ---------------- Prepare record ----------------
-try:
-    caption = getattr(media.caption, "html", None) or str(media.caption) if media.caption else None
-    record = saveMedia(
-        file_id=file_id,
+    # ---------------- Prepare record ----------------
+    try:
+        caption = (
+            getattr(media.caption, "html", None)
+            if media.caption and INDEX_CAPTION
+            else None
+        )
+
+        record = saveMedia(
+            file_id=file_id,
             file_ref=file_ref,
             file_name=file_name,
             file_size=media.file_size,
             file_type=media.file_type,
             mime_type=media.mime_type,
-            caption=(media.caption.html if media.caption and INDEX_CAPTION else None),
+            caption=caption,
         )
+
     except ValidationError as e:
         logger.exception(f"[VALIDATION ERROR] '{file_name}' → {e}")
         return False, 2
+
     try:
         await record.commit()
     except DuplicateKeyError:
@@ -138,9 +150,11 @@ try:
         return False, 0
     except Exception as e:
         logger.exception(
-            f"[ERROR] Failed commit of '{file_name}' to {target_db} DB.", exc_info=e
+            f"[ERROR] Failed commit of '{file_name}' to {target_db} DB.",
+            exc_info=e
         )
         return False, 3
+
     logger.info(f"[SUCCESS] '{file_name}' saved to {target_db} DB.")
     return True, 1
 
