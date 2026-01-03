@@ -1,24 +1,17 @@
-import logging
-from struct import pack
 import re
-import base64
-from pyrogram.file_id import FileId
-from typing import Dict, List
-from collections import defaultdict
+import logging
+from datetime import datetime, timedelta
 from pymongo.errors import DuplicateKeyError
 from umongo import Instance, Document, fields
 from motor.motor_asyncio import AsyncIOMotorClient
 from marshmallow import ValidationError
 from info import *
 from utils import get_settings, save_group_settings
-from datetime import datetime, timedelta
-import logging
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
-# ---------------------------------------------------------
 
-# Global cache for DB size
+# ------------------ DB Setup ------------------
 _db_stats_cache = {"timestamp": None, "primary_size": 0.0}
 
 # Primary DB
@@ -26,12 +19,12 @@ client = AsyncIOMotorClient(DATABASE_URI)
 db = client[DATABASE_NAME]
 instance = Instance.from_db(db)
 
-# secondary db
+# Secondary DB
 client2 = AsyncIOMotorClient(DATABASE_URI2)
 db2 = client2[DATABASE_NAME]
 instance2 = Instance.from_db(db2)
 
-
+# ------------------ Document Models ------------------
 @instance.register
 class Media(Document):
     file_id = fields.StrField(attribute="_id")
@@ -45,7 +38,6 @@ class Media(Document):
     class Meta:
         indexes = ("$file_name",)
         collection_name = COLLECTION_NAME
-
 
 @instance2.register
 class Media2(Document):
@@ -61,58 +53,45 @@ class Media2(Document):
         indexes = ("$file_name",)
         collection_name = COLLECTION_NAME
 
-
+# ------------------ DB Size Check ------------------
 async def check_db_size(db):
     try:
         now = datetime.utcnow()
-        cache_stale_by_time = _db_stats_cache["timestamp"] is None or (
-            now - _db_stats_cache["timestamp"] > timedelta(minutes=10)
-        )
-        refresh_if_size_threshold = _db_stats_cache["primary_size"] >= 10.0
-        if not cache_stale_by_time and not refresh_if_size_threshold:
+        stale = _db_stats_cache["timestamp"] is None or (now - _db_stats_cache["timestamp"] > timedelta(minutes=10))
+        if not stale and _db_stats_cache["primary_size"] < 10.0:
             return _db_stats_cache["primary_size"]
+
         stats = await db.command("dbstats")
-        db_logical_size = stats["dataSize"]
-        db_index_size = stats["indexSize"]
-        db_logical_size_mb = db_logical_size / (1024 * 1024)
-        db_index_size_mb = db_index_size / (1024 * 1024)
-        db_size_mb = db_logical_size_mb + db_index_size_mb
+        db_size_mb = (stats["dataSize"] + stats["indexSize"]) / (1024 * 1024)
         _db_stats_cache["primary_size"] = db_size_mb
         _db_stats_cache["timestamp"] = now
         return db_size_mb
     except Exception as e:
-        print(f"Error Checking Database Size: {e}")
+        logger.error(f"Error checking DB size: {e}")
         return 0
 
-
+# ------------------ Save File ------------------
 async def save_file(media):
-    """Save file in database, with detailed logging."""
     file_id, file_ref = unpack_new_file_id(media.file_id)
     file_name = str(media.file_name).strip()
-    file_name = re.sub(
-        r"[_\-\,#+$%^&*()!~`,;:\"'?/<>\[\]{}=|\\]",
-        " ",
-        file_name
-    )
-
+    file_name = re.sub(r"[_\-\,#+$%^&*()!~`,;:\"'?/<>\[\]{}=|\\]", " ", file_name)
     file_name = re.sub(r"\s+", " ", file_name).strip()
+
     saveMedia = Media
     target_db = "Primary"
-    if MULTIPLE_DB:
-        try:
+    try:
+        if MULTIPLE_DB:
             exists = await Media.count_documents({"file_id": file_id}, limit=1)
             if exists:
                 logger.info(f"[SKIP] '{file_name}' already in Primary DB.")
                 return False, 0
-            primary_db_size = await check_db_size(db)
-            if primary_db_size >= 407:
+            if await check_db_size(db) >= 407:
                 saveMedia = Media2
                 target_db = "Secondary"
                 logger.warning("Switching to Secondary DB due to size threshold.")
-        except Exception as e:
-            logger.error(
-                "Error during MULTIPLE_DB check; defaulting to primary DB.", exc_info=e
-            )
+    except Exception as e:
+        logger.error("Error during MULTIPLE_DB check; defaulting to primary DB.", exc_info=e)
+
     try:
         record = saveMedia(
             file_id=file_id,
@@ -126,27 +105,23 @@ async def save_file(media):
     except ValidationError as e:
         logger.exception(f"[VALIDATION ERROR] '{file_name}' → {e}")
         return False, 2
+
     try:
         await record.commit()
     except DuplicateKeyError:
-        logger.info(
-            f"[SKIP] DuplicateKey: '{file_name}' already exists in {target_db} DB."
-        )
+        logger.info(f"[SKIP] DuplicateKey: '{file_name}' already exists in {target_db} DB.")
         return False, 0
     except Exception as e:
-        logger.exception(
-            f"[ERROR] Failed commit of '{file_name}' to {target_db} DB.", exc_info=e
-        )
+        logger.exception(f"[ERROR] Failed commit of '{file_name}' to {target_db} DB.", exc_info=e)
         return False, 3
+
     logger.info(f"[SUCCESS] '{file_name}' saved to {target_db} DB.")
     return True, 1
 
-
-
-async def get_search_results(chat_id, query, file_type=None, max_results=10, offset=0, filter=False):
-    # ----------------------
+# ------------------ Search Files ------------------
+async def get_search_results(chat_id, query, file_type=None, max_results=10, offset=0):
     # Chat-specific max results
-    if chat_id is not None:
+    if chat_id:
         settings = await get_settings(int(chat_id))
         try:
             max_results = 10 if settings.get("max_btn") else int(MAX_B_TN)
@@ -155,70 +130,56 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
             settings = await get_settings(int(chat_id))
             max_results = 10 if settings.get("max_btn") else int(MAX_B_TN)
 
-    # ----------------------
-    # Regex filter creation
+    # Regex creation
+    queries = query if isinstance(query, list) else [query]
     regex_list = []
-    if isinstance(query, list):
-        for q in query:
-            q = q.strip()
-            if not q:
-                continue
-            q_escaped = re.escape(q)
-            if " " in q:
-                q_escaped = q_escaped.replace(r"\ ", r".*")
-            regex_list.append(re.compile(q_escaped, re.IGNORECASE))
-    else:
-        q = query.strip()
+    for q in queries:
+        q = q.strip()
         if not q:
-            q = "."
+            continue
         q_escaped = re.escape(q)
-        if " " in q:
+        if " " in q_escaped:
             q_escaped = q_escaped.replace(r"\ ", r".*")
         regex_list.append(re.compile(q_escaped, re.IGNORECASE))
 
-    # ----------------------
-    # Build Mongo filter
+    # Mongo filter
     if USE_CAPTION_FILTER:
-        filter_mongo = {"$or": [{"file_name": r} for r in regex_list] +
-                        [{"caption": {"$exists": True, "$ne": None, "$regex": r}} for r in regex_list]}
+        filter_mongo = {
+            "$or": [{"file_name": r} for r in regex_list] +
+                    [{"caption": {"$exists": True, "$ne": None, "$regex": r}} for r in regex_list]
+        }
     else:
         filter_mongo = {"$or": [{"file_name": r} for r in regex_list]}
 
     if file_type:
         filter_mongo["file_type"] = file_type
 
-    # ----------------------
     # Count total results
     total_results = await Media.count_documents(filter_mongo)
     if MULTIPLE_DB:
         total_results += await Media2.count_documents(filter_mongo)
 
-    # ----------------------
-    # Fetch from Primary DB
+    # Fetch primary DB
     cursor1 = Media.find(filter_mongo).sort("$natural", -1).skip(offset).limit(max_results)
     files1 = await cursor1.to_list(length=max_results)
 
-    # ----------------------
-    # Fetch from Secondary DB if needed
+    # Fetch secondary DB if needed
     files = files1
     if MULTIPLE_DB:
         remaining = max_results - len(files1)
         if remaining > 0:
-            # Secondary offset adjusted properly
             primary_count = await Media.count_documents(filter_mongo)
             secondary_offset = max(0, offset - primary_count)
             cursor2 = Media2.find(filter_mongo).sort("$natural", -1).skip(secondary_offset).limit(remaining)
             files2 = await cursor2.to_list(length=remaining)
             files += files2
 
-    # ----------------------
-    # Next offset for pagination
+    # Pagination next offset
     next_offset = offset + len(files)
     if next_offset >= total_results:
         next_offset = ""
 
-    # ----------------------
-    # Prepare results with language detection
+    # Add language detection to results
     results = []
     for file in files:
         title = getattr(file, "file_name", "")
