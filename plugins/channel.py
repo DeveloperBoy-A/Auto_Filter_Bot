@@ -104,6 +104,11 @@ def get_qualities(text: str) -> str:
     qualities = QUALITY_PATTERN.findall(text)
     return ", ".join(qualities) if qualities else "N/A"
 
+def get_language(text: str) -> str:
+    text = text.lower()
+    langs_found = {CAPTION_LANGUAGES[k] for k in CAPTION_LANGUAGES if k in text}
+    return ", ".join(sorted(langs_found)) if langs_found else "N/A"
+
 def extract_ott_platform(text: str) -> str:
     text = text.lower()
     platforms = {plat for key, plat in OTT_PLATFORMS.items() if key in text}
@@ -132,7 +137,12 @@ def schedule_update(bot, base_name, delay=5):
         delay,
         lambda: asyncio.create_task(update_movie_message(bot, base_name))
     )
-def extract_media_info(filename: str, caption: str):
+
+
+async def extract_media_info(filename: str, caption: str):
+    from re import search, sub
+
+    # Normalize filename & caption
     filename = normalize(clean_mentions_links(filename).title())
     caption_clean = clean_mentions_links(caption).lower() if caption else ""
     unified = f"{caption_clean} {filename.lower()}".strip()
@@ -140,104 +150,58 @@ def extract_media_info(filename: str, caption: str):
     season = episode = year = None
     tag = "#MOVIE"
     processed_raw = base_raw = filename
+
+    # ----------------------
+    # Quality & OTT
     quality = get_qualities(caption_clean) or get_qualities(filename.lower()) or "N/A"
     ott_platform = extract_ott_platform(f"{filename} {caption_clean}")
 
+    # ----------------------
+    # Language
     lang_keys = {k for k in CAPTION_LANGUAGES if k in caption_clean or k in filename.lower()}
     language = ", ".join(sorted({CAPTION_LANGUAGES[k] for k in lang_keys})) if lang_keys else "N/A"
 
+    # ----------------------
+    # Season/Episode extraction
     season, episode = extract_season_episode(filename)
     if season is not None:
         tag = "#SERIES"
-        if m := (RANGE_REGEX.search(filename) or SINGLE_REGEX.search(filename) or NAMED_REGEX.search(filename) or EP_ONLY_RANGE.search(filename)):
-            match_str = m.group(0)
-            start_idx = filename.lower().find(match_str.lower())
-            end_idx = start_idx + len(match_str)
-            processed_raw = filename[:end_idx]
-            base_raw = filename[:start_idx]
-            if year_match := YEAR_PATTERN.search(filename.lower()[end_idx:]):
-                y = year_match.group(0)
-                yi = filename.lower().find(y, end_idx)
-                if yi != -1:
-                    processed_raw = filename[:yi+4]
-                    base_raw += f" {y}"
-    else:
-        if year_match := YEAR_PATTERN.search(unified):
-            year = year_match.group(0)
-            year_idx = filename.lower().find(year.lower())
-            if year_idx != -1:
-                processed_raw = filename[:year_idx + 4]
-                base_raw = processed_raw
-        else:
-            if qual_match := QUALITY_PATTERN.search(unified):
-                qual_str = qual_match.group(0)
-                qual_idx = filename.lower().find(qual_str.lower())
-                if qual_idx != -1:
-                    processed_raw = filename[:qual_idx]
-                    base_raw = processed_raw
 
-    base_name = normalize(remove_ignored_words(normalize(base_raw)))
-    if year and year not in base_name:
-        base_name += f" {year}"
+    # ----------------------
+    # Base raw clean
+    base_raw = filename
+    base_raw = sub(r'[_\.\-]+', ' ', base_raw)      # Replace dots/underscores/hyphens
+    base_raw = sub(r'\s+', ' ', base_raw).strip()
 
-    if base_name.endswith(")"):
-        base_name = re.sub(r"\s+\(\d{4}\)$", "", base_name)
-        if year:
-            base_name += f" {year}"
+    # ----------------------
+    # Year extract if not found yet
+    if not year and (year_match := YEAR_PATTERN.search(unified)):
+        year = year_match.group(0)
 
-    # -------------------------
-    # NEW: strip season/episode tokens from final base_name
-    # -------------------------
-    def _strip_season_episode_tokens(name: str) -> str:
-        """
-        Remove common season/episode markers from a title while preserving a trailing year.
-        Examples removed: S01, s01e02, 1x02, season 1, ep 02, episode 2, part 1
-        """
-        if not name:
-            return name
+    # ----------------------
+    # Clean title for base_name
+    clean_title = normalize(remove_ignored_words(normalize(base_raw)))
 
-        # Preserve trailing year (e.g. "Title (2020)" or "Title 2020")
-        year_match = re.search(r'\(?\b(19|20)\d{2}\b\)?\s*$', name)
-        year_part = ""
-        if year_match:
-            year_part = year_match.group(0)
-            name = name[:year_match.start()].strip()
+    # ----------------------
+    # FINAL base_name
+    if season is not None:  # Series
+        base_name = f"{clean_title} {year} S{int(season):02}" if year else f"{clean_title} S{int(season):02}"
+    else:  # Movie
+        base_name = f"{clean_title} {year}" if year else clean_title
 
-        # Common patterns to remove
-        patterns = [
-            r'\bS\d{1,2}E\d{1,2}\b',     # S01E02
-            r'\bS\d{1,2}\b',             # S01
-            r'\bE\d{1,2}\b',             # E02
-            r'\b\d{1,2}x\d{1,2}\b',      # 1x02
-            r'\bSeason\s*\d{1,2}\b',     # Season 1
-            r'\bEp(?:isode)?\.?\s*\d{1,3}\b',  # Ep02, Episode 2
-            r'\bEpisode\s*\d{1,3}\b',
-            r'\bPart\s*\d{1,2}\b'
-        ]
+    # Fallback in case clean_title got empty
+    if not base_name.strip():
+        base_name = filename
 
-        for p in patterns:
-            name = re.sub(p, ' ', name, flags=re.IGNORECASE)
-
-        # Remove leftover separators and extra whitespace
-        name = re.sub(r'[_\.\-]+', ' ', name)     # underscores/dots/hyphens
-        name = re.sub(r'\s+', ' ', name).strip()
-
-        # Reattach year in canonical form if we removed it earlier
-        if year_part:
-            y = re.search(r'(19|20)\d{2}', year_part)
-            if y:
-                name = f"{name} {y.group(0)}"
-
-        return name.strip()
-
-    base_name = _strip_season_episode_tokens(base_name)
-    # If stripping accidentally removed everything, fall back to a safer value
-    if not base_name:
-        base_name = normalize(remove_ignored_words(normalize(processed_raw))) or filename
+    # ----------------------
+    # Add language to processed
+    processed = normalize(processed_raw)
+    if language != "N/A":
+        processed += f" [{language}]"
 
     return {
-        "processed": normalize(processed_raw),
-        "base_name": base_name,
+        "processed": processed,                 # Full filename + language
+        "base_name": base_name,                 # Clean for display/search
         "tag": tag,
         "season": season,
         "episode": episode,
