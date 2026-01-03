@@ -139,7 +139,7 @@ def schedule_update(bot, base_name, delay=5):
     )
 
 
-async def extract_media_info(filename: str, caption: str):
+def extract_media_info(filename: str, caption: str):
     from re import search, sub
 
     # Normalize filename & caption
