@@ -1,3 +1,7 @@
+import logging
+from struct import pack
+import re
+import base64
 from pyrogram.file_id import FileId
 from typing import Dict, List
 from collections import defaultdict
@@ -9,7 +13,6 @@ from info import *
 from utils import get_settings, save_group_settings
 from datetime import datetime, timedelta
 import logging
-import re
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -110,9 +113,12 @@ async def save_file(media):
             logger.error(
                 "Error during MULTIPLE_DB check; defaulting to primary DB.", exc_info=e
             )
-    try:
-        record = saveMedia(
-            file_id=file_id,
+
+# ---------------- Prepare record ----------------
+try:
+    caption = getattr(media.caption, "html", None) or str(media.caption) if media.caption else None
+    record = saveMedia(
+        file_id=file_id,
             file_ref=file_ref,
             file_name=file_name,
             file_size=media.file_size,
