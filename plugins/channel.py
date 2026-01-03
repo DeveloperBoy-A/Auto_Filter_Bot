@@ -145,8 +145,8 @@ def extract_media_info(filename: str, caption: str):
     ott_platform = extract_ott_platform(f"{filename.lower()} {caption_clean}")
 
     text_for_lang = f"{filename.lower()} {caption_clean}"
-lang_keys = {k for k in CAPTION_LANGUAGES if k in text_for_lang}
-language = ", ".join(sorted({CAPTION_LANGUAGES[k] for k in lang_keys})) if lang_keys else "N/A"
+    lang_keys = {k for k in CAPTION_LANGUAGES if k in text_for_lang}
+    language = ", ".join(sorted({CAPTION_LANGUAGES[k] for k in lang_keys})) if lang_keys else "N/A"
 
     season, episode = extract_season_episode(filename)
     if season is not None:
