@@ -224,6 +224,34 @@ async def get_search_results(
         next_offset = ""
     return files, next_offset, total_results
 
+async def get_bad_files(query, file_type=None):
+    query = query.strip()
+    if not query:
+        raw_pattern = '.'
+    elif ' ' not in query:
+        raw_pattern = r"(\b|[\.\+\-_])" + query + r"(\b|[\.\+\-_])"
+    else:
+        raw_pattern = query.replace(" ", r".*[\s\.\+\-_()]")
+    try:
+        regex = re.compile(raw_pattern, flags=re.IGNORECASE)
+    except:
+        return []
+    if USE_CAPTION_FILTER:
+        filter = {'$or': [{'file_name': regex}, {'caption': regex}]}
+    else:
+        filter = {'file_name': regex}
+    if file_type:
+        filter['file_type'] = file_type
+    cursor1 = Media.find(filter).sort('$natural', -1)
+    files1 = await cursor1.to_list(length=(await Media.count_documents(filter)))
+    if MULTIPLE_DB:
+        cursor2 = Media2.find(filter).sort('$natural', -1)
+        files2 = await cursor2.to_list(length=(await Media2.count_documents(filter)))
+        files = files1 + files2
+    else:
+        files = files1
+    total_results = len(files)
+    return files, total_results
 
 async def get_file_details(query):
     filter = {"file_id": query}
