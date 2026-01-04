@@ -8,7 +8,6 @@ import asyncio
 import string
 import pytz
 from .pmfilter import auto_filter 
-from ..Script import DEL_MSG
 from Script import script
 from datetime import datetime
 from database.refer import referdb
@@ -45,7 +44,7 @@ async def start(client, message):
         verify_id_info = await db.get_verify_id_info(user_id, verify_id)
         if not verify_id_info or verify_id_info["verified"]:
             return await message.reply("<b>ʟɪɴᴋ ᴇxᴘɪʀᴇᴅ ᴛʀʏ ᴀɢᴀɪɴ...</b>")  
-        
+
         ist_timezone = pytz.timezone('Asia/Kolkata')
         if await db.user_verified(user_id):
             key = "third_time_verified"
@@ -178,30 +177,30 @@ async def start(client, message):
         try:
             uss = await client.get_users(user_id)
         except Exception:
-            return 	    
+            return             
         referdb.add_user(message.from_user.id)
         fromuse = referdb.get_refer_points(user_id) + 10
         if fromuse == 100:
             referdb.add_refer_points(user_id, 0) 
-            await message.reply_text(f"🎉 𝗖𝗼𝗻𝗴𝗿𝗮𝘁𝘂𝗹𝗮𝘁𝗶𝗼𝗻𝘀! 𝗬𝗼𝘂 𝘄𝗼𝗻 𝟭𝟬 𝗥𝗲𝗳𝗲𝗿𝗿𝗮𝗹 𝗽𝗼𝗶𝗻𝘁 𝗯𝗲𝗰𝗮𝘂𝘀𝗲 𝗬𝗼𝘂 𝗵𝗮𝘃𝗲 𝗯𝗲𝗲𝗻 𝗦𝘂𝗰𝗰𝗲𝘀𝘀𝗳𝘂𝗹𝗹𝘆 𝗜𝗻𝘃𝗶𝘁𝗲𝗱 ☞ {uss.mention}!")		    
-            await message.reply_text(user_id, f"You have been successfully invited by {message.from_user.mention}!") 	
+            await message.reply_text(f"🎉 𝗖𝗼𝗻𝗴𝗿𝗮𝘁𝘂𝗹𝗮𝘁𝗶𝗼𝗻𝘀! 𝗬𝗼𝘂 𝘄𝗼𝗻 𝟭𝟬 𝗥𝗲𝗳𝗲𝗿𝗿𝗮𝗹 𝗽𝗼𝗶𝗻𝘁 𝗯𝗲𝗰𝗮𝘂𝘀𝗲 𝗬𝗼𝘂 𝗵𝗮𝘃𝗲 𝗯𝗲𝗲𝗻 𝗦𝘂𝗰𝗰𝗲𝘀𝘀𝗳𝘂𝗹𝗹𝘆 𝗜𝗻𝘃𝗶𝘁𝗲𝗱 ☞ {uss.mention}!")                    
+            await message.reply_text(user_id, f"You have been successfully invited by {message.from_user.mention}!")         
             seconds = 2592000
             if seconds > 0:
                 expiry_time = datetime.datetime.now() + datetime.timedelta(seconds=seconds)
                 user_data = {"id": user_id, "expiry_time": expiry_time}  # Using "id" instead of "user_id"  
-                await db.update_user(user_data)  # Use the update_user method to update or insert user data		    
+                await db.update_user(user_data)  # Use the update_user method to update or insert user data                    
                 await client.send_message(
                 chat_id=user_id,
                 text=f"<b>Hᴇʏ {uss.mention}\n\nYᴏᴜ ɢᴏᴛ 1 ᴍᴏɴᴛʜ ᴘʀᴇᴍɪᴜᴍ sᴜʙsᴄʀɪᴘᴛɪᴏɴ ʙʏ ɪɴᴠɪᴛɪɴɢ 10 ᴜsᴇʀs ❗", disable_web_page_preview=True              
                 )
             for admin in ADMINS:
-                await client.send_message(chat_id=admin, text=f"Sᴜᴄᴄᴇss ғᴜʟʟʏ ᴛᴀsᴋ ᴄᴏᴍᴘʟᴇᴛᴇᴅ ʙʏ ᴛʜɪs ᴜsᴇʀ:\n\nuser Nᴀᴍᴇ: {uss.mention}\n\nUsᴇʀ ɪᴅ: {uss.id}!")	
+                await client.send_message(chat_id=admin, text=f"Sᴜᴄᴄᴇss ғᴜʟʟʏ ᴛᴀsᴋ ᴄᴏᴍᴘʟᴇᴛᴇᴅ ʙʏ ᴛʜɪs ᴜsᴇʀ:\n\nuser Nᴀᴍᴇ: {uss.mention}\n\nUsᴇʀ ɪᴅ: {uss.id}!")        
         else:
             referdb.add_refer_points(user_id, fromuse)
             await message.reply_text(f"You have been successfully invited by {uss.mention}!")
             await client.send_message(user_id, f"𝗖𝗼𝗻𝗴𝗿𝗮𝘁𝘂𝗹𝗮𝘁𝗶𝗼𝗻𝘀! 𝗬𝗼𝘂 𝘄𝗼𝗻 𝟭𝟬 𝗥𝗲𝗳𝗲𝗿𝗿𝗮𝗹 𝗽𝗼𝗶𝗻𝘁 𝗯𝗲𝗰𝗮𝘂𝘀𝗲 𝗬𝗼𝘂 𝗵𝗮𝘃𝗲 𝗯𝗲𝗲𝗻 𝗦𝘂𝗰𝗰𝗲𝘀𝘀𝗳𝘂𝗹𝗹𝘆 𝗜𝗻𝘃𝗶𝘁𝗲𝗱 ☞{message.from_user.mention}!")
         return
-        
+
     if len(message.command) == 2 and message.command[1] in ["premium"]:
         buttons = [[
                     InlineKeyboardButton('📲 ꜱᴇɴᴅ ᴘᴀʏᴍᴇɴᴛ ꜱᴄʀᴇᴇɴꜱʜᴏᴛ', url=OWNER_LNK)
@@ -216,14 +215,14 @@ async def start(client, message):
             parse_mode=enums.ParseMode.HTML
         )
         return  
-    
+
     if len(message.command) == 2 and message.command[1].startswith('getfile'):
         movies = message.command[1].split("-", 1)[1] 
         movie = movies.replace('-',' ')
         message.text = movie 
         await auto_filter(client, message) 
         return
-    
+
     data = message.command[1]
     try:
         _, grp_id, file_id = data.split("_", 2)
@@ -297,7 +296,7 @@ async def start(client, message):
                     InlineKeyboardButton(text="♻️ ᴄʟɪᴄᴋ ʜᴇʀᴇ ᴛᴏ ᴠᴇʀɪꜰʏ ♻️", url=verify)
                ],[ 
                     InlineKeyboardButton(text="❓ʜᴏᴡ ᴛᴏ ᴠᴇʀɪꜰʏ ᴠɪᴅᴇᴏ❓", url=howtodownload),
-                
+
                 InlineKeyboardButton(text="😁ʙᴜʏ ᴘʀᴇᴍɪᴜᴍ😁", callback_data='buy_info'),
             ]]
                 reply_markup=InlineKeyboardMarkup(buttons)
@@ -309,9 +308,9 @@ async def start(client, message):
                     text=msg.format(message.from_user.mention),
                     protect_content = True,
                     reply_markup=reply_markup,
-                    parse_mode="HTML"
+                    parse_mode=enums.ParseMode.HTML
                 )
-                await asyncio.sleep(300)
+                await asyncio.sleep(300) 
                 await n.delete()
                 await m.delete()
                 return
@@ -324,121 +323,64 @@ async def start(client, message):
             files = temp.GETALL.get(file_id)
             if not files:
                 return await message.reply('<b><i>ɴᴏ ꜱᴜᴄʜ ꜰɪʟᴇ ᴇxɪꜱᴛꜱ !</b></i>')
-
             filesarr = []
-
             for file in files:
                 file_id = file.file_id
                 files_ = await get_file_details(file_id)
                 files1 = files_[0]
-
                 title = clean_filename(files1.file_name)
                 size = get_size(files1.file_size)
                 f_caption = files1.caption
-
                 settings = await get_settings(int(grp_id))
-                DREAMX_CAPTION = settings.get("caption", CUSTOM_FILE_CAPTION)
-
+                DREAMX_CAPTION = settings.get('caption', CUSTOM_FILE_CAPTION)
                 if DREAMX_CAPTION:
                     try:
-                        f_caption = DREAMX_CAPTION.format(
-                            file_name="" if title is None else title,
-                            file_size="" if size is None else size,
-                            file_caption="" if f_caption is None else f_caption,
-                        )
+                        f_caption=DREAMX_CAPTION.format(file_name= '' if title is None else title, file_size='' if size is None else size, file_caption='' if f_caption is None else f_caption)
                     except Exception as e:
                         logger.exception(e)
-
+                        f_caption = f_caption
                 if f_caption is None:
                     f_caption = f"{clean_filename(files1.file_name)}"
 
                 if STREAM_MODE and not PREMIUM_STREAM_MODE:
-                    btn = [
-                        [
-                            InlineKeyboardButton(
-                                "🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️",
-                                callback_data=f"generate_stream_link:{file_id}",
-                            )
-                        ],
-                        [
-                            InlineKeyboardButton(
-                                "📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌",
-                                url=UPDATE_CHNL_LNK,
-                            )
-                        ],
-                    ]
 
+                    btn = [
+                        [InlineKeyboardButton('🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️', callback_data=f'generate_stream_link:{file_id}')],
+                        [InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]  # Keep this line unchanged  
+                    ]
                 elif STREAM_MODE and PREMIUM_STREAM_MODE:
+
                     if not await db.has_premium_access(message.from_user.id):
+
                         btn = [
-                            [
-                                InlineKeyboardButton(
-                                    "🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️",
-                                    callback_data="prestream",
-                                )
-                            ],
-                            [
-                                InlineKeyboardButton(
-                                    "📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌",
-                                    url=UPDATE_CHNL_LNK,
-                                )
-                            ],
+                            [InlineKeyboardButton('🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️', callback_data=f'prestream')],
+                            [InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]  # Keep this line unchanged  
                         ]
                     else:
+
                         btn = [
-                            [
-                                InlineKeyboardButton(
-                                    "🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️",
-                                    callback_data=f"generate_stream_link:{file_id}",
-                                )
-                            ],
-                            [
-                                InlineKeyboardButton(
-                                    "📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌",
-                                    url=UPDATE_CHNL_LNK,
-                                )
-                            ],
+                            [InlineKeyboardButton('🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️', callback_data=f'generate_stream_link:{file_id}')],
+                            [InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]  # Keep this line unchanged  
                         ]
                 else:
-                    btn = [
-                        [
-                            InlineKeyboardButton(
-                                "📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌",
-                                url=UPDATE_CHNL_LNK,
-                            )
-                        ]
-                    ]
-
+                    btn = [[InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]]
                 msg = await client.send_cached_media(
                     chat_id=message.from_user.id,
                     file_id=file_id,
                     caption=f_caption,
-                    protect_content=settings.get("file_secure", PROTECT_CONTENT),
-                    reply_markup=InlineKeyboardMarkup(btn),
+                    protect_content=settings.get('file_secure', PROTECT_CONTENT),
+                    reply_markup=InlineKeyboardMarkup(btn)
                 )
-
                 filesarr.append(msg)
-
-            k = await client.send_message(
-                chat_id=message.from_user.id,
-                text=DEL_MSG.format(
-                    message.from_user.mention, get_time(DELETE_TIME)
-                ),
+            k = await client.send_message(chat_id=message.from_user.id, text=DEL_MSG.format(message.from_user.mention, get_time(DELETE_TIME)),  # Hardcoded text की जगह DEL_MSG
                 parse_mode="html",
-                reply_markup=InlineKeyboardMarkup(btn) if btn else None,
+                reply_markup=InlineKeyboardMarkup(btn) if btn else None
             )
-
             await asyncio.sleep(DELETE_TIME)
-
             for x in filesarr:
                 await x.delete()
-
-            await k.edit_text(
-                "<b>ʏᴏᴜʀ ᴀʟʟ ᴠɪᴅᴇᴏꜱ/ꜰɪʟᴇꜱ ᴀʀᴇ ᴅᴇʟᴇᴛᴇᴅ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ !\n"
-                "ᴋɪɴᴅʟʏ ꜱᴇᴀʀᴄʜ ᴀɢᴀɪɴ</b>"
-            )
+            await k.edit_text("<b>ʏᴏᴜʀ ᴀʟʟ ᴠɪᴅᴇᴏꜱ/ꜰɪʟᴇꜱ ᴀʀᴇ ᴅᴇʟᴇᴛᴇᴅ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ !\nᴋɪɴᴅʟʏ ꜱᴇᴀʀᴄʜ ᴀɢᴀɪɴ</b>")
             return
-
         except Exception as e:
             logger.exception(e)
             return
@@ -446,224 +388,111 @@ async def start(client, message):
     user = message.from_user.id
     files_ = await get_file_details(file_id)
     settings = await get_settings(int(grp_id))
-
     if not files_:
-        pre, file_id = (
-            base64.urlsafe_b64decode(data + "=" * (-len(data) % 4))
-            .decode("utf-8")
-            .split("_", 1)
-        )
-
+        pre, file_id = ((base64.urlsafe_b64decode(data + "=" * (-len(data) % 4))).decode("utf-8")).split("_", 1)
         try:
             if STREAM_MODE and not PREMIUM_STREAM_MODE:
                 btn = [
-                    [
-                        InlineKeyboardButton(
-                            "🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️",
-                            callback_data=f"generate_stream_link:{file_id}",
-                        )
-                    ],
-                    [
-                        InlineKeyboardButton(
-                            "📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌",
-                            url=UPDATE_CHNL_LNK,
-                        )
-                    ],
+                    [InlineKeyboardButton('🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️', callback_data=f'generate_stream_link:{file_id}')],
+                    [InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]  # Keep this line unchanged  
                 ]
-
             elif STREAM_MODE and PREMIUM_STREAM_MODE:
                 if not await db.has_premium_access(message.from_user.id):
-                    btn = [
-                        [
-                            InlineKeyboardButton(
-                                "🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️",
-                                callback_data="prestream",
-                            )
-                        ],
-                        [
-                            InlineKeyboardButton(
-                                "📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌",
-                                url=UPDATE_CHNL_LNK,
-                            )
-                        ],
+                   btn = [
+                        [InlineKeyboardButton('🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️', callback_data=f'prestream')],
+                        [InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]  # Keep this line unchanged  
                     ]
                 else:
                     btn = [
-                        [
-                            InlineKeyboardButton(
-                                "🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️",
-                                callback_data=f"generate_stream_link:{file_id}",
-                            )
-                        ],
-                        [
-                            InlineKeyboardButton(
-                                "📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌",
-                                url=UPDATE_CHNL_LNK,
-                            )
-                        ],
+                        [InlineKeyboardButton('🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️', callback_data=f'generate_stream_link:{file_id}')],
+                        [InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]  # Keep this line unchanged  
                     ]
             else:
-                btn = [
-                    [
-                        InlineKeyboardButton(
-                            "📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌",
-                            url=UPDATE_CHNL_LNK,
-                        )
-                    ]
-                ]
 
+                btn = [[InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]] 
             msg = await client.send_cached_media(
                 chat_id=message.from_user.id,
                 file_id=file_id,
-                protect_content=settings.get("file_secure", PROTECT_CONTENT),
-                reply_markup=InlineKeyboardMarkup(btn),
-            )
+                protect_content=settings.get('file_secure', PROTECT_CONTENT),
+                reply_markup=InlineKeyboardMarkup(btn))
 
             filetype = msg.media
             file = getattr(msg, filetype.value)
-
             title = clean_filename(file.file_name)
-            size = get_size(file.file_size)
+            size=get_size(file.file_size)
             f_caption = f"<code>{title}</code>"
-
             settings = await get_settings(int(grp_id))
-            DREAMX_CAPTION = settings.get("caption", CUSTOM_FILE_CAPTION)
-
+            DREAMX_CAPTION = settings.get('caption', CUSTOM_FILE_CAPTION)
             if DREAMX_CAPTION:
                 try:
-                    f_caption = DREAMX_CAPTION.format(
-                        file_name="" if title is None else title,
-                        file_size="" if size is None else size,
-                        file_caption="",
-                    )
-                except Exception:
+                    f_caption=DREAMX_CAPTION.format(file_name= '' if title is None else title, file_size='' if size is None else size, file_caption='')
+                except:
                     return
-
             await msg.edit_caption(
                 f_caption,
-                reply_markup=InlineKeyboardMarkup(btn),
+                reply_markup=InlineKeyboardMarkup(btn)
             )
-
             k = await msg.reply(
-                DEL_MSG.format(
-                    message.from_user.mention,
-                    get_time(DELETE_TIME),
-                ),
-                quote=True,
+                DEL_MSG.format(message.from_user.mention, get_time(DELETE_TIME)),
+                quote=True
             )
-
             await asyncio.sleep(DELETE_TIME)
             await msg.delete()
-            await k.edit_text(
-                "<b>ʏᴏᴜʀ ᴠɪᴅᴇᴏ / ꜰɪʟᴇ ɪꜱ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ᴅᴇʟᴇᴛᴇᴅ !!</b>"
-            )
+            await k.edit_text("<b>ʏᴏᴜʀ ᴠɪᴅᴇᴏ / ꜰɪʟᴇ ɪꜱ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ᴅᴇʟᴇᴛᴇᴅ !!</b>")
             return
-
         except Exception as e:
             logger.exception(e)
             pass
-
-        return await message.reply("ɴᴏ ꜱᴜᴄʜ ꜰɪʟᴇ ᴇxɪꜱᴛꜱ !")
+        return await message.reply('ɴᴏ ꜱᴜᴄʜ ꜰɪʟᴇ ᴇxɪꜱᴛꜱ !')
 
     files = files_[0]
     title = clean_filename(files.file_name)
     size = get_size(files.file_size)
     f_caption = files.caption
-
-    settings = await get_settings(int(grp_id))
-    DREAMX_CAPTION = settings.get("caption", CUSTOM_FILE_CAPTION)
-
+    settings = await get_settings(int(grp_id))            
+    DREAMX_CAPTION = settings.get('caption', CUSTOM_FILE_CAPTION)
     if DREAMX_CAPTION:
         try:
-            f_caption = DREAMX_CAPTION.format(
-                file_name="" if title is None else title,
-                file_size="" if size is None else size,
-                file_caption="" if f_caption is None else f_caption,
-            )
+            f_caption=DREAMX_CAPTION.format(file_name= '' if title is None else title, file_size='' if size is None else size, file_caption='' if f_caption is None else f_caption)
         except Exception as e:
             logger.exception(e)
+            f_caption = f_caption
 
     if f_caption is None:
         f_caption = clean_filename(files.file_name)
 
     if STREAM_MODE and not PREMIUM_STREAM_MODE:
         btn = [
-            [
-                InlineKeyboardButton(
-                    "🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️",
-                    callback_data=f"generate_stream_link:{file_id}",
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    "📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌",
-                    url=UPDATE_CHNL_LNK,
-                )
-            ],
+            [InlineKeyboardButton('🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️', callback_data=f'generate_stream_link:{file_id}')],
+            [InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]  # Keep this line unchanged  
         ]
-
     elif STREAM_MODE and PREMIUM_STREAM_MODE:
         if not await db.has_premium_access(message.from_user.id):
             btn = [
-                [
-                    InlineKeyboardButton(
-                        "🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️",
-                        callback_data="prestream",
-                    )
-                ],
-                [
-                    InlineKeyboardButton(
-                        "📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌",
-                        url=UPDATE_CHNL_LNK,
-                    )
-                ],
+                [InlineKeyboardButton('🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️', callback_data=f'prestream')],
+                [InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]  # Keep this line unchanged  
             ]
         else:
             btn = [
-                [
-                    InlineKeyboardButton(
-                        "🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️",
-                        callback_data=f"generate_stream_link:{file_id}",
-                    )
-                ],
-                [
-                    InlineKeyboardButton(
-                        "📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌",
-                        url=UPDATE_CHNL_LNK,
-                    )
-                ],
+                [InlineKeyboardButton('🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️', callback_data=f'generate_stream_link:{file_id}')],
+                [InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]  # Keep this line unchanged  
             ]
     else:
-        btn = [
-            [
-                InlineKeyboardButton(
-                    "📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌",
-                    url=UPDATE_CHNL_LNK,
-                )
-            ]
-        ]
-
+        btn = [[InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]]
     msg = await client.send_cached_media(
         chat_id=message.from_user.id,
         file_id=file_id,
         caption=f_caption,
-        protect_content=settings.get("file_secure", PROTECT_CONTENT),
-        reply_markup=InlineKeyboardMarkup(btn),
+        protect_content=settings.get('file_secure', PROTECT_CONTENT),
+        reply_markup=InlineKeyboardMarkup(btn)
     )
-
     k = await msg.reply(
-        DEL_MSG.format(
-            message.from_user.mention,
-            get_time(DELETE_TIME),
-        ),
-        quote=True,
-    )
-
+        DEL_MSG.format(message.from_user.mention, get_time(DELETE_TIME)),
+        quote=True
+    )     
     await asyncio.sleep(DELETE_TIME)
     await msg.delete()
-    await k.edit_text(
-        "<b>ʏᴏᴜʀ ᴠɪᴅᴇᴏ / ꜰɪʟᴇ ɪꜱ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ᴅᴇʟᴇᴛᴇᴅ !!</b>"
-    )
+    await k.edit_text("<b>ʏᴏᴜʀ ᴠɪᴅᴇᴏ / ꜰɪʟᴇ ɪꜱ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ᴅᴇʟᴇᴛᴇᴅ !!</b>")
     return
 
 
@@ -692,7 +521,7 @@ async def delete(bot, message):
     else:
         await msg.edit('Tʜɪs ɪs ɴᴏᴛ sᴜᴘᴘᴏʀᴛᴇᴅ ғɪʟᴇ ғᴏʀᴍᴀᴛ')
         return
-    
+
     file_id, file_ref = unpack_new_file_id(media.file_id)
     if await Media.count_documents({'file_id': file_id}):
         result = await Media.collection.delete_one({
@@ -803,7 +632,7 @@ async def settings(client, message):
                     "ᴜꜱᴇ /reload ɪɴ ᴛʜᴀᴛ ɢʀᴏᴜᴘ ᴀɴᴅ ɪᴛ ᴡɪʟʟ ᴀᴘᴘᴇᴀʀ ʜᴇʀᴇ.",
                     reply_markup=InlineKeyboardMarkup(group_list)
                 )
-        
+
 @Client.on_message(filters.command('reload'))
 async def connect_group(client, message):
     user_id = message.from_user.id
@@ -824,17 +653,17 @@ async def connect_group(client, message):
             await message.reply_text(f"Lɪɴᴋᴇᴅ sᴜᴄᴄᴇssғᴜʟʟʏ ✅ {chat.title} ᴛᴏ PM.")
         except:
             await message.reply_text("Invalid group ID or error occurred.")
-            
+
 @Client.on_message(filters.command('set_template'))
 async def save_template(client, message):
     sts = await message.reply("ᴄʜᴇᴄᴋɪɴɢ ᴛᴇᴍᴘʟᴀᴛᴇ...")
     user_id = message.from_user.id if message.from_user else None
     if not user_id:
         return await message.reply("ʏᴏᴜ'ʀᴇ ᴀɴᴏɴʏᴍᴏᴜꜱ ᴀᴅᴍɪɴ.")
-    
+
     if message.chat.type not in [enums.ChatType.GROUP, enums.ChatType.SUPERGROUP]:
         return await sts.edit("⚠️ ᴜꜱᴇ ᴛʜɪꜱ ᴄᴏᴍᴍᴀɴᴅ ɪɴ ᴀ ɢʀᴏᴜᴘ ᴄʜᴀᴛ.")
-    
+
     group_id = message.chat.id
     title = message.chat.title
     if not await is_check_admin(client, group_id, user_id):
@@ -842,7 +671,7 @@ async def save_template(client, message):
         return
     if len(message.command) < 2:
         return await sts.edit("⚠️ ɴᴏ ᴛᴇᴍᴘʟᴀᴛᴇ ᴘʀᴏᴠɪᴅᴇᴅ!")
-    
+
     template = message.text.split(" ", 1)[1]
     await save_group_settings(group_id, 'template', template)
     await sts.edit(
@@ -968,7 +797,7 @@ async def requests(bot, message):
                 InlineKeyboardButton('ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ', url=f"{reported_post.link}")
               ]]
         await message.reply_text("<b>ʏᴏᴜʀ ʀᴇǫᴜᴇꜱᴛ ʜᴀꜱ ʙᴇᴇɴ ᴀᴅᴅᴇᴅ! ᴘʟᴇᴀꜱᴇ ᴡᴀɪᴛ ꜰᴏʀ ꜱᴏᴍᴇ ᴛɪᴍᴇ.\n\nᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ ꜰɪʀꜱᴛ & ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ.</b>", reply_markup=InlineKeyboardMarkup(btn))
-    
+
 @Client.on_message(filters.command("send") & filters.user(ADMINS))
 async def send_msg(bot, message):
     if message.reply_to_message:
@@ -1031,7 +860,7 @@ async def deletemultiplefiles(bot, message):
 async def topsearch_callback(client, callback_query):
     def is_alphanumeric(string):
         return bool(re.match('^[a-zA-Z0-9 ]*$', string))
-    
+
     limit = 20  
     top_messages = await mdb.get_top_messages(limit)
     seen_messages = set()
