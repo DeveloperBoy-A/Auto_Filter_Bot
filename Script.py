@@ -149,12 +149,25 @@ Nᴀᴍᴇ - {}
 
 <blockquote>👇 नीचे दिए गए विकल्पों में से movie के नाम की सही spelling चुनें</blockquote>"""
 
-    DEL_MSG = """f"<b><u>❗️⚠️ IMPORTANT WARNING ⚠️❗️</u></b>\n\n"
-f"THIS MOVIE FILE/VIDEO WILL BE <b>AUTOMATICALLY DELETED</b> IN <b><u><code>{get_time(DELETE_TIME)}</code></u></b> 🫥 "
-"(DUE TO COPYRIGHT ISSUES).\n\n"
-f"<b><i>PLEASE FORWARD THIS FILE TO SOMEWHERE ELSE AND START DOWNLOADING THERE.\n\n"
-f"<blockquote>⚠️ यह फ़ाइल  <u><code>{get_time(DELETE_TIME)}</code></u> में स्वचालित रूप से हटा दी जाएगी, इसलिए इसे अपने  SAVED MESSAGES पर अग्रेषित करें और फिर डाउनलोड करें।</i></b></blockquote>"""
+    DEL_MSG = f"""
+<b>❗️⚠️ ɪᴍᴘᴏʀᴛᴀɴᴛ ᴡᴀʀɴɪɴɢ ⚠️❗️</b>
 
+<b>📁 ᴛʜɪs ᴍᴏᴠɪᴇ ғɪʟᴇ / ᴠɪᴅᴇᴏ</b>
+<b>ᴡɪʟʟ ʙᴇ <u>ᴀᴜᴛᴏᴍᴀᴛɪᴄᴀʟʟʏ ᴅᴇʟᴇᴛᴇᴅ</u></b>
+
+<b>⏳ ᴅᴇʟᴇᴛɪᴏɴ ᴛɪᴍᴇ :</b> <b><code>{get_time(DELETE_TIME)}</code></b> 🫥  
+<i>(ᴅᴜᴇ ᴛᴏ ᴄᴏᴘʏʀɪɢʜᴛ ɪssᴜᴇs)</i>
+
+<blockquote>
+<b>📤 ᴘʟᴇᴀsᴇ ғᴏʀᴡᴀʀᴅ ᴛʜɪs ғɪʟᴇ</b>  
+<b>ᴛᴏ sᴏᴍᴇᴡʜᴇʀᴇ ᴇʟsᴇ ᴀɴᴅ sᴛᴀʀᴛ ᴅᴏᴡɴʟᴏᴀᴅɪɴɢ.</b>
+
+⚠️ यह फ़ाइल <b>⏳ <code>{get_time(DELETE_TIME)}</code></b> में  
+<b><u>स्वचालित रूप से हटा दी जाएगी</u></b>
+</blockquote>
+<b>📌 इसे अपने <u>𝐒𝐀𝐕𝐄𝐃 𝐌𝐄𝐒𝐒𝐀𝐆𝐄𝐒</u></b>  
+<b>पर अग्रेषित करें और उसके बाद डाउनलोड करें।</b>
+"""
 
     I_CUDNT = """<b>sᴏʀʀʏ ɴᴏ ꜰɪʟᴇs ᴡᴇʀᴇ ꜰᴏᴜɴᴅ ꜰᴏʀ ʏᴏᴜʀ ʀᴇǫᴜᴇꜱᴛ {} 😕
 
