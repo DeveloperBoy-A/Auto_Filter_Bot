@@ -321,7 +321,7 @@ async def start(client, message):
             print(f"Error In Verification - {e}")
             pass
 
-    ƦƤ ᎬᗪᎥ丅乙:
+ 
 # Now, await the file details task
         files_ = await file_details_task
 
