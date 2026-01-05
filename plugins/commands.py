@@ -399,7 +399,7 @@ async def start(client, message):
                     try:
                         f_caption=DREAMX_CAPTION.format(file_name= '' if title is None else title, file_size='' if size is None else size, file_caption='')
 
-except:
+                    except:
                         return
                 await msg.edit_caption(
                     f_caption,
