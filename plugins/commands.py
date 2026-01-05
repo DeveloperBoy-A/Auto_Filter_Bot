@@ -431,8 +431,7 @@ async def start(client, message):
                 reply_markup=InlineKeyboardMarkup(btn)
             )
             k = await msg.reply(script.DEL_MSG.format(get_time(DELETE_TIME)),
-                quote=True, parse_mode=enums.ParseMode.HTML),
-                quote=True
+                quote=True, parse_mode=enums.ParseMode.HTML
             )
             await asyncio.sleep(DELETE_TIME)
             await msg.delete()
