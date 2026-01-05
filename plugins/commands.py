@@ -23,7 +23,7 @@ from utils import get_settings, save_group_settings, is_subscribed, is_req_subsc
 import time
 
 
-del_time = get_time(DELETE_TIME)
+
 logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
 
@@ -377,7 +377,7 @@ async def start(client, message):
                     reply_markup=InlineKeyboardMarkup(btn)
                 )
                 filesarr.append(msg)
-            k = await client.send_message(chat_id=message.from_user.id, text=script.DEL_MSG.format(del_time, del_time))
+            k = await client.send_message(chat_id=message.from_user.id, text=script.DEL_MSG.format(del_time,del_time))
             await asyncio.sleep(DELETE_TIME)
             for x in filesarr:
                 await x.delete()
