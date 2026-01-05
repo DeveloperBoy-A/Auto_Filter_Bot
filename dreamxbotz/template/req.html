@@ -42,13 +42,13 @@ nav .three-dots a{margin-left:8px;}
 .contact-links a:nth-child(2){background:#C13584;color:#fff;}
 footer{background:#111;color:#fff;padding:20px 10px;text-align:center;font-family:'Josefin Sans',sans-serif;}
 footer a{text-decoration:none;}
+.warning-msg{background:#ff3d3d;color:#fff;padding:8px 12px;border-radius:12px;margin-top:12px;text-align:center;font-weight:700;}
 </style>
 
 </head>
 
 <body>
 
-<!-- Navigation -->
 <nav>
   <a href="#main" style="display:flex; align-items:center; gap:8px; text-decoration:none;">
     <img src="logo.png" alt="Logo" style="height:32px; width:auto;"> 
@@ -63,15 +63,15 @@ footer a{text-decoration:none;}
 
 <div class="outer">
 
-  <!-- Video Player -->
   <div class="main" id="main">
-    <video id="player" class="player" src="{{file_url}}" type="video/mp4" playsinline controls></video>
+    <video id="player" class="player" type="video/mp4" playsinline controls></video>
     <div class="file-name">
       <h4>File Name:</h4>
       <p>{{file_name}}</p>
     </div>
 
-    <!-- Download / External Players -->
+    <div class="warning-msg" id="warningMsg">⚠️ If the video doesn’t play audio in browser, please use VLC.</div>
+
     <div class="downloadBtn">
       <button onclick="openVLC()"><img src="https://i.postimg.cc/15TQ4y7B/vlc.png" alt="">VLC PLAYER</button>
       <button onclick="openMX()"><img src="https://i.postimg.cc/sx4Msv4T/mx.png" alt="">MX PLAYER</button>
@@ -82,7 +82,7 @@ footer a{text-decoration:none;}
     </div>
   </div>
 
-  <!-- Welcome Section -->
+  <!-- ABOUT SECTION -->
   <div class="abt-sec" id="sec1">
     <h2>WELCOME TO OUR STREAMING PAGE</h2>
     <p>We’re thrilled to have you here. Enjoy movies and web series with ease and fun!</p>
@@ -96,27 +96,71 @@ footer a{text-decoration:none;}
     </div>
   </div>
 
-  <!-- Movie Suggestion -->
+  <!-- MOVIE SUGGESTION -->
   <div class="movie-suggestion">
     <h3 style="text-align:center; margin-bottom:10px;">🎬 MOVIE SUGGESTIONS</h3>
     <div class="movie-search">
       <input type="text" id="movieSearchInput" placeholder="Search movie..." onkeyup="filterMovies()">
     </div>
     <div class="movie-scroll" id="movieCarousel">
-      {% for movie in movies %}
+      <!-- 10 Static Movie Cards -->
       <div class="movie-card">
-        <img src="{{movie.poster}}" alt="{{movie.name}}">
-        <p class="movie-name">{{movie.name}}</p>
-        <a href="https://t.me/{{BOT_USERNAME}}?start=getfile-{{movie.name.replace(' ', '-')}}" class="movie-download-btn" target="_blank">DOWNLOAD</a>
+        <img src="https://link-to-poster1.jpg" alt="Doctor Strange 2">
+        <p class="movie-name">Doctor Strange 2</p>
+        <a href="https://t.me/{{BOT_USERNAME}}?start=getfile-Doctor-Strange-2" class="movie-download-btn" target="_blank">DOWNLOAD</a>
       </div>
-      {% endfor %}
+      <div class="movie-card">
+        <img src="https://link-to-poster2.jpg" alt="Black Adam">
+        <p class="movie-name">Black Adam</p>
+        <a href="https://t.me/{{BOT_USERNAME}}?start=getfile-Black-Adam" class="movie-download-btn" target="_blank">DOWNLOAD</a>
+      </div>
+      <div class="movie-card">
+        <img src="https://link-to-poster3.jpg" alt="Ant-Man and Wasp">
+        <p class="movie-name">Ant-Man and Wasp</p>
+        <a href="https://t.me/{{BOT_USERNAME}}?start=getfile-Ant-Man-and-Wasp" class="movie-download-btn" target="_blank">DOWNLOAD</a>
+      </div>
+      <div class="movie-card">
+        <img src="https://link-to-poster4.jpg" alt="Avatar 2">
+        <p class="movie-name">Avatar 2</p>
+        <a href="https://t.me/{{BOT_USERNAME}}?start=getfile-Avatar-2" class="movie-download-btn" target="_blank">DOWNLOAD</a>
+      </div>
+      <div class="movie-card">
+        <img src="https://link-to-poster5.jpg" alt="Guardians of Galaxy 3">
+        <p class="movie-name">Guardians of Galaxy 3</p>
+        <a href="https://t.me/{{BOT_USERNAME}}?start=getfile-Guardians-of-Galaxy-3" class="movie-download-btn" target="_blank">DOWNLOAD</a>
+      </div>
+      <div class="movie-card">
+        <img src="https://link-to-poster6.jpg" alt="Spider-Man No Way Home">
+        <p class="movie-name">Spider-Man No Way Home</p>
+        <a href="https://t.me/{{BOT_USERNAME}}?start=getfile-Spider-Man-No-Way-Home" class="movie-download-btn" target="_blank">DOWNLOAD</a>
+      </div>
+      <div class="movie-card">
+        <img src="https://link-to-poster7.jpg" alt="Thor Love and Thunder">
+        <p class="movie-name">Thor Love and Thunder</p>
+        <a href="https://t.me/{{BOT_USERNAME}}?start=getfile-Thor-Love-and-Thunder" class="movie-download-btn" target="_blank">DOWNLOAD</a>
+      </div>
+      <div class="movie-card">
+        <img src="https://link-to-poster8.jpg" alt="Shang-Chi">
+        <p class="movie-name">Shang-Chi</p>
+        <a href="https://t.me/{{BOT_USERNAME}}?start=getfile-Shang-Chi" class="movie-download-btn" target="_blank">DOWNLOAD</a>
+      </div>
+      <div class="movie-card">
+        <img src="https://link-to-poster9.jpg" alt="Black Panther 2">
+        <p class="movie-name">Black Panther 2</p>
+        <a href="https://t.me/{{BOT_USERNAME}}?start=getfile-Black-Panther-2" class="movie-download-btn" target="_blank">DOWNLOAD</a>
+      </div>
+      <div class="movie-card">
+        <img src="https://link-to-poster10.jpg" alt="Eternals">
+        <p class="movie-name">Eternals</p>
+        <a href="https://t.me/{{BOT_USERNAME}}?start=getfile-Eternals" class="movie-download-btn" target="_blank">DOWNLOAD</a>
+      </div>
     </div>
     <div style="text-align:center; margin-top:12px;">
-      <button class="get-more-btn" onclick="getDets()">GET MORE MOVIES SUGGESTION</button>
+      <button class="get-more-btn" onclick="alert('No more movies!')">GET MORE MOVIES SUGGESTION</button>
     </div>
   </div>
 
-  <!-- About Section -->
+  <!-- ABOUT SECTION -->
   <div class="abt-sec" id="sec2">
     <h2>ABOUT US</h2>
     <p>Welcome To Our Online Streaming Platform! Our Website Allows Users To Generate Streamable Links For Various Files Using Telegram Bots. We Are Not Responsible For Content Shared. Respect Copyright Laws. Enjoy Hassle-Free Streaming.</p>
@@ -124,7 +168,7 @@ footer a{text-decoration:none;}
     <h4>This Page Is Developed By <a href="https://t.me/its_ankit_meena907">Ankit Meena</a></h4>
   </div>
 
-  <!-- Contact Section -->
+  <!-- CONTACT SECTION -->
   <div class="contact-section" id="sec4">
     <h2>CONTACT US</h2>
     <p>For Support And Queries, You Can Reach Us Through Telegram Or Instagram.</p>
@@ -140,70 +184,45 @@ footer a{text-decoration:none;}
 
 </div>
 
-<!-- Footer -->
 <footer>
   <p style="margin-bottom:12px;">Thank you for visiting! Enjoy streaming.</p>
 </footer>
 
-<!-- JS -->
 <script>
 const file_url = "{{file_url}}";
 const file_name = "{{file_name}}";
-const BOT_USERNAME = "{{temp.U_NAME}}";
+const player = document.getElementById("player");
 
-// External Player Functions
-function openVLC(){ window.open(`vlc://${file_url}`, '_blank'); }
-function openMX(){ window.open(`mxplayer://${file_url}`, '_blank'); }
-function openPLAYit(){ window.open(`playit://${file_url}`, '_blank'); }
-function openSPlayer(){ window.open(`splayer://${file_url}`, '_blank'); }
+function setPlayerSource(url){
+  const ext = url.split('.').pop().toLowerCase();
+  if(ext==='mp4'){ player.src=url; }
+  else{ player.src=''; document.getElementById("warningMsg").style.display="block"; }
+}
+
+setPlayerSource(file_url);
+
+function openVLC(){ window.open(`vlc://${file_url}`,'_blank'); }
+function openMX(){ window.open(`mxplayer://${file_url}`,'_blank'); }
+function openPLAYit(){ window.open(`playit://${file_url}`,'_blank'); }
+function openSPlayer(){ window.open(`splayer://${file_url}`,'_blank'); }
 function openHDPlayer(){ window.open(file_url,'_blank'); }
 
-// Download button
 function downloadFile(){
-  const a = document.createElement('a');
-  a.href = `https://t.me/${BOT_USERNAME}?start=getfile-${file_name.replace(/ /g,'-')}`;
-  a.download = file_name;
-  a.target = "_blank";
+  const a=document.createElement('a');
+  a.href=`https://t.me/{{BOT_USERNAME}}?start=getfile-${file_name.replace(/ /g,'-')}`;
+  a.download=file_name;
+  a.target="_blank";
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
 }
 
-// Movie Search Filter
 function filterMovies(){
-  const input = document.getElementById("movieSearchInput").value.toUpperCase();
-  const cards = document.querySelectorAll(".movie-card");
+  const input=document.getElementById("movieSearchInput").value.toUpperCase();
+  const cards=document.querySelectorAll(".movie-card");
   cards.forEach(card=>{
-    const title = card.querySelector(".movie-name").innerText.toUpperCase();
+    const title=card.querySelector(".movie-name").innerText.toUpperCase();
     card.style.display = title.includes(input) ? "block" : "none";
-  });
-}
-
-// Get More Movies
-const moreMovies=[
-  {name:"Doctor Strange 2", poster:"https://link-to-poster1.jpg"},
-  {name:"Black Adam", poster:"https://link-to-poster2.jpg"},
-  {name:"Ant-Man and Wasp", poster:"https://link-to-poster3.jpg"},
-  {name:"Avatar 2", poster:"https://link-to-poster4.jpg"},
-  {name:"Thor Ragnarok", poster:"https://link-to-poster5.jpg"},
-  {name:"Spider-Man No Way Home", poster:"https://link-to-poster6.jpg"},
-  {name:"Iron Man", poster:"https://link-to-poster7.jpg"},
-  {name:"Batman Begins", poster:"https://link-to-poster8.jpg"},
-  {name:"Shang-Chi", poster:"https://link-to-poster9.jpg"},
-  {name:"Black Panther", poster:"https://link-to-poster10.jpg"}
-];
-
-function getDets(){
-  const carousel = document.getElementById("movieCarousel");
-  moreMovies.forEach(movie=>{
-    const card = document.createElement("div");
-    card.className="movie-card";
-    card.innerHTML = `
-      <img src="${movie.poster}" alt="${movie.name}">
-      <p class="movie-name">${movie.name}</p>
-      <a href="https://t.me/${BOT_USERNAME}?start=getfile-${movie.name.replace(/ /g,'-')}" class="movie-download-btn" target="_blank">DOWNLOAD</a>
-    `;
-    carousel.appendChild(card);
   });
 }
 </script>
