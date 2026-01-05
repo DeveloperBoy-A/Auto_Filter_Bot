@@ -197,28 +197,71 @@ async def start(client, message):
         logger.exception(e)
 
 async def stream_buttons(user_id: int, file_id: str):
+
+    # 🔹 Normal Stream (No Premium Required)
     if STREAM_MODE and not PREMIUM_STREAM_MODE:
         return [
-            [InlineKeyboardButton('🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️', callback_data=f'generate_stream_link:{file_id}')]
-
-            [InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]
+            [
+                InlineKeyboardButton(
+                    '🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️',
+                    callback_data=f'generate_stream_link:{file_id}'
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    '📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌',
+                    url=UPDATE_CHNL_LNK
+                )
+            ]
         ]
+
+    # 🔹 Premium Stream Mode Enabled
     elif STREAM_MODE and PREMIUM_STREAM_MODE:
+
+        # ❌ Not Premium User
         if not await db.has_premium_access(user_id):
             return [
-                [InlineKeyboardButton('🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️', callback_data='prestream')],
-
-                [InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]
+                [
+                    InlineKeyboardButton(
+                        '🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️',
+                        callback_data='prestream'
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        '📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌',
+                        url=UPDATE_CHNL_LNK
+                    )
+                ]
             ]
+
+        # ✅ Premium User
         else:
             return [
-                [InlineKeyboardButton('🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️', callback_data=f'generate_stream_link:{file_id}')],
-
-                [InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]
+                [
+                    InlineKeyboardButton(
+                        '🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️',
+                        callback_data=f'generate_stream_link:{file_id}'
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        '📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌',
+                        url=UPDATE_CHNL_LNK
+                    )
+                ]
             ]
-    else:
-        return [[InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]]
 
+    # 🔹 Stream Disabled
+    else:
+        return [
+            [
+                InlineKeyboardButton(
+                    '📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌',
+                    url=UPDATE_CHNL_LNK
+                )
+            ]
+        ]
 
 
 @Client.on_message(filters.command('logs') & filters.user(ADMINS))
