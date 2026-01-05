@@ -145,30 +145,31 @@ SOURCES = {
 # ---------------- Extract info from caption ----------------
 def extract_languages_quality(caption: str):
     caption = caption.lower()
+
     found_languages = []
-    seen_langs = set()
+    seen = set()
     resolution = None
     source = None
 
-    # Detect languages
+    # Languages
     for lang, aliases in LANGUAGE_ALIASES.items():
-        for alias in aliases:
-            if re.search(rf"\b{re.escape(alias)}\b", caption):
-                if lang not in seen_langs:
+        for a in aliases:
+            if re.search(rf"\b{re.escape(a)}\b", caption):
+                if lang not in seen:
                     found_languages.append(lang)
-                    seen_langs.add(lang)
+                    seen.add(lang)
                 break
 
-    # Detect resolution
+    # Resolution
     for r in RESOLUTIONS:
         if r in caption:
             resolution = r.upper()
             break
 
-    # Detect source
+    # Source
     for src, aliases in SOURCES.items():
-        for alias in aliases:
-            if alias in caption:
+        for a in aliases:
+            if a in caption:
                 source = src
                 break
         if source:
@@ -178,60 +179,73 @@ def extract_languages_quality(caption: str):
 
 # ---------------- Save File ----------------
 async def save_file(media):
-    """Save file in database, append missing info from caption and clean file_name."""
-
-    file_id, file_ref = unpack_new_file_id(media.file_id)
-
-    # Original file name
-    original_name = str(media.file_name or "Unnamed File").strip()
-    base_name, ext = os.path.splitext(original_name)
-
-    caption_text = getattr(media.caption, "text", "") or ""
-
-    # Extract info from caption (imported)
-    languages, resolution_caption, source_caption = extract_languages_quality(caption_text)
-
-    resolution_in_name = next((r.upper() for r in RESOLUTIONS if r.lower() in base_name.lower()), None)
-    source_in_name = next((src for src, aliases in SOURCES.items() if any(a in base_name.lower() for a in aliases)), None)
-
-    # Build final file name
-    parts = [base_name]
-    for lang in languages:
-        if lang.lower() not in base_name.lower():
-            parts.append(lang)
-    if not resolution_in_name and resolution_caption:
-        parts.append(resolution_caption)
-    if not source_in_name and source_caption:
-        parts.append(source_caption)
-    file_name = " ".join(parts) + ext
-    file_name = re.sub(r"[_\-\,#+$%^&*()!~`,;:\"'?/<>\[\]{}=|\\]", " ", file_name)
-    file_name = re.sub(r"\s+", " ", file_name).strip()
-
-    saveMedia = Media
-    target_db = "Primary"
-
-    if MULTIPLE_DB:
-        try:
-            exists = await Media.count_documents({"file_id": file_id}, limit=1)
-            if exists:
-                logger.info(f"[SKIP] '{file_name}' already in Primary DB.")
-                return False, 0
-
-            # ---------------- FIXED DB SIZE ----------------
-            primary_db_size = await check_db_size(db)
-            if primary_db_size >= 407:
-                saveMedia = Media2
-                target_db = "Secondary"
-                logger.warning("Switching to Secondary DB due to size threshold.")
-
-        except Exception as e:
-            logger.error(
-                "Error during MULTIPLE_DB check; defaulting to primary DB.",
-                exc_info=e
-            )
+    """
+    Save file in database with FORCED language + quality from caption
+    """
 
     try:
-        caption_html = getattr(media.caption, "html", None) if media.caption and INDEX_CAPTION else None
+        file_id, file_ref = unpack_new_file_id(media.file_id)
+
+        original_name = str(media.file_name or "Unnamed File").strip()
+        base_name, ext = os.path.splitext(original_name)
+
+        # ---------------- CLEAN BASE NAME ----------------
+        base_name = re.sub(r"[._\-]+", " ", base_name)
+        base_name = re.sub(r"\s+", " ", base_name).strip()
+
+        # ---------------- CAPTION READ (IMPORTANT) ----------------
+        caption_text = media.caption or ""
+
+        # ---------------- EXTRACT INFO ----------------
+        languages, resolution_caption, source_caption = extract_languages_quality(
+            caption_text
+        )
+
+        # ---------------- BUILD FINAL NAME (FORCED) ----------------
+        parts = [base_name]
+
+        for lang in languages:
+            parts.append(lang)
+
+        if resolution_caption:
+            parts.append(resolution_caption)
+
+        if source_caption:
+            parts.append(source_caption)
+
+        file_name = " ".join(parts) + ext
+
+        # ---------------- FINAL CLEAN ----------------
+        file_name = re.sub(r"[^\w\s().]", " ", file_name)
+        file_name = re.sub(r"\s+", " ", file_name).strip()
+
+        # ---------------- DB SELECTION ----------------
+        saveMedia = Media
+        target_db = "Primary"
+
+        if MULTIPLE_DB:
+            try:
+                exists = await Media.count_documents({"file_id": file_id}, limit=1)
+                if exists:
+                    logger.info(f"[SKIP] '{file_name}' already exists.")
+                    return False, 0
+
+                db_size = await check_db_size(db)
+                if db_size >= 407:
+                    saveMedia = Media2
+                    target_db = "Secondary"
+                    logger.warning("Switching to Secondary DB")
+
+            except Exception as e:
+                logger.error("DB check failed, using Primary DB", exc_info=e)
+
+        # ---------------- SAVE ----------------
+        caption_html = (
+            getattr(media.caption, "html", None)
+            if media.caption and INDEX_CAPTION
+            else None
+        )
+
         record = saveMedia(
             file_id=file_id,
             file_ref=file_ref,
@@ -241,22 +255,19 @@ async def save_file(media):
             mime_type=media.mime_type,
             caption=caption_html,
         )
-        logger.debug(f"DEBUG → Saving file_name: {record.file_name}")
-    except ValidationError as e:
-        logger.exception(f"[VALIDATION ERROR] '{file_name}' → {e}")
-        return False, 2
 
-    try:
         await record.commit()
-    except DuplicateKeyError:
-        logger.info(f"[SKIP] DuplicateKey: '{file_name}' already exists in {target_db} DB.")
-        return False, 0
-    except Exception as e:
-        logger.exception(f"[ERROR] Failed commit of '{file_name}' to {target_db} DB.", exc_info=e)
-        return False, 3
 
-    logger.info(f"[SUCCESS] '{file_name}' saved to {target_db} DB.")
-    return True, 1
+        logger.info(f"[SUCCESS] Saved → {file_name} ({target_db})")
+        return True, 1
+
+    except DuplicateKeyError:
+        logger.info(f"[SKIP] Duplicate → {file_name}")
+        return False, 0
+
+    except Exception as e:
+        logger.exception(f"[ERROR] Save failed → {file_name}", exc_info=e)
+        return False, 3
 
 async def get_search_results(
     chat_id, query, file_type=None, max_results=10, offset=0, filter=False
