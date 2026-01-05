@@ -3,210 +3,250 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>New Movies & Web Series | {{file_name}}</title>
+<title>MiniStream - New Movies & Web Series</title>
 
-<link rel="stylesheet" href="https://unpkg.com/sheryjs/dist/Shery.css" />
-<link rel="stylesheet" href="https://biisal.github.io/Resources/StreamCSS.css">
-<link rel="stylesheet" href="https://biisal.github.io/Resources/playerCss.css">
+<!-- This code is developed by Ankit Meena -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
-<script src="https://cdn.tailwindcss.com"></script>
 
 <style>
 body{background:#000;color:#fff;font-family:Arial,sans-serif;margin:0;padding:0;}
-
-/* NAVBAR */
 nav{display:flex;justify-content:space-between;padding:15px 20px;background:#111;position:sticky;top:0;z-index:999;}
 nav a{color:#fff;text-decoration:none;font-weight:600;}
-
-/* VIDEO PLAYER */
-.player{
-    width:100%;
-    max-height:85vh; /* thoda aur bada */
-    border-radius:12px;
-    margin-top:20px;
-    background:#000;
-}
-
-/* AUDIO WARNING */
-.audio-warning{
-    margin-top:12px;
-    padding:10px 14px;
-    color:#ffcc00;
-    font-size:16px;
-    text-align:center;
-    background:rgba(255,204,0,0.1);
-    border-radius:10px;
-}
-
-/* CUSTOM CONTROLS */
-.custom-controls{
-    display:flex;
-    align-items:center;
-    gap:20px;
-    padding:14px;
-    background:#0b0b0b;
-    border-radius:12px;
-    margin-top:12px;
-}
-
-#progress{flex:1;height:8px;cursor:pointer;}
-#progress::-webkit-slider-thumb{
-    -webkit-appearance:none;
-    width:24px;height:24px;
-    background:#ff0000;border-radius:50%;
-}
-
-#volume{width:100px;height:5px;}
-#volume::-webkit-slider-thumb{
-    -webkit-appearance:none;
-    width:12px;height:12px;
-    background:#fff;border-radius:50%;
-}
-
-/* FILE NAME */
+.player{width:100%;max-height:80vh;border-radius:12px;margin-top:20px;background:#000;}
+.audio-warning{margin-top:12px;padding:10px 14px;color:#ffcc00;font-size:16px;text-align:center;background:rgba(255,204,0,0.1);border-radius:10px;}
+.custom-controls{display:flex;align-items:center;gap:20px;padding:14px;background:#0b0b0b;border-radius:12px;margin-top:12px;}
+#progress{flex:1;height:12px;cursor:pointer;}
+#progress::-webkit-slider-thumb{-webkit-appearance:none;width:24px;height:24px;background:#ff0000;border-radius:50%;}
+#volume{width:80px;height:6px;}
+#volume::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;background:#fff;border-radius:50%;}
 .file-name{margin-top:15px;font-size:16px;}
-
-/* DOWNLOAD BUTTONS */
-.downloadBtn button{
-    padding:12px 18px;margin:6px;font-size:15px;border-radius:10px;background:#222;color:#fff;border:none;cursor:pointer;
-}
+.downloadBtn button{padding:12px 18px;margin:6px;font-size:15px;border-radius:10px;background:#222;color:#fff;border:none;cursor:pointer;}
 .downloadBtn button:hover{background:#333;}
-
-/* SECTIONS (About / Channels / Bots / Contact) */
-.abt-sec{padding:180px 30px;line-height:2;letter-spacing:0.8px;}
-.abt-sec h1{font-size:28px;margin-bottom:15px;}
+.abt-sec{padding:100px 30px;line-height:2;letter-spacing:0.8px;}
+.abt-sec h1, .abt-sec h2{font-size:28px;margin-bottom:15px;}
 .abt-sec p{font-size:16px;}
-
-/* LINKS */
 .links a button{margin:6px;padding:12px 18px;border-radius:10px;font-size:15px;background:#222;color:#fff;border:none;cursor:pointer;}
 .links a button:hover{background:#333;}
-
-/* FOOTER */
 footer{margin-top:50px;padding:30px;background:#111;text-align:center;font-size:15px;}
 footer a{color:#ffcc00;text-decoration:none;}
+.icons a{margin:0 8px;color:#ffcc00;}
+
+/* Movie carousel */
+.movie-search{margin:15px 0;display:flex;justify-content:center;}
+.movie-search input{padding:8px 12px;width:70%;border-radius:8px;border:none;font-size:15px;}
+.movie-container{display:flex;overflow-x:auto;gap:16px;padding:20px 0;scroll-behavior:smooth;scroll-snap-type:x mandatory;}
+.movie-container::-webkit-scrollbar{height:10px;}
+.movie-container::-webkit-scrollbar-thumb{background:#ff9900;border-radius:5px;}
+.movie-card{min-width:150px;background:#111;border-radius:12px;padding:10px;flex-shrink:0;text-align:center;scroll-snap-align:start;}
+.movie-card img{width:100%;height:220px;border-radius:10px;object-fit:cover;}
+.movie-card h4{margin:8px 0 6px 0;font-size:16px;}
+.downloadMovieBtn{padding:8px 12px;font-size:14px;border:none;border-radius:8px;background:linear-gradient(90deg,#ff4c4c,#ff9900);color:#fff;cursor:pointer;font-weight:600;display:flex;align-items:center;justify-content:center;gap:6px;transition:transform 0.2s, box-shadow 0.2s;}
+.downloadMovieBtn:hover{transform:scale(1.05);box-shadow:0 4px 15px rgba(255,153,0,0.6);}
+.carousel-controls{display:flex;justify-content:flex-end;margin-bottom:6px;gap:10px;}
+.carousel-controls button{padding:6px 12px;border-radius:6px;border:none;background:#222;color:#fff;cursor:pointer;transition:0.2s;}
+.carousel-controls button:hover{background:#333;}
+@media(max-width:768px){.movie-card{min-width:130px;}.movie-card img{height:180px;}}
 </style>
 </head>
 <body>
 
 <!-- NAVBAR -->
 <nav>
-    <div class="nleft">
-        <a href="https://t.me/+MINAQiQyVq8wMWRl">
-            <h3 id="heading" class="magnet">New Movies & Web Series</h3>
-        </a>
-    </div>
-    <div class="nryt">
-        <a class="home-btn magnet" href="#main">Home</a>
-        <a href="#sec1" class="about-btn magnet">About</a>
-        <a href="#sec2" class="about-btn magnet">Channels</a>
-        <a href="#sec3" class="about-btn magnet">Bots</a>
-        <a href="#sec4" class="about-btn magnet">Contact</a>
-    </div>
+<div class="nleft">
+<a href="https://t.me/+MINAQiQyVq8wMWRl"><h3 id="heading" class="magnet">MiniStream - New Movies & Web Series</h3></a>
+</div>
+<div class="nryt">
+<a class="home-btn magnet" href="#main">Home</a>
+<a href="#sec1" class="about-btn magnet">About</a>
+<a href="#sec2" class="about-btn magnet">Channels</a>
+<a href="#sec3" class="about-btn magnet">Bots</a>
+<a href="#sec4" class="about-btn magnet">Contact</a>
+</div>
 </nav>
 
-<!-- MAIN CONTENT -->
 <div class="outer">
 <div class="inner">
 
 <div class="main" id="main">
+<!-- OLD PLACEHOLDER SYSTEM -->
+<video id="player" class="player" 
+       src="{{file_url}}" 
+       poster="https://i.postimg.cc/YourLogo.png"
+       playsinline muted controls></video>
 
-<!-- VIDEO -->
-<video id="player" class="player" src="{{file_url}}" playsinline muted></video>
+<div class="file-name">
+<h4>File name :</h4>
+<p>{{file_name}}</p>
+</div>
 
-<!-- AUDIO WARNING -->
 <p id="audioWarning" class="audio-warning">
 ⚠️ If there is no sound in the video player, please use VLC Player.
 </p>
 
-<!-- CUSTOM CONTROLS -->
 <div class="custom-controls">
-    <input type="range" id="progress" value="0">
-    <input type="range" id="volume" min="0" max="1" step="0.01" value="1">
+<input type="range" id="progress" value="0">
+<input type="range" id="volume" min="0" max="1" step="0.01" value="1">
 </div>
 
-<!-- FILE NAME -->
-<div class="file-name">
-    <h4>File name :</h4>
-    <p>{{file_name}}</p>
-</div>
-
-<!-- EXTERNAL PLAYERS -->
 <div class="downloadBtn">
-    <button onclick="openPlayer('vlc')">VLC Player</button>
-    <button onclick="openPlayer('mx')">MX Player</button>
-    <button onclick="openPlayer('playit')">PLAYit</button>
-    <button onclick="openPlayer('km')">KM Player</button>
-    <button onclick="downloadVideo()">Download</button>
+<button onclick="openPlayer('vlc')">VLC Player</button>
+<button onclick="openPlayer('mx')">MX Player</button>
+<button onclick="openPlayer('playit')">PLAYit</button>
+<button onclick="openPlayer('km')">KM Player</button>
+<button onclick="downloadVideo()">Download</button>
 </div>
 
-<!-- ABOUT SECTION -->
+<!-- ABOUT -->
 <div class="abt-sec" id="sec1">
 <h1>Welcome to our Streaming Page</h1>
 <p>We’re thrilled to have you here. Enjoy movies and web series with ease and fun!</p>
 </div>
 
-<!-- CHANNELS SECTION -->
+<!-- CHANNELS -->
 <div class="abt-sec" id="sec2">
 <h1>Our Channels</h1>
 <div class="links">
-    <a href="https://t.me/+MINAQiQyVq8wMWRl"><button>Update Channel</button></a>
-    <a href="https://t.me/newmovieswebseries_group"><button>Movie Request Group</button></a>
-    <a href="https://youtube.com/@bhajan_907"><button>YouTube Bhajan Status</button></a>
+<a href="https://t.me/+MINAQiQyVq8wMWRl"><button>Update Channel</button></a>
+<a href="https://t.me/newmovieswebseries_group"><button>Movie Request Group</button></a>
+<a href="https://youtube.com/@bhajan_907"><button>YouTube Bhajan Status</button></a>
 </div>
 </div>
 
-<!-- BOTS SECTION -->
+<!-- BOTS -->
 <div class="abt-sec" id="sec3">
 <h1>Our Bots</h1>
 <div class="links">
-    <a href="https://t.me/Newmovie_sbot"><button>Movie Search Bot</button></a>
-    <a href="https://t.me/"><button>Reaction Bot</button></a>
+<a href="https://t.me/Newmovie_sbot"><button>Movie Search Bot</button></a>
+<a href="https://t.me/"><button>Reaction Bot</button></a>
 </div>
 </div>
 
-<!-- CONTACT SECTION -->
+<!-- CONTACT -->
 <div class="abt-sec" id="sec4">
 <h1>Contact Us</h1>
+<p>We can talk for your support and you can report through Telegram</p>
 <div class="links">
-    <a href="https://t.me/newmovies_support"><button>Contact</button></a>
+<a href="https://t.me/newmovies_support"><button>Contact</button></a>
 </div>
 </div>
 
+<!-- SEARCH -->
+<div class="movie-search">
+<input type="text" id="searchInput" placeholder="Search movies...">
 </div>
+
+<!-- MOVIE SUGGESTION CAROUSEL -->
+<div class="abt-sec">
+<h2>Movie Suggestions</h2>
+<div class="carousel-controls">
+<button onclick="scrollCarousel(-1)">&#8592; Prev</button>
+<button onclick="scrollCarousel(1)">Next &#8594;</button>
+</div>
+<div class="movie-container" id="movieCont"></div>
+<div style="text-align:center;margin-top:12px;">
+<button style="padding:10px 18px;border-radius:10px;background:#ff4c4c;color:#fff;font-weight:600;border:none;cursor:pointer;" onclick="fetchMovies()">Get More Movies Suggestion</button>
 </div>
 </div>
 
 <!-- FOOTER -->
 <footer>
-<h5>Copyright © 2024 New Movies & Web Series</h5>
-<h4>This Page is made by <a href="https://t.me/its_ankit_meena907">Developer_Boy™ (Ankit Meena)</a></h4>
+<div class="mid">
+<h1 class="mid-text">VISIT <a href="#sec3"><span>OUR BOTS LIST</span></a> FOR MORE INFO</h1>
+</div>
+<div class="last-text">
+<p style="font-weight: 500;">
+Welcome To Our Online Streaming Platform! Our Website Allows Users To Generate Streamable Links For Various Files Using Telegram Bots. We Are Not Responsible For Content Shared. Respect Copyright Laws. Enjoy Hassle-Free Streaming.
+</p>
+</div>
+<center>
+<div class="copyright">
+<h5 class="text-center">Copyright © 2026 <a href="https://t.me/+MINAQiQyVq8wMWRl"><span style="font-weight:700;">MiniStream</span></a>. All Rights Reserved.</h5>
+<div class="icons">
+<a href="https://t.me/+MINAQiQyVq8wMWRl"><i class="fa-brands fa-telegram fa-lg"></i></a>
+</div>
+<h4 style="font-weight:700;">This Page Is Developed By Ankit Meena</h4>
+</div>
+</center>
 </footer>
 
-<!-- JS -->
 <script>
+/* This code is developed by Ankit Meena */
 document.addEventListener("DOMContentLoaded", function(){
-const video=document.getElementById("player");
-const progress=document.getElementById("progress");
-const volume=document.getElementById("volume");
+    // 🟢 Add this line at the top
+    const BOT_TOKEN = window.BOT_TOKEN || "{{BOT_TOKEN}}";  // host variable se token le, fallback placeholder
+    const BOT_USERNAME = "Newmovie_sbot";
 
-video.play().catch(()=>{});
+    const video=document.getElementById("player");
+    const progress=document.getElementById("progress");
+    const volume=document.getElementById("volume");
 
-video.addEventListener("timeupdate",()=>{
-if(video.duration) progress.value=(video.currentTime/video.duration)*100;
+    // Video controls
+    ...
+video.addEventListener("timeupdate",()=>{if(video.duration) progress.value=(video.currentTime/video.duration)*100;});
+progress.addEventListener("input",()=>{video.currentTime=(progress.value/100)*video.duration;});
+volume.addEventListener("input",()=>{video.volume=volume.value;});
+
+// BOT TOKEN from environment
+const BOT_TOKEN = window.BOT_TOKEN || "DEFAULT_PLACEHOLDER";
+const BOT_USERNAME = "Newmovie_sbot";
+const movieContainer = document.getElementById("movieCont");
+
+let movieCache=[];
+
+// Fetch movies from Bot
+async function fetchMovies(){
+    try{
+        if(movieCache.length>0){renderMovies(movieCache); return;}
+        const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getUpdates`);
+        const data = await res.json();
+        const messages = data.result.slice(-10);
+        movieCache = messages;
+        renderMovies(messages);
+    }catch(err){console.error(err);}
+}
+
+// Render movies
+function renderMovies(messages){
+    movieContainer.innerHTML="";
+    messages.forEach(msg=>{
+        const text = msg.message?.text;
+        if(text){
+            const parts=text.split("|");
+            const name = parts[0] || document.querySelector(".file-name p").textContent;
+            const url = parts[1] || document.getElementById("player").src;
+            const poster = parts[2] || "https://i.postimg.cc/YourLogo.png";
+
+            document.getElementById("player").src = url;
+            document.getElementById("player").poster = poster;
+            document.querySelector(".file-name p").textContent = name;
+
+            const card = document.createElement("div");
+            card.className="movie-card";
+            card.innerHTML=`<img loading="lazy" src="${poster}" alt="${name}"><h4>${name}</h4>
+            <button class="downloadMovieBtn" onclick="window.open('${url}','_blank')"><i class="fa-solid fa-download"></i> Download</button>`;
+            movieContainer.appendChild(card);
+        }
+    });
+}
+
+// Search
+const searchInput=document.getElementById("searchInput");
+searchInput.addEventListener("input", function(){
+    const query=this.value.toLowerCase();
+    document.querySelectorAll(".movie-card").forEach(card=>{
+        const title = card.querySelector("h4").textContent.toLowerCase();
+        card.style.display = title.includes(query) ? "block" : "none";
+    });
 });
 
-progress.addEventListener("input",()=>{
-video.currentTime=(progress.value/100)*video.duration;
-});
+// Carousel scroll
+function scrollCarousel(dir){
+    movieContainer.scrollBy({left:dir*350,behavior:'smooth'});
+}
 
-volume.addEventListener("input",()=>{
-video.volume=volume.value;
-});
-});
-
-/* External players */
+// External players
 function openPlayer(app){
-const url="{{file_url}}";
+const url=document.getElementById("player").src;
 let link=url;
 if(app==="vlc") link="vlc://"+url;
 if(app==="mx") link="intent:"+url+"#Intent;package=com.mxtech.videoplayer.ad;end";
@@ -215,8 +255,10 @@ if(app==="km") link="intent:"+url+"#Intent;package=com.kmplayer;end";
 window.location.href=link;
 }
 
-/* Download */
-function downloadVideo(){window.open("{{file_url}}","_blank");}
+// Download
+function downloadVideo(){window.open(document.getElementById("player").src,"_blank");}
+});
 </script>
+
 </body>
 </html>
