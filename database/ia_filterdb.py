@@ -269,9 +269,56 @@ async def save_file(media):
         logger.exception(f"[ERROR] Save failed → {file_name}", exc_info=e)
         return False, 3
 
+
+
+# ----------------------------
+# 🔹 Helper function
+# ----------------------------
+def normalize_season_episode_query(query: str) -> str:
+    """
+    Normalize user query:
+    season 1              -> (S01|Season[ ._-]*0?1)
+    s1 / s01              -> (S01|Season[ ._-]*0?1)
+    season 1 episode 2    -> S01E02
+    s1e2 / s01e02         -> S01E02
+    """
+    q = query.lower()
+
+    # Season + Episode (exact episode)
+    m = re.search(
+        r"(?:season|s)\s*(\d{1,2})\s*(?:episode|ep|e)\s*(\d{1,2})",
+        q
+    )
+    if m:
+        s = int(m.group(1))
+        e = int(m.group(2))
+        return f"S{s:02d}E{e:02d}"
+
+    # Season only (all possible formats)
+    m = re.search(r"(?:season|s)\s*(\d{1,2})", q)
+    if m:
+        s = int(m.group(1))
+        return rf"(S{s:02d}|Season[\s\.\-_]*0?{s})"
+
+    return query
+
+# ----------------------------
+# 🔹 Main function
+# ----------------------------
 async def get_search_results(
     chat_id, query, file_type=None, max_results=10, offset=0, filter=False
 ):
+    # ----------------------------
+    # Step 0: Normalize Season/Episode query
+    # ----------------------------
+    if isinstance(query, str):
+        query = normalize_season_episode_query(query)
+    if isinstance(query, list):
+        query = [normalize_season_episode_query(q) for q in query]
+
+    # ----------------------------
+    # Step 1: Chat settings
+    # ----------------------------
     if chat_id is not None:
         settings = await get_settings(int(chat_id))
         try:
@@ -280,6 +327,10 @@ async def get_search_results(
             await save_group_settings(int(chat_id), "max_btn", False)
             settings = await get_settings(int(chat_id))
             max_results = 10 if settings.get("max_btn") else int(MAX_B_TN)
+
+    # ----------------------------
+    # Step 2: Build regex filter
+    # ----------------------------
     if isinstance(query, list):
         regex_list = []
         for q in query:
@@ -301,13 +352,12 @@ async def get_search_results(
             }
         else:
             filter_mongo = {"$or": [{"file_name": r} for r in regex_list]}
-
     else:
         query = query.strip()
         if not query:
             raw_pattern = "."
         elif " " not in query:
-            raw_pattern = r"(\b|[\.\+\-_])" + query + r"(\b|[\.\+\-_])"
+            raw_pattern = r"(\b|[\.\+\-_])" + re.escape(query) + r"(\b|[\.\+\-_])"
         else:
             raw_pattern = query.replace(
                 " ", r".*[\s\.\+\-_()\[\]]"
@@ -322,12 +372,23 @@ async def get_search_results(
             filter_mongo = {"$or": [{"file_name": regex}, {"caption": regex}]}
         else:
             filter_mongo = {"file_name": regex}
+
+    # ----------------------------
+    # Step 3: file_type filter
+    # ----------------------------
     if file_type:
         filter_mongo["file_type"] = file_type
+
+    # ----------------------------
+    # Step 4: Total count
+    # ----------------------------
     total_results = await Media.count_documents(filter_mongo)
     if MULTIPLE_DB:
         total_results += await Media2.count_documents(filter_mongo)
 
+    # ----------------------------
+    # Step 5: Fetch files
+    # ----------------------------
     cursor1 = (
         Media.find(filter_mongo).sort("$natural", -1).skip(offset).limit(max_results)
     )
@@ -342,10 +403,16 @@ async def get_search_results(
         files = files1 + files2
     else:
         files = files1
+
+    # ----------------------------
+    # Step 6: next_offset
+    # ----------------------------
     next_offset = offset + len(files)
     if next_offset >= total_results:
         next_offset = ""
+
     return files, next_offset, total_results
+
 
 async def get_bad_files(query, file_type=None):
     query = query.strip()
