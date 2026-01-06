@@ -1,231 +1,164 @@
+
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>𝑵𝒆𝒘 𝒎𝒐𝒗𝒊𝒆𝒔 & 𝑾𝒆𝒃 𝒔𝒆𝒓𝒊𝒆𝒔 | {{file_name}}</title>
-
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
-
+<title>YOUR STREAMING PLATFORM</title>
+<link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Swiper/9.4.1/swiper-bundle.min.css" />
 <style>
-body{margin:0;font-family:'Josefin Sans',sans-serif;background:#0a0a0a;color:#fff;}
-nav{display:flex;justify-content:space-between;align-items:center;padding:10px 20px;background:#111;}
-nav a{text-decoration:none;color:#fff;font-weight:600;margin:0 6px;}
-nav .three-dots a{margin-left:8px;}
-.outer{padding:20px;}
-.player{width:100%;border-radius:10px;}
-.file-name, .downloadBtn{margin-top:12px;}
-.downloadBtn button{margin:6px 4px;padding:8px 14px;border-radius:20px;background:#ff3d3d;color:#fff;border:none;cursor:pointer;font-weight:600;}
-.downloadBtn button img{height:20px;vertical-align:middle;margin-right:6px;}
-.abt-sec{padding:40px 20px;background:#111;border-radius:12px;margin-top:20px;text-align:center;}
-.abt-sec h2{text-transform:uppercase;margin-bottom:12px;}
-.abt-sec p{line-height:1.6;}
-.movie-suggestion{margin-top:20px;}
-.movie-search input{width:100%;padding:8px;border-radius:20px;border:none;margin-bottom:12px;font-size:14px;}
-.movie-scroll{max-height:520px;overflow-y:auto;display:grid;grid-template-columns:repeat(2,1fr);gap:14px;padding:10px;}
-.movie-scroll::-webkit-scrollbar{width:4px;}
-.movie-scroll::-webkit-scrollbar-thumb{background:#444;border-radius:10px;}
-.movie-card{background:#1b1b1b;border-radius:12px;padding:8px;text-align:center;}
-.movie-card img{width:100%;border-radius:10px;}
-.movie-name{margin:6px 0 4px;font-size:13px;font-weight:700;color:#fff;}
-.movie-download-btn{display:inline-block;padding:6px 14px;background:#ff3d3d;color:#fff;font-size:12px;border-radius:20px;text-decoration:none;font-weight:600;margin-top:4px;}
-.get-more-btn{background:linear-gradient(90deg,#ff6a00,#ee0979);border:none;color:#fff;font-weight:700;padding:10px 20px;border-radius:25px;font-size:14px;cursor:pointer;transition:0.3s;margin-top:12px;}
-.get-more-btn:hover{transform:scale(1.05);}
-.contact-section{padding:40px 20px;background:#111;color:#fff;border-radius:12px;margin:20px 10px;text-align:center;}
-.contact-links a{display:flex;align-items:center;gap:6px;text-decoration:none;padding:8px 12px;border-radius:20px;font-weight:600;}
-.contact-links a img{width:20px;height:20px;}
-.contact-links a:nth-child(1){background:#0088cc;color:#fff;}
-.contact-links a:nth-child(2){background:#C13584;color:#fff;}
-footer{background:#111;color:#fff;padding:20px 10px;text-align:center;font-family:'Josefin Sans',sans-serif;}
-footer a{text-decoration:none;}
-.warning-msg{background:#ff3d3d;color:#fff;padding:8px 12px;border-radius:12px;margin-top:12px;text-align:center;font-weight:700;}
+    body { margin:0; font-family: Arial, sans-serif; background:#121212; color:#fff; }
+    header { display:flex; justify-content:space-between; align-items:center; padding:10px 20px; background:#1f1f1f; }
+    .title { font-size:1.2rem; font-weight:bold; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:flex; align-items:center; gap:10px; }
+    .title img { height:30px; }
+    .menu-btn { font-size:1.5rem; cursor:pointer; }
+    nav { display:none; position:absolute; top:50px; right:20px; background:#222; padding:10px; border-radius:8px; }
+    nav.active { display:block; }
+    nav a { display:block; padding:5px 10px; color:#fff; text-decoration:none; margin-bottom:5px; }
+    .video-container { position:relative; width:100%; max-width:900px; margin:20px auto; }
+    #player { width:100%; height:500px; background:#000; }
+    .audio-warning { color:#ffcc00; display:flex; align-items:center; gap:8px; padding:10px 0; }
+    .fast-download { margin:10px auto; display:block; text-align:center; padding:10px 20px; background:#e91e63; color:#fff; border:none; border-radius:5px; cursor:pointer; font-weight:bold; }
+    .movie-section { padding:20px; max-width:1200px; margin:auto; }
+    .swiper { padding:20px 0; }
+    .swiper-slide { background:#1f1f1f; border-radius:10px; text-align:center; padding:10px; width:180px; }
+    .movie-poster { width:100%; border-radius:10px; height:270px; object-fit:cover; }
+    .movie-name { margin-top:5px; font-weight:bold; font-size:0.9rem; }
+    .movie-download { margin-top:5px; padding:5px 10px; background:#03a9f4; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:0.8rem; font-weight:bold; display:block; text-align:center; }
+    footer { text-align:center; padding:20px; font-size:0.8rem; color:#aaa; background:#1f1f1f; margin-top:20px; line-height:1.4; }
 </style>
-
 </head>
-
 <body>
 
-<nav>
-  <a href="#main" style="display:flex; align-items:center; gap:8px; text-decoration:none;">
-    <img src="logo.png" alt="Logo" style="height:32px; width:auto;"> 
-    <span style="color:#fff; font-weight:700; font-size:16px;">𝑵𝒆𝒘 𝒎𝒐𝒗𝒊𝒆𝒔 & 𝑾𝒆𝒃 𝒔𝒆𝒓𝒊𝒆𝒔</span>
-  </a>
-  <div class="three-dots">
-    <a href="#sec1">ABOUT</a>
-    <a href="#sec2">CHANNEL</a>
-    <a href="#sec4">CONTACT</a>
-  </div>
-</nav>
-
-<div class="outer">
-
-  <div class="main" id="main">
-    <video id="player" class="player" type="video/mp4" playsinline controls></video>
-    <div class="file-name">
-      <h4>File Name:</h4>
-      <p>{{file_name}}</p>
+<header>
+    <div class="title">
+        <img src="logo.png" alt="Logo"> YOUR STREAMING PLATFORM
     </div>
+    <div class="menu-btn">&#9776;</div>
+    <nav>
+        <a href="#about">About</a>
+        <a href="#contact">Contact</a>
+        <a href="https://t.me/YourBotUsername" target="_blank">Bot</a>
+    </nav>
+</header>
 
-    <div class="warning-msg" id="warningMsg">⚠️ If the video doesn’t play audio in browser, please use VLC.</div>
+<div class="video-container" id="video-section">
+    <video id="player" controls>
+        <source src="{{file_url}}" type="video/mp4">
+        Your browser does not support HTML5 video.
+    </video>
+    <button class="fast-download" onclick="blazeDownload()">FAST DOWNLOAD</button>
+    <div class="audio-warning">
+        ⚠️ Browser does not support EAC3 audio. If no sound, please use External Players.
+    </div>
+</div>
 
-    <div class="downloadBtn">
-      <button onclick="openVLC()"><img src="https://i.postimg.cc/15TQ4y7B/vlc.png" alt="">VLC PLAYER</button>
-      <button onclick="openMX()"><img src="https://i.postimg.cc/sx4Msv4T/mx.png" alt="">MX PLAYER</button>
-      <button onclick="openPLAYit()"><img src="https://i.postimg.cc/RVGWYJFF/playit.png" alt="">PLAYit</button>
-      <button onclick="openSPlayer()"><img src="https://i.postimg.cc/XYJr6NGg/s.png" alt="">S PLAYER</button>
-      <button onclick="openHDPlayer()"><img src="https://i.postimg.cc/rFT43LNh/hd.png" alt="">HD PLAYER(4K)</button>
-      <button onclick="downloadFile()"><img src="https://i.postimg.cc/Zncc9YLq/Pngtree-download-icon-3581467.png" alt="">DOWNLOAD</button>
-    </div>
-  </div>
+<div class="movie-section">
+    <h2 style="margin-bottom:10px;">TRENDING & LATEST MOVIES</h2>
+    <div class="swiper mySwiper">
+        <div class="swiper-wrapper">
 
-  <!-- ABOUT SECTION -->
-  <div class="abt-sec" id="sec1">
-    <h2>WELCOME TO OUR STREAMING PAGE</h2>
-    <p>We’re thrilled to have you here. Enjoy movies and web series with ease and fun!</p>
-    <div style="margin-top:12px;">
-      <button>UPDATE CHANNEL</button>
-      <button>YOUTUBE</button>
-      <button>MOVIE SEARCH GROUP</button>
-    </div>
-    <div style="margin-top:12px;">
-      <button style="background:#ff3d3d;color:#fff;">NEW MOVIE NOTIFICATION CHANNEL</button>
-    </div>
-  </div>
+            <!-- Example Movie Cards with Posters, Names, Bot Download Links -->
+            <div class="swiper-slide">
+                <img src="https://image.tmdb.org/t/p/w300/abc1.jpg" class="movie-poster" />
+                <div class="movie-name">Avatar 2 (2025)</div>
+                <button class="movie-download" onclick="window.open('https://t.me/Newmovie_sbot?start=getfile-Avatar-2-2025','_blank')">DOWNLOAD</button>
+            </div>
 
-  <!-- MOVIE SUGGESTION -->
-  <div class="movie-suggestion">
-    <h3 style="text-align:center; margin-bottom:10px;">🎬 MOVIE SUGGESTIONS</h3>
-    <div class="movie-search">
-      <input type="text" id="movieSearchInput" placeholder="Search movie..." onkeyup="filterMovies()">
-    </div>
-    <div class="movie-scroll" id="movieCarousel">
-      <!-- 10 Static Movie Cards -->
-      <div class="movie-card">
-        <img src="https://link-to-poster1.jpg" alt="Doctor Strange 2">
-        <p class="movie-name">Doctor Strange 2</p>
-        <a href="https://t.me/{{BOT_USERNAME}}?start=getfile-Doctor-Strange-2" class="movie-download-btn" target="_blank">DOWNLOAD</a>
-      </div>
-      <div class="movie-card">
-        <img src="https://link-to-poster2.jpg" alt="Black Adam">
-        <p class="movie-name">Black Adam</p>
-        <a href="https://t.me/{{BOT_USERNAME}}?start=getfile-Black-Adam" class="movie-download-btn" target="_blank">DOWNLOAD</a>
-      </div>
-      <div class="movie-card">
-        <img src="https://link-to-poster3.jpg" alt="Ant-Man and Wasp">
-        <p class="movie-name">Ant-Man and Wasp</p>
-        <a href="https://t.me/{{BOT_USERNAME}}?start=getfile-Ant-Man-and-Wasp" class="movie-download-btn" target="_blank">DOWNLOAD</a>
-      </div>
-      <div class="movie-card">
-        <img src="https://link-to-poster4.jpg" alt="Avatar 2">
-        <p class="movie-name">Avatar 2</p>
-        <a href="https://t.me/{{BOT_USERNAME}}?start=getfile-Avatar-2" class="movie-download-btn" target="_blank">DOWNLOAD</a>
-      </div>
-      <div class="movie-card">
-        <img src="https://link-to-poster5.jpg" alt="Guardians of Galaxy 3">
-        <p class="movie-name">Guardians of Galaxy 3</p>
-        <a href="https://t.me/{{BOT_USERNAME}}?start=getfile-Guardians-of-Galaxy-3" class="movie-download-btn" target="_blank">DOWNLOAD</a>
-      </div>
-      <div class="movie-card">
-        <img src="https://link-to-poster6.jpg" alt="Spider-Man No Way Home">
-        <p class="movie-name">Spider-Man No Way Home</p>
-        <a href="https://t.me/{{BOT_USERNAME}}?start=getfile-Spider-Man-No-Way-Home" class="movie-download-btn" target="_blank">DOWNLOAD</a>
-      </div>
-      <div class="movie-card">
-        <img src="https://link-to-poster7.jpg" alt="Thor Love and Thunder">
-        <p class="movie-name">Thor Love and Thunder</p>
-        <a href="https://t.me/{{BOT_USERNAME}}?start=getfile-Thor-Love-and-Thunder" class="movie-download-btn" target="_blank">DOWNLOAD</a>
-      </div>
-      <div class="movie-card">
-        <img src="https://link-to-poster8.jpg" alt="Shang-Chi">
-        <p class="movie-name">Shang-Chi</p>
-        <a href="https://t.me/{{BOT_USERNAME}}?start=getfile-Shang-Chi" class="movie-download-btn" target="_blank">DOWNLOAD</a>
-      </div>
-      <div class="movie-card">
-        <img src="https://link-to-poster9.jpg" alt="Black Panther 2">
-        <p class="movie-name">Black Panther 2</p>
-        <a href="https://t.me/{{BOT_USERNAME}}?start=getfile-Black-Panther-2" class="movie-download-btn" target="_blank">DOWNLOAD</a>
-      </div>
-      <div class="movie-card">
-        <img src="https://link-to-poster10.jpg" alt="Eternals">
-        <p class="movie-name">Eternals</p>
-        <a href="https://t.me/{{BOT_USERNAME}}?start=getfile-Eternals" class="movie-download-btn" target="_blank">DOWNLOAD</a>
-      </div>
-    </div>
-    <div style="text-align:center; margin-top:12px;">
-      <button class="get-more-btn" onclick="alert('No more movies!')">GET MORE MOVIES SUGGESTION</button>
-    </div>
-  </div>
+            <div class="swiper-slide">
+                <img src="https://image.tmdb.org/t/p/w300/abc2.jpg" class="movie-poster" />
+                <div class="movie-name">War 2 (2025)</div>
+                <button class="movie-download" onclick="window.open('https://t.me/Newmovie_sbot?start=getfile-War-2-2025','_blank')">DOWNLOAD</button>
+            </div>
 
-  <!-- ABOUT SECTION -->
-  <div class="abt-sec" id="sec2">
-    <h2>ABOUT US</h2>
-    <p>Welcome To Our Online Streaming Platform! Our Website Allows Users To Generate Streamable Links For Various Files Using Telegram Bots. We Are Not Responsible For Content Shared. Respect Copyright Laws. Enjoy Hassle-Free Streaming.</p>
-    <h5>Copyright © 2026 <a href="https://t.me/+MINAQiQyVq8wMWRl">𝑵𝒆𝒘 𝒎𝒐𝒗𝒊𝒆𝒔 & 𝑾𝒆𝒃 𝒔𝒆𝒓𝒊𝒆𝒔</a>. All Rights Reserved.</h5>
-    <h4>This Page Is Developed By <a href="https://t.me/its_ankit_meena907">Ankit Meena</a></h4>
-  </div>
+            <div class="swiper-slide">
+                <img src="https://image.tmdb.org/t/p/w300/abc3.jpg" class="movie-poster" />
+                <div class="movie-name">Dhurandhar (2025)</div>
+                <button class="movie-download" onclick="window.open('https://t.me/Newmovie_sbot?start=getfile-Dhurandhar-2025','_blank')">DOWNLOAD</button>
+            </div>
 
-  <!-- CONTACT SECTION -->
-  <div class="contact-section" id="sec4">
-    <h2>CONTACT US</h2>
-    <p>For Support And Queries, You Can Reach Us Through Telegram Or Instagram.</p>
-    <div class="contact-links">
-      <a href="https://t.me/newmovies_support" target="_blank">
-        <img src="https://cdn-icons-png.flaticon.com/512/2111/2111646.png"> Telegram
-      </a>
-      <a href="https://instagram.com/your_instagram" target="_blank">
-        <img src="https://cdn-icons-png.flaticon.com/512/2111/2111463.png"> Instagram
-      </a>
+            <div class="swiper-slide">
+                <img src="https://image.tmdb.org/t/p/w300/abc4.jpg" class="movie-poster" />
+                <div class="movie-name">Sanam Teri Kasam</div>
+                <button class="movie-download" onclick="window.open('https://t.me/Newmovie_sbot?start=getfile-Sanam-Teri-Kasam','_blank')">DOWNLOAD</button>
+            </div>
+
+            <div class="swiper-slide">
+                <img src="https://image.tmdb.org/t/p/w300/abc5.jpg" class="movie-poster" />
+                <div class="movie-name">Tere Ishk Mein (2025)</div>
+                <button class="movie-download" onclick="window.open('https://t.me/Newmovie_sbot?start=getfile-Tere-Ishk-Mein-2025','_blank')">DOWNLOAD</button>
+            </div>
+
+            <div class="swiper-slide">
+                <img src="https://image.tmdb.org/t/p/w300/abc6.jpg" class="movie-poster" />
+                <div class="movie-name">Saiyaara (2025)</div>
+                <button class="movie-download" onclick="window.open('https://t.me/Newmovie_sbot?start=getfile-Saiyaara-2025','_blank')">DOWNLOAD</button>
+            </div>
+
+            <div class="swiper-slide">
+                <img src="https://image.tmdb.org/t/p/w300/abc7.jpg" class="movie-poster" />
+                <div class="movie-name">Ek Deewane Ki Deewaniyat (2025)</div>
+                <button class="movie-download" onclick="window.open('https://t.me/Newmovie_sbot?start=getfile-Ek-Deewane-Ki-Deewaniyat-2025','_blank')">DOWNLOAD</button>
+            </div>
+
+            <!-- Add remaining cards to reach 27 -->
+        </div>
+        <div class="swiper-button-next"></div>
+        <div class="swiper-button-prev"></div>
     </div>
-  </div>
-
 </div>
 
 <footer>
-  <p style="margin-bottom:12px;">Thank you for visiting! Enjoy streaming.</p>
+    <div>Welcome To Our Online Streaming Platform! Our Website Allows Users To Generate Streamable Links For Various Files Using Telegram Bots. We Are Not Responsible For Content Shared. Respect Copyright Laws. Enjoy Hassle-Free Streaming.</div>
+    <div>Copyright © 2026 <a href="https://t.me/+MINAQiQyVq8wMWRl" target="_blank">YOUR STREAMING PLATFORM</a>. All Rights Reserved.</div>
+    <div>This Page Is Developed By Ankit Meena</div>
 </footer>
 
+<script src="https://cdn.plyr.io/3.7.8/plyr.polyfilled.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mpegts.js@1.7.3/dist/mpegts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.314.0/dist/lucide.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Swiper/9.4.1/swiper-bundle.min.js"></script>
+
 <script>
-const file_url = "{{file_url}}";
-const file_name = "{{file_name}}";
-const player = document.getElementById("player");
-
-function setPlayerSource(url){
-  const ext = url.split('.').pop().toLowerCase();
-  if(ext==='mp4'){ player.src=url; }
-  else{ player.src=''; document.getElementById("warningMsg").style.display="block"; }
+function blazeDownload() {
+    const a = document.createElement("a");
+    a.href = "{{file_url}}";
+    a.download = "{{file_name}}";
+    a.click();
 }
 
-setPlayerSource(file_url);
-
-function openVLC(){ window.open(`vlc://${file_url}`,'_blank'); }
-function openMX(){ window.open(`mxplayer://${file_url}`,'_blank'); }
-function openPLAYit(){ window.open(`playit://${file_url}`,'_blank'); }
-function openSPlayer(){ window.open(`splayer://${file_url}`,'_blank'); }
-function openHDPlayer(){ window.open(file_url,'_blank'); }
-
-function downloadFile(){
-  const a=document.createElement('a');
-  a.href=`https://t.me/{{BOT_USERNAME}}?start=getfile-${file_name.replace(/ /g,'-')}`;
-  a.download=file_name;
-  a.target="_blank";
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+function initPlayer() {
+    const video = document.querySelector("#player");
+    if(!video) return;
+    const player = new Plyr(video, { controls:["play-large","play","progress","current-time","mute","volume","pip","airplay","fullscreen"] });
+    window.plyrPlayer = player;
 }
 
-function filterMovies(){
-  const input=document.getElementById("movieSearchInput").value.toUpperCase();
-  const cards=document.querySelectorAll(".movie-card");
-  cards.forEach(card=>{
-    const title=card.querySelector(".movie-name").innerText.toUpperCase();
-    card.style.display = title.includes(input) ? "block" : "none";
-  });
-}
+// External Players
+function vlc_player(){window.location.href=`vlc://${"{{file_url}}".replace(/^https?:\/\//,"")}`;}
+function mx_player(){window.location.href=`intent:{{file_url}}#Intent;action=android.intent.action.VIEW;type=video/*;package=com.mxtech.videoplayer.ad;end`;}
+function mx_playerpro(){window.location.href=`intent:{{file_url}}#Intent;action=android.intent.action.VIEW;type=video/*;package=com.mxtech.videoplayer.pro;end`;}
+function km_player(){window.location.href=`intent:{{file_url}}#Intent;action=android.intent.action.VIEW;type=video/*;package=com.kmplayer;end`;}
+function s_player(){window.location.href=`intent:{{file_url}}#Intent;action=com.young.simple.player.playback_online;package=com.young.simple.player;end`;}
+function hd_player(){window.location.href=`intent:{{file_url}}#Intent;action=android.intent.action.VIEW;type=video/*;package=uplayer.video.player;end`;}
+
+// Menu toggle
+const menuBtn = document.querySelector(".menu-btn");
+const nav = document.querySelector("nav");
+menuBtn.addEventListener("click",()=>{nav.classList.toggle("active");});
+document.addEventListener("click",e=>{if(!nav.contains(e.target)&&!menuBtn.contains(e.target)){nav.classList.remove("active");}});
+
+// Swiper
+const swiper = new Swiper(".mySwiper",{slidesPerView:2,spaceBetween:15,navigation:{nextEl:".swiper-button-next",prevEl:".swiper-button-prev"},breakpoints:{640:{slidesPerView:3},768:{slidesPerView:4},1024:{slidesPerView:6}}});
+
+document.addEventListener("DOMContentLoaded",()=>{initPlayer();});
 </script>
 
 </body>
 </html>
+
+
+
+
+
