@@ -271,34 +271,32 @@ async def save_file(media):
 
 
 
+
 # ----------------------------
 # 🔹 Helper function
 # ----------------------------
 def normalize_season_episode_query(query: str) -> str:
     """
-    Normalize user query:
-    season 1              -> (S01|Season[ ._-]*0?1)
-    s1 / s01              -> (S01|Season[ ._-]*0?1)
-    season 1 episode 2    -> S01E02
-    s1e2 / s01e02         -> S01E02
+    Convert user query to regex pattern for season/episode search.
+    Examples:
+    season 1 -> matches S01, S01E01, S01 Complete, Season 1 Full
+    season 1 episode 2 -> S01E02
     """
-    q = query.lower()
+    q = query.lower().strip()
 
-    # Season + Episode (exact episode)
-    m = re.search(
-        r"(?:season|s)\s*(\d{1,2})\s*(?:episode|ep|e)\s*(\d{1,2})",
-        q
-    )
+    # Season + Episode
+    m = re.search(r"(?:season|s)\s*(\d{1,2})\s*(?:episode|ep|e)\s*(\d{1,2})", q)
     if m:
         s = int(m.group(1))
         e = int(m.group(2))
         return f"S{s:02d}E{e:02d}"
 
-    # Season only (all possible formats)
+    # Season only
     m = re.search(r"(?:season|s)\s*(\d{1,2})", q)
     if m:
         s = int(m.group(1))
-        return rf"(S{s:02d}|Season[\s\.\-_]*0?{s})"
+        # Regex for all Sxx, episodes, full season
+        return rf"(S{s:02d}|S{s:02d}E\d{{2}}|Season[\s\.\-_]*0?{s}|Season[\s\.\-_]*{s})"
 
     return query
 
@@ -313,7 +311,7 @@ async def get_search_results(
     # ----------------------------
     if isinstance(query, str):
         query = normalize_season_episode_query(query)
-    if isinstance(query, list):
+    elif isinstance(query, list):
         query = [normalize_season_episode_query(q) for q in query]
 
     # ----------------------------
@@ -337,17 +335,15 @@ async def get_search_results(
             q = q.strip()
             if not q:
                 continue
-            if " " not in q:
-                raw = r"(\b|[\.\+\-_])" + re.escape(q) + r"(\b|[\.\+\-_])"
-            else:
-                raw = re.escape(q).replace(r"\ ", r".*[\s\.\+\-_()]")
-            regex_list.append(re.compile(raw, re.IGNORECASE))
+            # Flexible spaces/dot/dash
+            q = q.replace(" ", r"[\s\.\+\-_]*")
+            regex_list.append(re.compile(q, re.IGNORECASE))
 
         if USE_CAPTION_FILTER:
             filter_mongo = {
                 "$or": (
-                    [{"file_name": r} for r in regex_list]
-                    + [{"caption": r} for r in regex_list]
+                    [{"file_name": r} for r in regex_list] +
+                    [{"caption": r} for r in regex_list]
                 )
             }
         else:
@@ -356,13 +352,8 @@ async def get_search_results(
         query = query.strip()
         if not query:
             raw_pattern = "."
-        elif " " not in query:
-            raw_pattern = r"(\b|[\.\+\-_])" + re.escape(query) + r"(\b|[\.\+\-_])"
         else:
-            raw_pattern = query.replace(
-                " ", r".*[\s\.\+\-_()\[\]]"
-            )
-
+            raw_pattern = query.replace(" ", r"[\s\.\+\-_]*")
         try:
             regex = re.compile(raw_pattern, flags=re.IGNORECASE)
         except re.error:
@@ -412,6 +403,8 @@ async def get_search_results(
         next_offset = ""
 
     return files, next_offset, total_results
+
+
 
 
 async def get_bad_files(query, file_type=None):
