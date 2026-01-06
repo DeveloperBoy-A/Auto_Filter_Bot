@@ -275,57 +275,9 @@ async def save_file(media):
 
 
 # ----------------------------
-# 🔹 Helper function
-# ----------------------------
-def build_exact_regex(query: str, is_series=False, season_only_limit=True) -> str:
-    """
-    Build regex for exact match.
-    - is_series: True → series search with optional season/episode
-    - season_only_limit: if True, season-only query matches only main season / first episode
-    """
-    q = query.strip()
-
-    if is_series:
-        # Detect season + episode
-        m = re.search(r"(?:season|s)\s*(\d{1,2})\s*(?:episode|ep|e)\s*(\d{1,2})", q, re.IGNORECASE)
-        if m:
-            s = int(m.group(1))
-            e = int(m.group(2))
-            # Exact episode match
-            return rf"^{re.escape(q)}|S{s:02d}E{e:02d}$"
-
-        # Detect season only
-        m = re.search(r"(?:season|s)\s*(\d{1,2})", q, re.IGNORECASE)
-        if m:
-            s = int(m.group(1))
-            if season_only_limit:
-                return rf"^{re.escape(q)}|S{s:02d}E01|S{s:02d}\.Complete|Season[\s\.\-_]*{s}$"
-            else:
-                return rf"^{re.escape(q)}|S{s:02d}.*|Season[\s\.\-_]*{s}$"
-
-        # Series name only
-        return rf"^{re.escape(q)}$"
-
-    else:
-        # Movie: exact match
-        return rf"^{re.escape(q)}$"
-
-# ----------------------------
-# 🔹 Main function
-# ----------------------------
-async def get_search_results(chat_id, query, file_type=None, max_results=10, offset=0, filter=False):
-    # ----------------------------
-    # Step 0: Determine type: movie or series
-    # ----------------------------
-    query_lower = query.lower()
-    is_series = bool(re.search(r"(?:season|s\d+|episode|ep|e\d+)", query_lower))
-
-    regex_str = build_exact_regex(query, is_series=is_series, season_only_limit=True)
-    regex = re.compile(regex_str, re.IGNORECASE)
-
-    # ----------------------------
-    # Step 1: Chat settings
-    # ----------------------------
+# async def get_search_results(
+    chat_id, query, file_type=None, max_results=10, offset=0, filter=False
+):
     if chat_id is not None:
         settings = await get_settings(int(chat_id))
         try:
@@ -334,48 +286,72 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
             await save_group_settings(int(chat_id), "max_btn", False)
             settings = await get_settings(int(chat_id))
             max_results = 10 if settings.get("max_btn") else int(MAX_B_TN)
+    if isinstance(query, list):
+        regex_list = []
+        for q in query:
+            q = q.strip()
+            if not q:
+                continue
+            if " " not in q:
+                raw = r"(\b|[\.\+\-_])" + re.escape(q) + r"(\b|[\.\+\-_])"
+            else:
+                raw = re.escape(q).replace(r"\ ", r".*[\s\.\+\-_()]")
+            regex_list.append(re.compile(raw, re.IGNORECASE))
 
-    # ----------------------------
-    # Step 2: MongoDB filter
-    # ----------------------------
-    if USE_CAPTION_FILTER:
-        filter_mongo = {"$or": [{"file_name": regex}, {"caption": regex}]}
+        if USE_CAPTION_FILTER:
+            filter_mongo = {
+                "$or": (
+                    [{"file_name": r} for r in regex_list]
+                    + [{"caption": r} for r in regex_list]
+                )
+            }
+        else:
+            filter_mongo = {"$or": [{"file_name": r} for r in regex_list]}
+
     else:
-        filter_mongo = {"file_name": regex}
+        query = query.strip()
+        if not query:
+            raw_pattern = "."
+        elif " " not in query:
+            raw_pattern = r"(\b|[\.\+\-_])" + query + r"(\b|[\.\+\-_])"
+        else:
+            raw_pattern = query.replace(
+                " ", r".*[\s\.\+\-_()\[\]]"
+            )
 
+        try:
+            regex = re.compile(raw_pattern, flags=re.IGNORECASE)
+        except re.error:
+            return [], "", 0
+
+        if USE_CAPTION_FILTER:
+            filter_mongo = {"$or": [{"file_name": regex}, {"caption": regex}]}
+        else:
+            filter_mongo = {"file_name": regex}
     if file_type:
         filter_mongo["file_type"] = file_type
-
-    # ----------------------------
-    # Step 3: Count total results
-    # ----------------------------
     total_results = await Media.count_documents(filter_mongo)
     if MULTIPLE_DB:
         total_results += await Media2.count_documents(filter_mongo)
 
-    # ----------------------------
-    # Step 4: Fetch files
-    # ----------------------------
-    cursor1 = Media.find(filter_mongo).sort("$natural", -1).skip(offset).limit(max_results)
+    cursor1 = (
+        Media.find(filter_mongo).sort("$natural", -1).skip(offset).limit(max_results)
+    )
     files1 = await cursor1.to_list(length=max_results)
 
     if MULTIPLE_DB:
         remaining = max_results - len(files1)
-        cursor2 = Media2.find(filter_mongo).sort("$natural", -1).skip(offset).limit(remaining)
+        cursor2 = (
+            Media2.find(filter_mongo).sort("$natural", -1).skip(offset).limit(remaining)
+        )
         files2 = await cursor2.to_list(length=remaining)
         files = files1 + files2
     else:
         files = files1
-
-    # ----------------------------
-    # Step 5: next_offset
-    # ----------------------------
     next_offset = offset + len(files)
     if next_offset >= total_results:
         next_offset = ""
-
     return files, next_offset, total_results
-
 
 
 async def get_bad_files(query, file_type=None):
