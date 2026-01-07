@@ -152,18 +152,18 @@ Nᴀᴍᴇ - {}
     
 
     DEL_MSG = """
-<b>❗️⚠️ ɪᴍᴘᴏʀᴛᴀɴᴛ ᴡᴀʀɴɪɴɢ ⚠️❗️</b>
+<b>❗️⚠️ IMPORTANT WARNING ⚠️❗️</b>
 ────────────────────
-💢 ᴛʜɪs ꜰɪʟᴇ / ᴠɪᴅᴇᴏ ᴡɪʟʟ ʙᴇ ᴀᴜᴛᴏᴍᴀᴛɪᴄᴀʟʟʏ ᴅᴇʟᴇᴛᴇᴅ,
-ᴘʟᴇᴀꜱᴇ ꜰᴏʀᴡᴀʀᴅ ᴛʜɪꜱ ꜰɪʟᴇ ᴛᴏ ꜱᴏᴍᴇᴡʜᴇʀᴇ ᴇʟꜱᴇ & ꜱᴛᴀʀᴛ ᴅᴏᴡɴʟᴏᴀᴅɪɴɢ ᴛʜᴇʀᴇ.
+💢 This file / video will be <b>automatically deleted</b>.
+Please forward this file to <b>Saved Messages</b> or somewhere else
+and start downloading from there.
 
-⏳🗑️ ᴅᴇʟᴇᴛɪᴏɴ ᴛɪᴍᴇ :
-<b><u>{}</u></b>
+⏳🗑️ <b>Deletion Time:</b> <b><u>{}</u></b>
 
-⚠️ यह फ़ाइल / वीडियो
-<b>स्वचालित रूप से हटा दी जाएगी</b>
+⚠️ <b>यह फ़ाइल / वीडियो स्वचालित रूप से हटा दी जाएगी</b>
+
 <blockquote>
-<b><i>📌 कृपया इसे अपने SAVED MESSAGES पर फ़ॉरवर्ड⏩ करें और वहीं से डाउनलोड करें।</i></b>
+<b><i>📌 कृपया इसे अपने <u>SAVED MESSAGES</u> पर फ़ॉरवर्ड ⏩ करें और वहीं से डाउनलोड करें।</i></b>
 </blockquote>
 """
 
@@ -243,13 +243,14 @@ Nᴀᴍᴇ : {}
 
 Mᴇꜱꜱᴀɢᴇ : <b>{}</b>"""
 
-    CAPTION = """<b><a href="https://t.me/newmovieswebseries_group">🗃️{file_size}🗃️ {file_name}
-</a>~❣️[@Newmovie_sbot]</b>
+    CAPTION = """<b><a href="https://t.me/newmovieswebseries_group">
+🎬 𝑻𝒊𝒕𝒍𝒆 : {file_name}
 
-<b>⚜️ Powered by 𝖩𝗈𝗂𝗇✅➥ : <a href="https://t.me/+MINAQiQyVq8wMWRl">[ 🔰𝑵𝒆𝒘 𝒎𝒐𝒗𝒊𝒆 & 𝒘𝒆𝒃 𝒔𝒆𝒓𝒊𝒆𝒔🔰 ]</a></b>
-★━━━━━━━━━━━━━━━━━━━★
-🔥STAY WITH US & SAVE YOUR MONEY🔥
-➳⃝⃝❤️ Rᴇᴀᴄᴛ, sᴀᴠᴇ & sʜᴀʀᴇ"""
+📦 𝑺𝒊𝒛𝒆 : {file_size}</a></b>
+★━━━━━━━━━━━━━━━━━━━━━★
+<b>❣️ 𝑷𝒐𝒘𝒆𝒓𝒆𝒅 𝑩𝒚 𝖩𝗈𝗂𝗇✅➥:</b>
+<a href="https://t.me/+MINAQiQyVq8wMWRl">🫧『𓆩ꨄ︎𓆪𝐓ᴏᴋʏᴏ 𝐁ᴀᴄᴋᴜᴘ𓆩ꨄ︎𓆪』🫧</a>
+"""
 
 
     MOVIE_UPDATE_NOTIFY_TXT = """
