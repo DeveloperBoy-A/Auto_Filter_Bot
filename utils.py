@@ -745,11 +745,11 @@ async def get_cap(settings, remaining_seconds, files, query, total_results, sear
                             f"<a href='https://telegram.me/{temp.U_NAME}"
                             f"?start=file_{query.message.chat.id}_{file.file_id}'>"
                             f"❗[{get_size(file.file_size)}]❗ "
-                            f"{clean_filename(file.file_name)}\n"
+                            f"{clean_filename(file.file_name)}\n\n"
                             f"</a></b>"
                         )
                             # Loop ke bahar, last me DEL_MSG add karo 
-                cap += f"\n<b>{script.DEL_MSG_2.format(get_time(DELETE_TIME))}</b>"   
+                cap += f"<b>{script.DEL_MSG_2.format(get_time(DELETE_TIME))}</b>"   
             else:
                 imdb = await get_poster(search, file=(files[0]).file_name) if settings["imdb"] else None
                 if imdb:
@@ -791,11 +791,11 @@ async def get_cap(settings, remaining_seconds, files, query, total_results, sear
                             f"<a href='https://telegram.me/{temp.U_NAME}"
                             f"?start=file_{query.message.chat.id}_{file.file_id}'>"
                             f"❗[{get_size(file.file_size)}]❗ "
-                            f"{clean_filename(file.file_name)}\n"
+                            f"{clean_filename(file.file_name)}\n\n"
                             f"</a></b>"
                         )
                                  # Loop ke bahar, last me DEL_MSG add karo 
-                    cap += f"\n<b>{script.DEL_MSG_2.format(get_time(DELETE_TIME))}</b>"   
+                    cap += f"<b>{script.DEL_MSG_2.format(get_time(DELETE_TIME))}</b>"   
                 else:
                     cap = (
                         f"<b>🏷 ᴛɪᴛʟᴇ : <code>{search}</code>\n"
@@ -811,11 +811,11 @@ async def get_cap(settings, remaining_seconds, files, query, total_results, sear
                             f"<a href='https://telegram.me/{temp.U_NAME}"
                             f"?start=file_{query.message.chat.id}_{file.file_id}'>"
                             f"❗[{get_size(file.file_size)}]❗ "
-                            f"{clean_filename(file.file_name)}\n"
+                            f"{clean_filename(file.file_name)}\n\n"
                             f"</a></b>"
                         )
                                  # Loop ke bahar, last me DEL_MSG add karo 
-                    cap += f"\n<b>{script.DEL_MSG_2.format(get_time(DELETE_TIME))}</b>"   
+                    cap += f"<b>{script.DEL_MSG_2.format(get_time(DELETE_TIME))}</b>"   
         else:
             cap = (
                 f"<b>🏷 ᴛɪᴛʟᴇ : <code>{search}</code>\n"
@@ -830,11 +830,11 @@ async def get_cap(settings, remaining_seconds, files, query, total_results, sear
                             f"<a href='https://telegram.me/{temp.U_NAME}"
                             f"?start=file_{query.message.chat.id}_{file.file_id}'>"
                             f"❗[{get_size(file.file_size)}]❗ "
-                            f"{clean_filename(file.file_name)}\n"
+                            f"{clean_filename(file.file_name)}\n\n"
                             f"</a></b>"
                         )
                           # Loop ke bahar, last me DEL_MSG add karo 
-            cap += f"\n<b>{script.DEL_MSG_2.format(get_time(DELETE_TIME))}</b>"      
+            cap += f"<b>{script.DEL_MSG_2.format(get_time(DELETE_TIME))}</b>"      
 
         return cap
     except Exception as e:
