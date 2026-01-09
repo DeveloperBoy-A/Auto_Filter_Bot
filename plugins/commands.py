@@ -297,7 +297,6 @@ async def start(client, message):
                ],[ 
                     InlineKeyboardButton(text="ʜᴏᴡ ᴛᴏ ᴠᴇʀɪꜰʏ ᴠɪᴅᴇᴏ", url=howtodownload),
 
-                InlineKeyboardButton(text="😁ʙᴜʏ ᴘʀᴇᴍɪᴜᴍ😁", callback_data='buy_info'),
             ]]
                 reply_markup=InlineKeyboardMarkup(buttons)
                 if await db.user_verified(user_id): 
