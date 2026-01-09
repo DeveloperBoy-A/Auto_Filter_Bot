@@ -295,7 +295,7 @@ async def start(client, message):
                 buttons = [[
                     InlineKeyboardButton(text="♻️ ᴄʟɪᴄᴋ ʜᴇʀᴇ ᴛᴏ ᴠᴇʀɪꜰʏ ♻️", url=verify)
                ],[ 
-                    InlineKeyboardButton(text="ʜᴏᴡ ᴛᴏ ᴠᴇʀɪꜰʏ ᴠɪᴅᴇᴏ", url=howtodownload),
+                    InlineKeyboardButton(text="📸ʜᴏᴡ ᴛᴏ ᴠᴇʀɪꜰʏ ᴠɪᴅᴇᴏ📸", url=howtodownload),
 
             ]]
                 reply_markup=InlineKeyboardMarkup(buttons)
