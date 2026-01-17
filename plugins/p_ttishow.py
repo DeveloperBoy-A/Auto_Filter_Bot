@@ -156,63 +156,91 @@ async def re_enable_chat(bot, message):
     await message.reply("Chat Successfully re-enabled")
 
 
+
+
 @Client.on_message(filters.command('stats') & filters.user(ADMINS))
 async def get_stats(bot, message):
     try:
-        msg = await message.reply('ᴀᴄᴄᴇꜱꜱɪɴɢ ꜱᴛᴀᴛᴜꜱ ᴅᴇᴛᴀɪʟꜱ...')
+        msg = await message.reply("📊 Fetching real-time stats...")
+
+        # ---- USERS & GROUPS ----
         total_users = await db.total_users_count()
-        totl_chats = await db.total_chat_count()
+        total_chats = await db.total_chat_count()
         premium = await db.all_premium_users()
-        file1 = await Media.count_documents()
-        DB_SIZE = 512 * 1024 * 1024
 
-        # Calculate size for Current Primary DB
-        dbstats = await db_stats.command("dbStats")
-        current_db_size = dbstats['storageSize'] + dbstats['indexSize']
+        # ---- FILES ----
+        db1_files = await Media.count_documents()
+        db2_files = await Media2.count_documents() if MULTIPLE_DB else 0
 
-        # Calculate total size for Primary DB Cluster
-        dbs = await client.list_database_names()
-        db_size = 0
-        for db_name in dbs:
-            if db_name in ["admin", "local"]:
-                continue
-            stats = await client[db_name].command("dbStats")
-            db_size += stats['storageSize'] + stats['indexSize']
+        # ---- DATABASE 1 ----
+        db1 = await db_stats.command("dbStats")
+        db1_data = db1.get("dataSize", 0)
+        db1_index = db1.get("indexSize", 0)
+        db1_used = db1_data + db1_index
+        db1_cluster = db1.get("storageSize", 0)
+        db1_free = max(db1_cluster - db1_used, 0)
 
-        free = DB_SIZE - db_size
+        # ---- DATABASE 2 ----
+        if MULTIPLE_DB:
+            db2 = await db2_stats.command("dbStats")
+            db2_data = db2.get("dataSize", 0)
+            db2_index = db2.get("indexSize", 0)
+            db2_used = db2_data + db2_index
+            db2_cluster = db2.get("storageSize", 0)
+            db2_free = max(db2_cluster - db2_used, 0)
+        else:
+            db2_files = db2_used = db2_cluster = db2_free = 0
+
+        # ---- BOT SYSTEM ----
         uptime = get_readable_time(time() - botStartTime)
         ram = psutil.virtual_memory().percent
         cpu = psutil.cpu_percent()
 
-        if MULTIPLE_DB == False:
-            await msg.edit(script.STATUS_TXT.format(
-                total_users, totl_chats, premium, file1, get_size(current_db_size), get_size(db_size), get_size(free), uptime, ram, cpu))                                               
-            return
+        # ---- BUILD STYLISH TEXT ----
+        text = f"""<b>🌿 ᴍᴀɪɴᴛᴀɪɴᴇᴅ ʙʏ : 𝐃𝐞𝐯𝐞𝐥ᴏᴘᴇʀ_𝐁𝐨𝐲™(𝓐𝓷𝓴𝓲𝓽_𝓜𝓮᷉ɴᴀ😝)</b>
 
-        file2 = await Media2.count_documents()
+╭───[ 👨‍👩‍👧‍👦 USERS & GROUPS ]───⍟
+│
+├⋟ Total Users ⋟ {total_users}
+├⋟ Total Groups ⋟ {total_chats}
+├⋟ Premium Users ⋟ {premium}
+╰─────────────────────────────⍟
 
-        # Calculate size for Current Secondary DB
-        db2stats = await db2_stats.command("dbStats")
-        current_db2_size = db2stats['storageSize'] + db2stats['indexSize']
+╭───[ 🗃 DATABASE 1 ]───⍟
+│
+├⋟ All Files ⋟ {db1_files}
+├⋟ Used Storage ⋟ {get_size(db1_used)}
+├⋟ Cluster Storage ⋟ {get_size(db1_cluster)}
+├⋟ Free in Cluster ⋟ {get_size(db1_free)}
+╰─────────────────────────────⍟"""
 
-        # Calculate total size for Secondary DB Cluster
-        dbs2 = await client2.list_database_names()
-        db2_size = 0
-        for db_name in dbs2:
-            if db_name in ["admin", "local"]:
-                continue
-            stats = await client2[db_name].command("dbStats")
-            db2_size += stats['storageSize'] + stats['indexSize']
+        if MULTIPLE_DB:
+            text += f"""
 
-        free2 = DB_SIZE - db2_size
+╭───[ 🗃 DATABASE 2 ]───⍟
+│
+├⋟ All Files ⋟ {db2_files}
+├⋟ Used Storage ⋟ {get_size(db2_used)}
+├⋟ Cluster Storage ⋟ {get_size(db2_cluster)}
+├⋟ Free in Cluster ⋟ {get_size(db2_free)}
+╰─────────────────────────────⍟"""
 
-        await msg.edit(script.MULTI_STATUS_TXT.format(
-            total_users, totl_chats, premium, file1, get_size(current_db_size), get_size(db_size), get_size(free),
-            file2, get_size(current_db2_size), get_size(db2_size), get_size(free2), 
-            uptime, ram, cpu, (int(file1) + int(file2))
-            ))
+        text += f"""
+
+╭───[ 🤖 BOT SYSTEM ]───⍟
+│
+├⋟ Uptime ⋟ {uptime}
+├⋟ RAM ⋟ {ram}%
+├⋟ CPU ⋟ {cpu}%
+├⋟ Total Files ⋟ {db1_files + db2_files}
+╰─────────────────────────────⍟"""
+
+        await msg.edit(text)
+
     except Exception as e:
-       print(f"Error In stats :- {e}")        
+        await msg.edit(f"❌ Stats Error:\n<code>{e}</code>")
+
+
 
 @Client.on_message(filters.command('invite') & filters.user(ADMINS))
 async def gen_invite(bot, message):
