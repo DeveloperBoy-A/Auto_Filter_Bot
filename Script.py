@@ -82,7 +82,7 @@ class script(object):
 │
 ╰─────────────────────⍟</b>"""
 
-MULTI_STATUS_TXT = """<b><blockquote>🌿 ᴍᴀɪɴᴛᴀɪɴᴇᴅ ʙʏ : 𝐃𝐞𝐯𝐞𝐥ᴏᴘᴇʀ_𝐁𝐨𝐲™(𝓐𝓷𝓴𝓲𝓽_𝓜𝓮᷉ɴᴀ😝)</blockquote>
+    MULTI_STATUS_TXT = """<b><blockquote>🌿 ᴍᴀɪɴᴛᴀɪɴᴇᴅ ʙʏ : 𝐃𝐞𝐯𝐞𝐥ᴏᴘᴇʀ_𝐁𝐨𝐲™(𝓐𝓷𝓴𝓲𝓽_𝓜𝓮᷉ɴᴀ😝)</blockquote>
 
 ╭──[ 👨‍❤️‍👨 ᴜsᴇʀs ᴅᴀᴛᴀʙᴀsᴇ 👨‍❤️‍👨 ] ──⍟
 │
@@ -113,7 +113,6 @@ MULTI_STATUS_TXT = """<b><blockquote>🌿 ᴍᴀɪɴᴛᴀɪɴᴇᴅ ʙʏ : 𝐃
 ├⋟ » ᴛᴏᴛᴀʟ ꜰɪʟᴇs ⋟ {14}
 │
 ╰─────────────────────⍟</b>"""
-
 
 
     LOG_TEXT_G = """#NewGroup
