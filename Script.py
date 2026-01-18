@@ -260,7 +260,7 @@ Mᴇꜱꜱᴀɢᴇ : <b>{}</b>"""
 
 
     MOVIE_UPDATE_NOTIFY_TXT = """
-<b>【{filename}】</b> ✅🆕️
+</b><a href={poster_url}>🖼️</a><a href={imdb_url}>🆕</a></b> <code>【{filename}】</code> ✅
 
 🎭 Gᴇɴʀᴇs : <b>{genres}</b>
 📺 ᴏᴛᴛ    : <b>{ott}</b>
