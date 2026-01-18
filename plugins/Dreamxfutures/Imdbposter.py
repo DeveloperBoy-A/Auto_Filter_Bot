@@ -47,88 +47,71 @@ async def fetch_image(url, size=(860, 1200)):
         logger.error(f"Unexpected error in fetch_image: {e}")
         return None
 
+
 # -----------------------------
-# IMDB Movie Details
+# IMDB Movie Details🍿
 # -----------------------------
 async def get_movie_details(query, id=False, file=None):
     try:
         if not id:
             query = query.strip().lower()
             title = query
-            year = re.findall(r'[1-2]\d{3}$', query, re.IGNORECASE)
+            year = re.findall(r'[1-2]\d{3}$', query)
             if year:
-                year = list_to_str(year[:1])
+                year = year[0]
                 title = query.replace(year, "").strip()
-            elif file is not None:
-                year = re.findall(r'[1-2]\d{3}', file, re.IGNORECASE)
-                if year:
-                    year = list_to_str(year[:1])
-                else:
-                    year = None
+            elif file:
+                year = re.findall(r'[1-2]\d{3}', file)
+                year = year[0] if year else None
 
-            movieid = ia.search_movie(title.lower(), results=10)
-            if not movieid:
+            results = ia.search_movie(title, results=10)
+            if not results:
                 return None
-            if year:
-                filtered = list(filter(lambda k: str(k.get('year')) == str(year), movieid))
-                if not filtered:
-                    filtered = movieid
-            else:
-                filtered = movieid
 
-            movieid = list(filter(lambda k: k.get('kind') in ['movie', 'tv series'], filtered))
-            if not movieid:
-                movieid = filtered
-            movieid = movieid[0].movieID
+            if year:
+                results = [m for m in results if str(m.get("year")) == str(year)] or results
+
+            results = [m for m in results if m.get("kind") in ("movie", "tv series")] or results
+            movieid = results[0].movieID
         else:
             movieid = query
 
         movie = ia.get_movie(movieid)
-        ia.update(movie, info=['main', 'vote details'])
 
-        date = movie.get("original air date") or movie.get("year") or "N/A"
+        # 🔥 THIS IS THE MAIN FIX
+        ia.update(movie, info=[
+            "main",
+            "plot",
+            "votes",
+            "images"   # 👈 poster yahin se aata hai
+        ])
 
-        plot = movie.get('plot')
-        if plot and len(plot) > 0:
-            plot = plot[0]
-        else:
-            plot = movie.get('plot outline')
+        # ✅ Poster extraction (FIXED)
+        poster = None
+        if movie.get("full-size cover url"):
+            poster = movie.get("full-size cover url")
+        elif movie.get("cover url"):
+            poster = movie.get("cover url")
+
+        plot = movie.get("plot")
+        plot = plot[0] if plot else movie.get("plot outline")
         if plot and len(plot) > 800:
             plot = plot[:800] + "..."
 
-        poster_url = movie.get('full-size cover url')
-
         return {
-            'title': movie.get('title'),
-            'votes': movie.get('votes'),
-            "aka": list_to_str(movie.get("akas")),
-            "seasons": movie.get("number of seasons"),
-            "box_office": movie.get('box office'),
-            'localized_title': movie.get('localized title'),
-            'kind': movie.get("kind"),
+            "title": movie.get("title"),
+            "year": movie.get("year"),
+            "rating": str(movie.get("rating", "N/A")),
+            "votes": movie.get("votes"),
+            "plot": plot,
+            "genres": list_to_str(movie.get("genres")),
+            "poster_url": poster,   # ✅ NOW ALWAYS FILLED IF EXISTS
             "imdb_id": f"tt{movie.get('imdbID')}",
-            "cast": list_to_str(movie.get("cast")),
-            "runtime": list_to_str(movie.get("runtimes")),
-            "countries": list_to_str(movie.get("countries")),
-            "certificates": list_to_str(movie.get("certificates")),
-            "languages": list_to_str(movie.get("languages")),
-            "director": list_to_str(movie.get("director")),
-            "writer": list_to_str(movie.get("writer")),
-            "producer": list_to_str(movie.get("producer")),
-            "composer": list_to_str(movie.get("composer")),
-            "cinematographer": list_to_str(movie.get("cinematographer")),
-            "music_team": list_to_str(movie.get("music department")),
-            "distributors": list_to_str(movie.get("distributors")),
-            'release_date': date,
-            'year': movie.get('year'),
-            'genres': list_to_str(movie.get("genres")),
-            'poster_url': poster_url,
-            'plot': plot,
-            'rating': str(movie.get("rating", "N/A")),
-            'url': f'https://www.imdb.com/title/tt{movieid}'
+            "url": f"https://www.imdb.com/title/tt{movieid}",
         }
+
     except Exception as e:
-        logger.error(f"An error occurred in get_movie_details: {e}")
+        logger.error(f"IMDb error: {e}")
         return None
 
 # -----------------------------
