@@ -33,4 +33,4 @@ fuzzywuzzy
 python-Levenshtein==0.27.1
 
 # Git-based Packages
-git+https://github.com/DreamXBotz/cinemagoer
+https://github.com/DreamXBotz/cinemagoer/archive/master.zip
