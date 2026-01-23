@@ -273,25 +273,11 @@ async def save_file(media):
 
 
 
-# ---------- Quality Order ----------
-QUALITY_ORDER = [
-    "4k", "2160p", "1080p", "bluray", "bdrip", "web-dl", "webrip", 
-    "hdrip", "hdts", "hdtv", "dvdrip", "pre-dvd", "cam", "ts", "telesync",
-    "r5", "dvdscr", "scr", "hdcam", "hdtscam"
-]
-
-def get_quality_score(file_name):
-    name = file_name.lower()
-    for idx, quality in enumerate(QUALITY_ORDER):
-        if quality in name:
-            return len(QUALITY_ORDER) - idx  # high = better quality
-    return 0
-
 def expand_season_episode(text: str):
     text = text.lower().strip()
     patterns = {text}
 
-    # Season
+    # Season patterns
     sm = re.search(r"(season|s)\s*(\d+)", text)
     if sm:
         n = int(sm.group(2))
@@ -302,7 +288,7 @@ def expand_season_episode(text: str):
             f"season {n:02}",
         })
 
-    # Episode
+    # Episode patterns
     em = re.search(r"(episode|ep|e)\s*(\d+)", text)
     if em:
         n = int(em.group(2))
@@ -315,11 +301,10 @@ def expand_season_episode(text: str):
 
     return list(patterns)
 
-# ---------- Main Function ----------
+
 async def get_search_results(
     chat_id, query, file_type=None, max_results=10, offset=0, filter=False
 ):
-    # ---------- SETTINGS ----------
     if chat_id is not None:
         settings = await get_settings(int(chat_id))
         try:
@@ -330,43 +315,68 @@ async def get_search_results(
             max_results = 10 if settings.get("max_btn") else int(MAX_B_TN)
 
     # ---------- QUERY ----------
-    regex_list = []
+    if isinstance(query, list):
+        regex_list = []
+        expanded = []
 
-    # Ensure query is list
-    queries = query if isinstance(query, list) else [query]
+        for q in query:
+            expanded.extend(expand_season_episode(q))
 
-    for q in queries:
-        q = q.strip()
-        if not q:
-            continue
-
-        # 1️⃣ Exact title match
-        regex_list.append(re.compile(re.escape(q), re.IGNORECASE))
-
-        # 2️⃣ Season/Episode expansion
-        expanded = expand_season_episode(q)
-        for ex in expanded:
-            ex = ex.strip()
-            if not ex:
+        for q in expanded:
+            q = q.strip()
+            if not q:
                 continue
-            if " " not in ex:
-                raw = r"(\b|[\.\+\-_()\[\]])" + re.escape(ex) + r"(\b|[\.\+\-_()\[\]])"
+
+            if " " not in q:
+                raw = r"(\b|[\.\+\-_])" + re.escape(q) + r"(\b|[\.\+\-_])"
             else:
-                raw = re.escape(ex).replace(r"\ ", r".*[\s\.\+\-_()\[\]]*")
+                raw = re.escape(q).replace(r"\ ", r".*[\s\.\+\-_()]")
+
             regex_list.append(re.compile(raw, re.IGNORECASE))
 
-    if not regex_list:
-        return [], "", 0
+        if USE_CAPTION_FILTER:
+            filter_mongo = {
+                "$or": (
+                    [{"file_name": r} for r in regex_list]
+                    + [{"caption": r} for r in regex_list]
+                )
+            }
+        else:
+            filter_mongo = {"$or": [{"file_name": r} for r in regex_list]}
 
-    # ---------- Mongo Filter ----------
-    if USE_CAPTION_FILTER:
-        filter_mongo = {
-            "$or": ([{"file_name": r} for r in regex_list] +
-                    [{"caption": r} for r in regex_list])
-        }
     else:
-        filter_mongo = {"$or": [{"file_name": r} for r in regex_list]}
+        query = query.strip()
+        if not query:
+            raw_pattern = r".*"
+        else:
+            expanded = expand_season_episode(query)
+            regex_list = []
 
+            for q in expanded:
+                if " " not in q:
+                    raw = (
+                        r"(\b|[\.\+\-_])"
+                        + re.escape(q)
+                        + r"(\b|[\.\+\-_])"
+                    )
+                else:
+                    raw = re.escape(q).replace(
+                        r"\ ", r".*[\s\.\+\-_()\[\]]"
+                    )
+
+                regex_list.append(re.compile(raw, re.IGNORECASE))
+
+        if USE_CAPTION_FILTER:
+            filter_mongo = {
+                "$or": (
+                    [{"file_name": r} for r in regex_list]
+                    + [{"caption": r} for r in regex_list]
+                )
+            }
+        else:
+            filter_mongo = {"$or": [{"file_name": r} for r in regex_list]}
+
+    # ---------- FILE TYPE ----------
     if file_type:
         filter_mongo["file_type"] = file_type
 
@@ -375,7 +385,7 @@ async def get_search_results(
     if MULTIPLE_DB:
         total_results += await Media2.count_documents(filter_mongo)
 
-    # ---------- FETCH MAIN DB ----------
+    # ---------- MAIN DB ----------
     cursor1 = (
         Media.find(filter_mongo)
         .sort("$natural", -1)
@@ -384,7 +394,7 @@ async def get_search_results(
     )
     files1 = await cursor1.to_list(length=max_results)
 
-    # ---------- FETCH SECOND DB ----------
+    # ---------- SECOND DB ----------
     if MULTIPLE_DB:
         remaining = max_results - len(files1)
         cursor2 = (
@@ -397,39 +407,11 @@ async def get_search_results(
     else:
         files = files1
 
-    # ---------- SCORING ----------
-    scored_files = []
-    for f in files:
-        score = 0
-        fname = f.get("file_name", "").lower()
-
-        # Exact title match
-        for q in queries:
-            if q.lower() in fname:
-                score += 5
-
-        # Season/Episode match
-        for q in queries:
-            for ex in expand_season_episode(q):
-                if ex.lower() in fname:
-                    score += 3
-
-        # Quality score
-        score += get_quality_score(fname)
-
-        f["_score"] = score
-        scored_files.append(f)
-
-    # ---------- SORT BY SCORE ----------
-    scored_files.sort(key=lambda x: x["_score"], reverse=True)
-
-    # ---------- OFFSET ----------
-    next_offset = offset + len(scored_files)
+    next_offset = offset + len(files)
     if next_offset >= total_results:
         next_offset = ""
 
-    return scored_files, next_offset, total_results
-
+    return files, next_offset, total_results
 
 
 async def get_bad_files(query, file_type=None):
