@@ -271,68 +271,94 @@ async def save_file(media):
 
 
 
-
-
 async def get_search_results(
-chat_id, query, file_type=None, max_results=10, offset=0, filter=False
+    chat_id, query, file_type=None, max_results=10, offset=0, filter=False
 ):
-if chat_id is not None:
-settings = await get_settings(int(chat_id))
-try:
-max_results = 10 if settings.get("max_btn") else int(MAX_B_TN)
-except KeyError:
-await save_group_settings(int(chat_id), "max_btn", False)
-settings = await get_settings(int(chat_id))
-max_results = 10 if settings.get("max_btn") else int(MAX_B_TN)
-if isinstance(query, list):
-regex_list = []
-for q in query:
-q = q.strip()
-if not q:
-continue
-if " " not in q:
-raw = r"(\b|[\.\+\-_])" + re.escape(q) + r"(\b|[\.\+\-_])"
-else:
-raw = re.escape(q).replace(r"\ ", r".*[\s\.\+\-_()]")
-regex_list.append(re.compile(raw, re.IGNORECASE))
-if USE_CAPTION_FILTER:
-filter_mongo = {"$or": ([{"file_name": r} for r in regex_list] + [{"caption": r} for r in regex_list])}
-else:
-filter_mongo = {"$or": [{"file_name": r} for r in regex_list]}
-else:
-query = query.strip()
-if not query:
-raw_pattern = "."
-elif " " not in query:
-raw_pattern = r"(\b|[\.\+\-_])" + query + r"(\b|[\.\+\-_])"
-else:
-raw_pattern = query.replace(" ", r".*[\s\.\+\-_()\[\]]")
-try:
-regex = re.compile(raw_pattern, flags=re.IGNORECASE)
-except re.error:
-return [], "", 0
-if USE_CAPTION_FILTER:
-filter_mongo = {"$or": [{"file_name": regex}, {"caption": regex}]}
-else:
-filter_mongo = {"file_name": regex}
-if file_type:
-filter_mongo["file_type"] = file_type
-total_results = await Media.count_documents(filter_mongo)
-if MULTIPLE_DB:
-total_results += await Media2.count_documents(filter_mongo)
-cursor1 = Media.find(filter_mongo).sort("$natural", -1).skip(offset).limit(max_results)
-files1 = await cursor1.to_list(length=max_results)
-if MULTIPLE_DB:
-remaining = max_results - len(files1)
-cursor2 = Media2.find(filter_mongo).sort("$natural", -1).skip(offset).limit(remaining)
-files2 = await cursor2.to_list(length=remaining)
-files = files1 + files2
-else:
-files = files1
-next_offset = offset + len(files)
-if next_offset >= total_results:
-next_offset = ""
-return files, next_offset, total_results
+    if chat_id is not None:
+        settings = await get_settings(int(chat_id))
+        try:
+            max_results = 10 if settings.get("max_btn") else int(MAX_B_TN)
+        except KeyError:
+            await save_group_settings(int(chat_id), "max_btn", False)
+            settings = await get_settings(int(chat_id))
+            max_results = 10 if settings.get("max_btn") else int(MAX_B_TN)
+
+    if isinstance(query, list):
+        regex_list = []
+        for q in query:
+            q = q.strip()
+            if not q:
+                continue
+            if " " not in q:
+                raw = r"(\b|[\.\+\-_])" + re.escape(q) + r"(\b|[\.\+\-_])"
+            else:
+                raw = re.escape(q).replace(r"\ ", r".*[\s\.\+\-_()]")
+            regex_list.append(re.compile(raw, re.IGNORECASE))
+
+        if USE_CAPTION_FILTER:
+            filter_mongo = {
+                "$or": (
+                    [{"file_name": r} for r in regex_list]
+                    + [{"caption": r} for r in regex_list]
+                )
+            }
+        else:
+            filter_mongo = {"$or": [{"file_name": r} for r in regex_list]}
+
+    else:
+        query = query.strip()
+        if not query:
+            raw_pattern = "."
+        elif " " not in query:
+            raw_pattern = r"(\b|[\.\+\-_])" + query + r"(\b|[\.\+\-_])"
+        else:
+            raw_pattern = query.replace(
+                " ", r".*[\s\.\+\-_()\[\]]"
+            )
+
+        try:
+            regex = re.compile(raw_pattern, flags=re.IGNORECASE)
+        except re.error:
+            return [], "", 0
+
+        if USE_CAPTION_FILTER:
+            filter_mongo = {"$or": [{"file_name": regex}, {"caption": regex}]}
+        else:
+            filter_mongo = {"file_name": regex}
+
+    if file_type:
+        filter_mongo["file_type"] = file_type
+
+    total_results = await Media.count_documents(filter_mongo)
+    if MULTIPLE_DB:
+        total_results += await Media2.count_documents(filter_mongo)
+
+    cursor1 = (
+        Media.find(filter_mongo)
+        .sort("$natural", -1)
+        .skip(offset)
+        .limit(max_results)
+    )
+    files1 = await cursor1.to_list(length=max_results)
+
+    if MULTIPLE_DB:
+        remaining = max_results - len(files1)
+        cursor2 = (
+            Media2.find(filter_mongo)
+            .sort("$natural", -1)
+            .skip(offset)
+            .limit(remaining)
+        )
+        files2 = await cursor2.to_list(length=remaining)
+        files = files1 + files2
+    else:
+        files = files1
+
+    next_offset = offset + len(files)
+    if next_offset >= total_results:
+        next_offset = ""
+
+    return files, next_offset, total_results
 
 
 
