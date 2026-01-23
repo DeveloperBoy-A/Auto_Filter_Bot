@@ -276,6 +276,35 @@ async def save_file(media):
 
 # ----------------------------
 
+def expand_season_episode(text: str):
+    text = text.lower().strip()
+    patterns = {text}
+
+    # Season patterns
+    sm = re.search(r"(season|s)\s*(\d+)", text)
+    if sm:
+        n = int(sm.group(2))
+        patterns.update({
+            f"s{n}",
+            f"s{n:02}",
+            f"season {n}",
+            f"season {n:02}",
+        })
+
+    # Episode patterns
+    em = re.search(r"(episode|ep|e)\s*(\d+)", text)
+    if em:
+        n = int(em.group(2))
+        patterns.update({
+            f"e{n}",
+            f"e{n:02}",
+            f"episode {n}",
+            f"episode {n:02}",
+        })
+
+    return list(patterns)
+
+
 async def get_search_results(
     chat_id, query, file_type=None, max_results=10, offset=0, filter=False
 ):
@@ -287,16 +316,25 @@ async def get_search_results(
             await save_group_settings(int(chat_id), "max_btn", False)
             settings = await get_settings(int(chat_id))
             max_results = 10 if settings.get("max_btn") else int(MAX_B_TN)
+
+    # ---------- QUERY ----------
     if isinstance(query, list):
         regex_list = []
+        expanded = []
+
         for q in query:
+            expanded.extend(expand_season_episode(q))
+
+        for q in expanded:
             q = q.strip()
             if not q:
                 continue
+
             if " " not in q:
                 raw = r"(\b|[\.\+\-_])" + re.escape(q) + r"(\b|[\.\+\-_])"
             else:
                 raw = re.escape(q).replace(r"\ ", r".*[\s\.\+\-_()]")
+
             regex_list.append(re.compile(raw, re.IGNORECASE))
 
         if USE_CAPTION_FILTER:
@@ -312,47 +350,72 @@ async def get_search_results(
     else:
         query = query.strip()
         if not query:
-            raw_pattern = "."
-        elif " " not in query:
-            raw_pattern = r"(\b|[\.\+\-_])" + query + r"(\b|[\.\+\-_])"
+            raw_pattern = r".*"
         else:
-            raw_pattern = query.replace(
-                " ", r".*[\s\.\+\-_()\[\]]"
-            )
+            expanded = expand_season_episode(query)
+            regex_list = []
 
-        try:
-            regex = re.compile(raw_pattern, flags=re.IGNORECASE)
-        except re.error:
-            return [], "", 0
+            for q in expanded:
+                if " " not in q:
+                    raw = (
+                        r"(\b|[\.\+\-_])"
+                        + re.escape(q)
+                        + r"(\b|[\.\+\-_])"
+                    )
+                else:
+                    raw = re.escape(q).replace(
+                        r"\ ", r".*[\s\.\+\-_()\[\]]"
+                    )
+
+                regex_list.append(re.compile(raw, re.IGNORECASE))
 
         if USE_CAPTION_FILTER:
-            filter_mongo = {"$or": [{"file_name": regex}, {"caption": regex}]}
+            filter_mongo = {
+                "$or": (
+                    [{"file_name": r} for r in regex_list]
+                    + [{"caption": r} for r in regex_list]
+                )
+            }
         else:
-            filter_mongo = {"file_name": regex}
+            filter_mongo = {"$or": [{"file_name": r} for r in regex_list]}
+
+    # ---------- FILE TYPE ----------
     if file_type:
         filter_mongo["file_type"] = file_type
+
+    # ---------- COUNT ----------
     total_results = await Media.count_documents(filter_mongo)
     if MULTIPLE_DB:
         total_results += await Media2.count_documents(filter_mongo)
 
+    # ---------- MAIN DB ----------
     cursor1 = (
-        Media.find(filter_mongo).sort("$natural", -1).skip(offset).limit(max_results)
+        Media.find(filter_mongo)
+        .sort("$natural", -1)
+        .skip(offset)
+        .limit(max_results)
     )
     files1 = await cursor1.to_list(length=max_results)
 
+    # ---------- SECOND DB ----------
     if MULTIPLE_DB:
         remaining = max_results - len(files1)
         cursor2 = (
-            Media2.find(filter_mongo).sort("$natural", -1).skip(offset).limit(remaining)
+            Media2.find(filter_mongo)
+            .sort("$natural", -1)
+            .limit(remaining)
         )
         files2 = await cursor2.to_list(length=remaining)
         files = files1 + files2
     else:
         files = files1
+
     next_offset = offset + len(files)
     if next_offset >= total_results:
         next_offset = ""
+
     return files, next_offset, total_results
+
 
 
 async def get_bad_files(query, file_type=None):
