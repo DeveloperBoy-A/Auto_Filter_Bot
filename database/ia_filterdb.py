@@ -273,145 +273,70 @@ async def save_file(media):
 
 
 
-def expand_season_episode(text: str):
-    text = text.lower().strip()
-    patterns = {text}
-
-    # Season patterns
-    sm = re.search(r"(season|s)\s*(\d+)", text)
-    if sm:
-        n = int(sm.group(2))
-        patterns.update({
-            f"s{n}",
-            f"s{n:02}",
-            f"season {n}",
-            f"season {n:02}",
-        })
-
-    # Episode patterns
-    em = re.search(r"(episode|ep|e)\s*(\d+)", text)
-    if em:
-        n = int(em.group(2))
-        patterns.update({
-            f"e{n}",
-            f"e{n:02}",
-            f"episode {n}",
-            f"episode {n:02}",
-        })
-
-    return list(patterns)
-
-
-async def get_search_results(
-    chat_id, query, file_type=None, max_results=10, offset=0, filter=False
-):
+async def get_search_results(chat_id, query, file_type=None, max_results=None, offset=0):
     if chat_id is not None:
         settings = await get_settings(int(chat_id))
+        # max_results decide करना settings के हिसाब से
+        max_results = max_results or (10 if settings.get("max_btn") else int(MAX_B_TN))
+
+    # Helper function to build regex from query string
+    def build_regex(q: str):
+        q = q.strip()
+        if not q:
+            return re.compile(".")
+        if " " not in q:
+            pattern = r"(\b|[\.\+\-_])" + re.escape(q) + r"(\b|[\.\+\-_])"
+        else:
+            pattern = re.escape(q).replace(r"\ ", r".*[\s\.\+\-_()]")
         try:
-            max_results = 10 if settings.get("max_btn") else int(MAX_B_TN)
-        except KeyError:
-            await save_group_settings(int(chat_id), "max_btn", False)
-            settings = await get_settings(int(chat_id))
-            max_results = 10 if settings.get("max_btn") else int(MAX_B_TN)
+            return re.compile(pattern, flags=re.IGNORECASE)
+        except re.error:
+            return re.compile(".")  # fallback to match all if invalid
 
-    # ---------- QUERY ----------
+    # Build filter
     if isinstance(query, list):
-        regex_list = []
-        expanded = []
-
-        for q in query:
-            expanded.extend(expand_season_episode(q))
-
-        for q in expanded:
-            q = q.strip()
-            if not q:
-                continue
-
-            if " " not in q:
-                raw = r"(\b|[\.\+\-_])" + re.escape(q) + r"(\b|[\.\+\-_])"
-            else:
-                raw = re.escape(q).replace(r"\ ", r".*[\s\.\+\-_()]")
-
-            regex_list.append(re.compile(raw, re.IGNORECASE))
-
+        regex_list = [build_regex(q) for q in query if q.strip()]
         if USE_CAPTION_FILTER:
-            filter_mongo = {
-                "$or": (
-                    [{"file_name": r} for r in regex_list]
-                    + [{"caption": r} for r in regex_list]
-                )
-            }
+            filter_mongo = {"$or": [{"file_name": r} for r in regex_list] +
+                                      [{"caption": r} for r in regex_list]}
         else:
             filter_mongo = {"$or": [{"file_name": r} for r in regex_list]}
-
     else:
-        query = query.strip()
-        if not query:
-            raw_pattern = r".*"
-        else:
-            expanded = expand_season_episode(query)
-            regex_list = []
-
-            for q in expanded:
-                if " " not in q:
-                    raw = (
-                        r"(\b|[\.\+\-_])"
-                        + re.escape(q)
-                        + r"(\b|[\.\+\-_])"
-                    )
-                else:
-                    raw = re.escape(q).replace(
-                        r"\ ", r".*[\s\.\+\-_()\[\]]"
-                    )
-
-                regex_list.append(re.compile(raw, re.IGNORECASE))
-
+        regex = build_regex(query)
         if USE_CAPTION_FILTER:
-            filter_mongo = {
-                "$or": (
-                    [{"file_name": r} for r in regex_list]
-                    + [{"caption": r} for r in regex_list]
-                )
-            }
+            filter_mongo = {"$or": [{"file_name": regex}, {"caption": regex}]}
         else:
-            filter_mongo = {"$or": [{"file_name": r} for r in regex_list]}
+            filter_mongo = {"file_name": regex}
 
-    # ---------- FILE TYPE ----------
     if file_type:
         filter_mongo["file_type"] = file_type
 
-    # ---------- COUNT ----------
+    # Count total results
     total_results = await Media.count_documents(filter_mongo)
     if MULTIPLE_DB:
         total_results += await Media2.count_documents(filter_mongo)
 
-    # ---------- MAIN DB ----------
-    cursor1 = (
-        Media.find(filter_mongo)
-        .sort("$natural", -1)
-        .skip(offset)
-        .limit(max_results)
-    )
-    files1 = await cursor1.to_list(length=max_results)
+    # Fetch documents
+    files = []
+    remaining = max_results
 
-    # ---------- SECOND DB ----------
-    if MULTIPLE_DB:
-        remaining = max_results - len(files1)
-        cursor2 = (
-            Media2.find(filter_mongo)
-            .sort("$natural", -1)
-            .limit(remaining)
-        )
+    cursor1 = Media.find(filter_mongo).sort("$natural", -1).skip(offset).limit(remaining)
+    files1 = await cursor1.to_list(length=remaining)
+    files.extend(files1)
+    remaining -= len(files1)
+
+    if MULTIPLE_DB and remaining > 0:
+        cursor2 = Media2.find(filter_mongo).sort("$natural", -1).limit(remaining)
         files2 = await cursor2.to_list(length=remaining)
-        files = files1 + files2
-    else:
-        files = files1
+        files.extend(files2)
 
+    # Next offset calculation
     next_offset = offset + len(files)
     if next_offset >= total_results:
         next_offset = ""
 
     return files, next_offset, total_results
+
 
 
 async def get_bad_files(query, file_type=None):
