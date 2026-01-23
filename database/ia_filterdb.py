@@ -272,15 +272,25 @@ async def save_file(media):
 
 
 
+# ---------- Quality Order ----------
+QUALITY_ORDER = [
+    "4k", "2160p", "1080p", "bluray", "bdrip", "web-dl", "webrip", 
+    "hdrip", "hdts", "hdtv", "dvdrip", "pre-dvd", "cam", "ts", "telesync",
+    "r5", "dvdscr", "scr", "hdcam", "hdtscam"
+]
 
-
-# ----------------------------
+def get_quality_score(file_name):
+    name = file_name.lower()
+    for idx, quality in enumerate(QUALITY_ORDER):
+        if quality in name:
+            return len(QUALITY_ORDER) - idx  # high = better quality
+    return 0  # unknown quality
 
 def expand_season_episode(text: str):
     text = text.lower().strip()
     patterns = {text}
 
-    # Season patterns
+    # Season
     sm = re.search(r"(season|s)\s*(\d+)", text)
     if sm:
         n = int(sm.group(2))
@@ -291,7 +301,7 @@ def expand_season_episode(text: str):
             f"season {n:02}",
         })
 
-    # Episode patterns
+    # Episode
     em = re.search(r"(episode|ep|e)\s*(\d+)", text)
     if em:
         n = int(em.group(2))
@@ -304,10 +314,11 @@ def expand_season_episode(text: str):
 
     return list(patterns)
 
-
+# ---------- Main Function ----------
 async def get_search_results(
     chat_id, query, file_type=None, max_results=10, offset=0, filter=False
 ):
+    # ---------- SETTINGS ----------
     if chat_id is not None:
         settings = await get_settings(int(chat_id))
         try:
@@ -329,20 +340,19 @@ async def get_search_results(
             q = q.strip()
             if not q:
                 continue
-
             if " " not in q:
-                raw = r"(\b|[\.\+\-_])" + re.escape(q) + r"(\b|[\.\+\-_])"
+                raw = r"(\b|[\.\+\-_()\[\]])" + re.escape(q) + r"(\b|[\.\+\-_()\[\]])"
             else:
-                raw = re.escape(q).replace(r"\ ", r".*[\s\.\+\-_()]")
-
+                raw = re.escape(q).replace(r"\ ", r".*[\s\.\+\-_()\[\]]*")
             regex_list.append(re.compile(raw, re.IGNORECASE))
+
+        if not regex_list:
+            return [], "", 0
 
         if USE_CAPTION_FILTER:
             filter_mongo = {
-                "$or": (
-                    [{"file_name": r} for r in regex_list]
-                    + [{"caption": r} for r in regex_list]
-                )
+                "$or": ([{"file_name": r} for r in regex_list] +
+                        [{"caption": r} for r in regex_list])
             }
         else:
             filter_mongo = {"$or": [{"file_name": r} for r in regex_list]}
@@ -351,30 +361,21 @@ async def get_search_results(
         query = query.strip()
         if not query:
             raw_pattern = r".*"
+            regex_list = [re.compile(raw_pattern, re.IGNORECASE)]
         else:
-            expanded = expand_season_episode(query)
             regex_list = []
-
+            expanded = expand_season_episode(query)
             for q in expanded:
                 if " " not in q:
-                    raw = (
-                        r"(\b|[\.\+\-_])"
-                        + re.escape(q)
-                        + r"(\b|[\.\+\-_])"
-                    )
+                    raw = r"(\b|[\.\+\-_()\[\]])" + re.escape(q) + r"(\b|[\.\+\-_()\[\]])"
                 else:
-                    raw = re.escape(q).replace(
-                        r"\ ", r".*[\s\.\+\-_()\[\]]"
-                    )
-
+                    raw = re.escape(q).replace(r"\ ", r".*[\s\.\+\-_()\[\]]*")
                 regex_list.append(re.compile(raw, re.IGNORECASE))
 
         if USE_CAPTION_FILTER:
             filter_mongo = {
-                "$or": (
-                    [{"file_name": r} for r in regex_list]
-                    + [{"caption": r} for r in regex_list]
-                )
+                "$or": ([{"file_name": r} for r in regex_list] +
+                        [{"caption": r} for r in regex_list])
             }
         else:
             filter_mongo = {"$or": [{"file_name": r} for r in regex_list]}
@@ -388,7 +389,7 @@ async def get_search_results(
     if MULTIPLE_DB:
         total_results += await Media2.count_documents(filter_mongo)
 
-    # ---------- MAIN DB ----------
+    # ---------- FETCH FROM MAIN DB ----------
     cursor1 = (
         Media.find(filter_mongo)
         .sort("$natural", -1)
@@ -397,7 +398,7 @@ async def get_search_results(
     )
     files1 = await cursor1.to_list(length=max_results)
 
-    # ---------- SECOND DB ----------
+    # ---------- FETCH FROM SECOND DB ----------
     if MULTIPLE_DB:
         remaining = max_results - len(files1)
         cursor2 = (
@@ -410,6 +411,10 @@ async def get_search_results(
     else:
         files = files1
 
+    # ---------- QUALITY SORT ----------
+    files.sort(key=lambda x: get_quality_score(x['file_name']), reverse=True)
+
+    # ---------- OFFSET ----------
     next_offset = offset + len(files)
     if next_offset >= total_results:
         next_offset = ""
