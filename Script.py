@@ -269,7 +269,7 @@ Mᴇꜱꜱᴀɢᴇ : <b>{}</b>"""
 🔥 Rᴀᴛɪɴɢ   : <b>{rating}</b>
 📢  : {episodes}
 
-<blockquote>🌿 Powered by : <a href="https://t.me/+MINAQiQyVq8wMWRl">[🔰𝑵𝒆𝒘 𝒎𝒐𝒗𝒊𝒆 & 𝒘𝒆𝒃 𝒔𝒆𝒓𝒊𝒆𝒔🔰]</a></blockquote>
+<blockquote>🌿 Powered by : [🔰𝑵𝒆𝒘 𝒎𝒐𝒗𝒊𝒆 & 𝒘𝒆𝒃 𝒔𝒆𝒓𝒊𝒆𝒔🔰]</blockquote>
 """
 
 
