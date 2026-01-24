@@ -327,6 +327,36 @@ def clean_filename(file_name):
     )
     return file_name
 
+# ---------------- Prefix Cleaner ----------------
+def remove_prefix_garbage(file_name):
+    """
+    Title से पहले जो भी unwanted prefix/spam words हैं, वो remove करता है.
+    Logic:
+    - prefixes: @, www., #, specific spam words
+    - file_name.split() करके check
+    - पहला valid word मिलने के बाद बाकी words untouched
+    """
+    prefixes = (
+        '[', '@', 'www.', 't.me/', 'telegram.me/',
+        '#', 'ClipmateZone', 'New', 'Movies', 'OnTG', 'moviehub4uupdate'
+    )
+
+    unwanted = {word.lower() for word in BAD_WORDS}
+
+    words = file_name.split()
+    start = False
+    cleaned = []
+
+    for word in words:
+        if not start:
+            if word.startswith(prefixes) or word.lower() in unwanted:
+                continue
+            start = True  # title start
+        cleaned.append(word)
+
+    return ' '.join(cleaned)
+
+
 def get_size(size):
     units = ["Bytes", "KB", "MB", "GB", "TB", "PB", "EB"]
     size = float(size)
