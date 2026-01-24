@@ -94,6 +94,8 @@ TMDB_API_KEY = environ.get('TMDB_API_KEY', 'a02fd334c1aad2e413e6f57a0be2ef27') #
 TMDB_POSTER = bool(environ.get('TMDB_POSTER', "True")) # Shows TMDB poster in notification msg
 LANDSCAPE_POSTER = bool(environ.get('LANDSCAPE_POSTER', True)) # Shows landscape poster in notification msg
 
+MAX_LIST_ELM = environ.get("MAX_LIST_ELM", None)
+
 # Poster settings
 DREAMXBOTZ_IMAGE_FETCH = True
 TMDB_API_KEY = "a02fd334c1aad2e413e6f57a0be2ef27"
