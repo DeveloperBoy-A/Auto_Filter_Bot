@@ -67,9 +67,10 @@ async def get_movie_details(query, id=False, file=None):
                 else:
                     year = None
 
-            movieid = ia.search_movie(title.lower(), results=10)
+            movieid = ia.search_movie(title.lower())
             if not movieid:
                 return None
+            movieid = movieid[:10]  # limit added
             if year:
                 filtered = list(filter(lambda k: str(k.get('year')) == str(year), movieid))
                 if not filtered:
