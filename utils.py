@@ -2,12 +2,13 @@ import re
 import os
 import logging
 from info import  *
-from imdb import Cinemagoer 
+from imdbkit import IMDBKit  
 import asyncio
 from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
 from pyrogram.errors import InputUserDeactivated, UserNotParticipant, FloodWait, UserIsBlocked, PeerIdInvalid, ChatAdminRequired, MessageNotModified
 from pyrogram import enums
-from typing import Union
+from typing import Union,Optional, Dict, Any
+import aiohttp
 from Script import script
 from typing import List
 from database.users_chats_db import db
@@ -185,8 +186,27 @@ async def get_status(bot_id):
     try:
         return await db.movie_update_status(bot_id) or False  
     except Exception as e:
-        logging.error(f"Error in get_movie_update_status: {e}")
+        LOGGER.error(f"Error in get_movie_update_status: {e}")
         return False  
+
+def listx_to_str(k):
+    if k is None or k == "":
+        return "N/A"
+
+    # Handle non-iterable types first
+    if not hasattr(k, '__iter__') or isinstance(k, (str, int, float)):
+        return str(k)
+
+    result = []
+    for elem in k:
+        if elem and str(elem).strip():
+            result.append(str(elem).strip())
+
+    if MAX_LIST_ELM and len(result) > MAX_LIST_ELM:
+        result = result[:int(MAX_LIST_ELM)]
+
+    return ', '.join(result) if result else "N/A"
+
 
 async def add_name_to_db(filename):
     """
