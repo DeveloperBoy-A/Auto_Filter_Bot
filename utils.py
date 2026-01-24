@@ -24,7 +24,7 @@ BTN_URL_REGEX = re.compile(
 )
 
 
-imdb = Cinemagoer() 
+imdb = IMDBKit() 
 BANNED = {}
 SMART_OPEN = '“'
 SMART_CLOSE = '”'
