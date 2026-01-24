@@ -318,7 +318,7 @@ async def save_group_settings(group_id, key, value):
     await db.update_settings(group_id, current)
 
 def clean_filename(file_name):
-    prefixes = ('[', '@', 'www.', 'ClipmateZone', 'NewMoviesOnTG', 'moviehub4uupdate',   'New', 'Movies', 'OnTG')
+    prefixes = ('[', '@', 'www.', 'ClipmateZone', 'NewMoviesOnTG', 'moviehub4uupdate', 'moviehub4u', 'update', 'New', 'Movies', 'OnTG')
     unwanted = {word.lower() for word in BAD_WORDS}
     
     file_name = ' '.join(
