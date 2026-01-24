@@ -215,85 +215,168 @@ async def add_name_to_db(filename):
     
     return await db.add_name(filename) 
 
+
 async def get_poster(query, bulk=False, id=False, file=None):
     if not id:
         query = (query.strip()).lower()
         title = query
-        year = re.findall(r'[1-2]\d{3}$', query, re.IGNORECASE)
-        imdb
-        if year:
-            year = list_to_str(year[:1])
-            title = (query.replace(year, "")).strip()
+        year_val = None
+
+        year_list = re.findall(r'[1-2]\d{3}$', query, re.IGNORECASE)
+        if year_list:
+            year_val = year_list[0]
+            title = (query.replace(year_val, "")).strip()
         elif file is not None:
-            year = re.findall(r'[1-2]\d{3}', file, re.IGNORECASE)
-            if year:
-                year = list_to_str(year[:1]) 
-        else:
-            year = None
-        movieid = imdb.search_movie(title.lower(), results=10)
-        if not movieid:
+            year_list = re.findall(r'[1-2]\d{3}', file, re.IGNORECASE)
+            if year_list:
+                year_val = year_list[0]
+
+        search_result = await asyncio.to_thread(imdb.search_movie, title.lower())
+        if not search_result or not search_result.titles:
             return None
-        if year:
-            filtered=list(filter(lambda k: str(k.get('year')) == str(year), movieid))
+
+        movie_list = search_result.titles
+
+        if year_val:
+            filtered = [m for m in movie_list if m.year and str(m.year) == str(year_val)]
             if not filtered:
-                filtered = movieid
+                filtered = movie_list
         else:
-            filtered = movieid
-        movieid=list(filter(lambda k: k.get('kind') in ['movie', 'tv series'], filtered))
-        if not movieid:
-            movieid = filtered
+            filtered = movie_list
+
+        kind_filter = ['movie', 'tv series', 'tvSeries', 'tvMiniSeries', 'tvMovie']
+        filtered_kind = [m for m in filtered if m.kind and m.kind in kind_filter]
+
+        if not filtered_kind:
+            filtered_kind = filtered
+
         if bulk:
-            return movieid
-        movieid = movieid[0].movieID
+            return filtered_kind
+
+        movie_brief = filtered_kind[0]
+        movieid_str = movie_brief.imdb_id 
     else:
-        movieid = query
-    movie = imdb.get_movie(movieid)
-    imdb.update(movie, info=['main', 'vote details'])
-    if movie.get("original air date"):
-        date = movie["original air date"]
-    elif movie.get("year"):
-        date = movie.get("year")
+        movieid_str = query
+
+    movie = await asyncio.to_thread(imdb.get_movie, movieid_str)
+    if not movie:
+        return None
+
+    if movie.release_date:
+        date = movie.release_date
+    elif movie.year:
+        date = str(movie.year)
     else:
         date = "N/A"
-    plot = ""
-    if not LONG_IMDB_DESCRIPTION:
-        plot = movie.get('plot')
-        if plot and len(plot) > 0:
-            plot = plot[0]
-    else:
-        plot = movie.get('plot outline')
+
+    plot = movie.plot or ""
     if plot and len(plot) > 800:
         plot = plot[0:800] + "..."
 
     return {
-        'title': movie.get('title'),
-        'votes': movie.get('votes'),
-        "aka": list_to_str(movie.get("akas")),
-        "seasons": movie.get("number of seasons"),
-        "box_office": movie.get('box office'),
-        'localized_title': movie.get('localized title'),
-        'kind': movie.get("kind"),
-        "imdb_id": f"tt{movie.get('imdbID')}",
-        "cast": list_to_str(movie.get("cast")),
-        "runtime": list_to_str(movie.get("runtimes")),
-        "countries": list_to_str(movie.get("countries")),
-        "certificates": list_to_str(movie.get("certificates")),
-        "languages": list_to_str(movie.get("languages")),
-        "director": list_to_str(movie.get("director")),
-        "writer":list_to_str(movie.get("writer")),
-        "producer":list_to_str(movie.get("producer")),
-        "composer":list_to_str(movie.get("composer")) ,
-        "cinematographer":list_to_str(movie.get("cinematographer")),
-        "music_team": list_to_str(movie.get("music department")),
-        "distributors": list_to_str(movie.get("distributors")),
+        'title': movie.title,
+        'votes': movie.votes,
+        "aka": listx_to_str(movie.title_akas),
+        "seasons": (
+            len(movie.info_series.display_seasons)
+            if getattr(movie, "info_series", None)
+            and getattr(movie.info_series, "display_seasons", None)
+            else "N/A"
+        ),
+        "box_office": movie.worldwide_gross,
+        'localized_title': movie.title_localized,
+        'kind': movie.kind,
+        "imdb_id": f"tt{movie.imdb_id}",
+        "cast": listx_to_str(movie.stars),
+        "runtime": listx_to_str(movie.duration),
+        "countries": listx_to_str(movie.countries),
+        "certificates": listx_to_str(movie.certificates),
+        "languages": listx_to_str(movie.languages),
+        "director": listx_to_str(movie.directors),
+        "writer": listx_to_str([p.name for p in movie.writers]),
+        "producer": listx_to_str([p.name for p in movie.producers]),
+        "composer": listx_to_str([p.name for p in movie.composers]),
+        "cinematographer": listx_to_str([p.name for p in movie.cinematographers]),
+        "music_team": listx_to_str([p.name for p in movie.music_team]),
+        "distributors": listx_to_str([c.name for c in movie.distributors]),        
         'release_date': date,
-        'year': movie.get('year'),
-        'genres': list_to_str(movie.get("genres")),
-        'poster': movie.get('full-size cover url'),
+        'year': movie.year,
+        'genres': listx_to_str(movie.genres),
+        'poster': movie.cover_url,
         'plot': plot,
-        'rating': str(movie.get("rating")),
-        'url':f'https://www.imdb.com/title/tt{movieid}'
+        'rating': str(movie.rating),
+        'url': movie.url or f'https://www.imdb.com/title/tt{movie.imdb_id}'
     }
+
+async def fetch_tmdb_data(title: str, year: str = None) -> Optional[Dict[str, Any]]:
+    base_url = "https://image.silentxbotz.tech/api/v2/poster"
+    params = {"title": title.strip()}
+    if year:
+        params["year"] = year
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(base_url, params=params, timeout=aiohttp.ClientTimeout(total=25)) as response:
+                if response.status != 200:
+                    return None
+                data = await response.json()
+
+                raw_director = data.get("director")
+                if isinstance(raw_director, list):
+                    director = ", ".join([str(x) for x in raw_director if x])
+                elif isinstance(raw_director, str):
+                    director = raw_director
+                else:
+                    director = None
+
+                director = director if director else ""    
+
+                return {
+                    "id": data.get("id"),
+                    "title": data.get("title", title),
+                    "original_title": data.get("original_title", ""),
+                    "original_language": data.get("original_language", "en"),
+                    "kind": data.get("type", "Movie").upper(),
+                    "director": director,
+                    "release_date": data.get("release_date", ""),
+                    "vote_average": f"{data['vote_average']:.1f}" if data.get("vote_average") else "N/A",
+                    "vote_count": f"{data['vote_count']:,}" if data.get("vote_count") else "0",
+                    "genres": data.get("genres", []),
+                    "imdb_id": data.get("imdb_id", ""),
+                    "imdb_url": f"https://www.imdb.com/title/{data.get('imdb_id')}/" if data.get("imdb_id") else "",
+                    "overview": data.get("overview", ""),
+                    "poster_url": data.get("poster_url", ""),
+                    "backdrop_url": data.get("backdrop_url", ""),
+                    "backdrops": data.get("backdrops", {}),
+                    "posters": data.get("posters", {}),
+                    "cast": data.get("cast", [])[:5],
+                    "videos": data.get("videos", []),
+                }
+
+    except Exception as e:
+        LOGGER.error(f"API Fetch Error: {str(e)}")
+        return None
+
+async def get_best_visual(tmdb_data: Dict) -> Optional[str]:
+    backdrops = tmdb_data.get("backdrops", {})
+    by_language = backdrops.get("by_language", {})    
+    original_lang = tmdb_data.get("original_language")
+    if original_lang and by_language.get(original_lang):
+        return by_language[original_lang][0]["url"]    
+    indian_langs = [
+        "hi", "ta", "te", "kn", "ml", "mr", "bn", "gu", "pa", "or", "as", 
+        "ur", "ne"
+    ]
+    for lang in indian_langs:
+        if by_language.get(lang):
+            return by_language[lang][0]["url"]    
+    if by_language.get("en"):
+        return by_language["en"][0]["url"]
+    if by_language.get("unknown"):
+        return by_language["unknown"][0]["url"]    
+    if backdrops.get("all") and backdrops["all"]:
+        return backdrops["all"][0]["url"]
+    return None
     
 async def search_gagala(text):
     usr_agent = {
