@@ -1,6 +1,6 @@
-# ---------------- Broadcast Bot Features ----------------
-# This code is developed by 【𝐃𝐞𝐯𝐞𝐥𝐨𝐩𝐞𝐫_𝐁𝐨𝐲™(𝓐𝓷𝓴𝓲𝓽_𝓜𝓮𝓮𝓷𝓪😝)】
-# Don't remove my credit please 🙏
+# ---------------- Optimized Persistent Broadcast Bot ----------------
+# Developed by 【𝐃𝐞𝐯𝐞𝐥𝐨𝐩𝐞𝐫_𝐁𝐨𝐲™(𝓐𝓷𝓴𝓲𝓽_𝓜𝐞𝐞𝐧𝐚😝)】
+# Don't remove credit
 
 import time
 import asyncio
@@ -9,27 +9,34 @@ from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyb
 from database.users_chats_db import db
 from info import ADMINS
 from utils import temp, get_readable_time
+import pymongo
+from datetime import datetime
 
 lock = asyncio.Lock()
 
-# ----------------- Helper: Auto-delete -----------------
+# ---------------- MongoDB setup for persistent broadcast ----------------
+client = pymongo.MongoClient("mongodb://localhost:27017/")  # Change URI as needed
+broadcast_db = client["broadcast_db"]
+user_broadcast_collection = broadcast_db["user_broadcasts"]
+group_broadcast_collection = broadcast_db["group_broadcasts"]
+
+# ----------------- Runtime temp lists -----------------
+temp.LAST_USER_BROADCAST = []
+temp.LAST_GROUP_BROADCAST = []
+
+# ----------------- Auto-delete -----------------
 async def auto_delete(msg, delay):
     try:
         await asyncio.sleep(delay)
         await msg.delete()
-        # Remove from tracking list if still present
         if msg in temp.LAST_USER_BROADCAST:
             temp.LAST_USER_BROADCAST.remove(msg)
         if msg in temp.LAST_GROUP_BROADCAST:
             temp.LAST_GROUP_BROADCAST.remove(msg)
     except:
-        # Old messages may fail to delete due to Telegram limitations
         pass
 
-# ----------------- Track last broadcast messages -----------------
-temp.LAST_USER_BROADCAST = []
-temp.LAST_GROUP_BROADCAST = []
-
+# ----------------- Track messages in runtime -----------------
 async def track_message(sent_msg, target="user"):
     if sent_msg:
         if target == "user":
@@ -48,7 +55,7 @@ async def broadcast_cancel(bot, query):
         temp.B_GROUPS_CANCEL = True
         await query.message.edit("🛑 Trying to cancel groups broadcasting...")
 
-# ----------------- Helper: Send message -----------------
+# ----------------- Send message helper -----------------
 async def send_message(bot, chat_id, reply_msg, pin=False):
     try:
         reply_markup = reply_msg.reply_markup
@@ -81,12 +88,13 @@ async def send_message(bot, chat_id, reply_msg, pin=False):
         else:
             return None, "Error"
 
-# ----------------- User Broadcast -----------------
+# ----------------- User Broadcast (Batch + Async + Persistent) -----------------
 @Client.on_message(filters.command("broadcast") & filters.user(ADMINS) & filters.reply)
 async def broadcast_users(bot, message):
     if lock.locked():
         return await message.reply("⚠️ Another broadcast is in progress. Please wait...")
 
+    # Pin option
     ask = await message.reply(
         "<b>Do you want to pin this message in users?</b>",
         reply_markup=ReplyKeyboardMarkup([["Yes", "No"]], one_time_keyboard=True, resize_keyboard=True)
@@ -101,6 +109,7 @@ async def broadcast_users(bot, message):
         return await message.reply("❌ Invalid input. Broadcast cancelled.")
     is_pin = user_response.text == "Yes"
 
+    # Auto-delete time
     ask_time = await message.reply("<b>Enter auto-delete time in seconds (0 to disable auto-delete):</b>")
     try:
         time_response = await bot.listen(chat_id=message.chat.id, user_id=message.from_user.id, timeout=60)
@@ -122,19 +131,26 @@ async def broadcast_users(bot, message):
     async def send(user):
         sent_msg, result = await send_message(bot, int(user["id"]), b_msg, is_pin)
         await track_message(sent_msg, "user")
+        # MongoDB storage
+        if sent_msg:
+            user_broadcast_collection.insert_one({
+                "user_id": int(user["id"]),
+                "message_id": sent_msg.message_id,
+                "timestamp": datetime.now()
+            })
         if sent_msg and auto_delete_time > 0:
-            # Old messages safe delete
             asyncio.create_task(auto_delete(sent_msg, auto_delete_time))
         return result
 
     async with lock:
-        for i in range(0, total_users, 50):
+        batch_size = 50
+        for i in range(0, total_users, batch_size):
             if temp.B_USERS_CANCEL:
                 temp.B_USERS_CANCEL = False
                 cancelled = True
                 break
 
-            batch = users[i:i + 50]
+            batch = users[i:i + batch_size]
             results = await asyncio.gather(*[send(user) for user in batch])
             for res in results:
                 if res == "Success": success += 1
@@ -155,7 +171,7 @@ async def broadcast_users(bot, message):
                 f"⏱️ Time: {elapsed}",
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ CANCEL", callback_data="broadcast_cancel#users")]])
             )
-            await asyncio.sleep(0.2)
+            await asyncio.sleep(0.1)  # small delay to avoid flood
 
     elapsed = get_readable_time(time.time() - start_time)
     final_status = (
@@ -170,7 +186,25 @@ async def broadcast_users(bot, message):
     )
     await status_msg.edit(final_status)
 
-# ----------------- Group Broadcast -----------------
+# ----------------- Delete all user broadcasts (Persistent) -----------------
+@Client.on_message(filters.command("del_broadcast") & filters.user(ADMINS))
+async def del_all_user_broadcast(bot, message):
+    records = list(user_broadcast_collection.find({}))
+    if not records:
+        return await message.reply("⚠️ No user broadcast messages to delete.")
+
+    count = 0
+    for record in records:
+        try:
+            await bot.delete_message(record["user_id"], record["message_id"])
+            count += 1
+        except:
+            pass
+    user_broadcast_collection.delete_many({})
+    temp.LAST_USER_BROADCAST.clear()
+    await message.reply(f"🗑️ Deleted {count} user broadcast messages successfully.")
+
+# ----------------- Group Broadcast (Batch + Async + Persistent) -----------------
 @Client.on_message(filters.command("grp_broadcast") & filters.user(ADMINS) & filters.reply)
 async def broadcast_group(bot, message):
     ask = await message.reply(
@@ -203,30 +237,49 @@ async def broadcast_group(bot, message):
     done = success = failed = 0
     cancelled = False
 
+    async def send(chat):
+        sent_msg, result = await send_message(bot, int(chat["id"]), b_msg, is_pin)
+        await track_message(sent_msg, "group")
+        if sent_msg:
+            group_broadcast_collection.insert_one({
+                "group_id": int(chat["id"]),
+                "message_id": sent_msg.message_id,
+                "timestamp": datetime.now()
+            })
+        if sent_msg and auto_delete_time > 0:
+            asyncio.create_task(auto_delete(sent_msg, auto_delete_time))
+        return result
+
     async with lock:
-        async for chat in chats:
+        batch_size = 50
+        async for i in range(0, total_chats, batch_size):
+            batch = []
+            async for chat in chats:
+                batch.append(chat)
+                if len(batch) == batch_size:
+                    break
             if temp.B_GROUPS_CANCEL:
                 temp.B_GROUPS_CANCEL = False
                 cancelled = True
                 break
-            sent_msg, result = await send_message(bot, int(chat["id"]), b_msg, is_pin)
-            await track_message(sent_msg, "group")
-            if sent_msg and auto_delete_time > 0:
-                asyncio.create_task(auto_delete(sent_msg, auto_delete_time))
-            if result == "Success": success += 1
-            else: failed += 1
-            done += 1
 
-            if done % 10 == 0:
-                await status_msg.edit(
-                    f"📣 <b>Group broadcast progress:</b>\n\n"
-                    f"👥 Total Groups: <code>{total_chats}</code>\n"
-                    f"✅ Completed: <code>{done} / {total_chats}</code>\n"
-                    f"📬 Success: <code>{success}</code>\n"
-                    f"❌ Failed: <code>{failed}</code>\n\n"
-                    f"🌿<blockquote> Maintained by :【𝐃𝐞𝐯𝐞𝐥𝐨𝐩𝐞𝐫_𝐁𝐨𝐲™】</blockquote>",
-                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ CANCEL", callback_data="broadcast_cancel#groups")]])
-                )
+            results = await asyncio.gather(*[send(chat) for chat in batch])
+            for res in results:
+                if res == "Success": success += 1
+                else: failed += 1
+            done += len(batch)
+
+            elapsed = get_readable_time(time.time() - start_time)
+            await status_msg.edit(
+                f"📣 <b>Group broadcast progress:</b>\n\n"
+                f"👥 Total Groups: <code>{total_chats}</code>\n"
+                f"✅ Completed: <code>{done}</code>\n"
+                f"📬 Success: <code>{success}</code>\n"
+                f"❌ Failed: <code>{failed}</code>\n"
+                f"⏱️ Time: {elapsed}",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ CANCEL", callback_data="broadcast_cancel#groups")]])
+            )
+            await asyncio.sleep(0.1)
 
     elapsed = get_readable_time(time.time() - start_time)
     final_text = (
@@ -239,33 +292,20 @@ async def broadcast_group(bot, message):
     )
     await status_msg.edit(final_text)
 
-# ----------------- Delete last broadcast -----------------
-@Client.on_message(filters.command("del_broadcast") & filters.user(ADMINS))
-async def del_last_user_broadcast(bot, message):
-    if not temp.LAST_USER_BROADCAST:
-        return await message.reply("⚠️ No user broadcast messages to delete.")
-    count = 0
-    for msg in temp.LAST_USER_BROADCAST:
-        try:
-            await msg.delete()
-            count += 1
-        except:
-            pass
-    temp.LAST_USER_BROADCAST.clear()
-    await message.reply(f"🗑️ Deleted {count} user broadcast messages successfully.")
-
+# ----------------- Delete all group broadcasts (Persistent) -----------------
 @Client.on_message(filters.command("del_grp_broadcast") & filters.user(ADMINS))
-async def del_last_group_broadcast(bot, message):
-    if not temp.LAST_GROUP_BROADCAST:
+async def del_all_group_broadcast(bot, message):
+    records = list(group_broadcast_collection.find({}))
+    if not records:
         return await message.reply("⚠️ No group broadcast messages to delete.")
+
     count = 0
-    for msg in temp.LAST_GROUP_BROADCAST:
+    for record in records:
         try:
-            await msg.delete()
+            await bot.delete_message(record["group_id"], record["message_id"])
             count += 1
         except:
             pass
+    group_broadcast_collection.delete_many({})
     temp.LAST_GROUP_BROADCAST.clear()
     await message.reply(f"🗑️ Deleted {count} group broadcast messages successfully.")
-
-#_________________________End of broadcast code____________________#
