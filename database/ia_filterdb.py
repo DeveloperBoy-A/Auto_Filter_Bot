@@ -11,7 +11,7 @@ from umongo import Instance, Document, fields
 from motor.motor_asyncio import AsyncIOMotorClient
 from marshmallow import ValidationError
 from info import *
-from utils import get_settings, save_group_settings
+from utils import get_settings, save_group_settings, remove_prefix_garbage
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
@@ -142,6 +142,7 @@ SOURCES = {
     "BLURAY": ["bluray","blu-ray","bdrip"]
 }
 
+
 # ---------------- Extract info from caption ----------------
 def extract_languages_quality(caption: str):
     caption = caption.lower()
@@ -177,6 +178,7 @@ def extract_languages_quality(caption: str):
 
     return found_languages, resolution, source
 
+
 # ---------------- Save File ----------------
 async def save_file(media):
     """
@@ -193,6 +195,9 @@ async def save_file(media):
         base_name = re.sub(r"[._\-]+", " ", base_name)
         base_name = re.sub(r"\s+", " ", base_name).strip()
 
+        # prefix se pehle ka garbage remove
+        base_name = remove_prefix_garbage(base_name)
+
         # ---------------- CAPTION READ (IMPORTANT) ----------------
         caption_text = media.caption or ""
 
@@ -204,14 +209,31 @@ async def save_file(media):
         # ---------------- BUILD FINAL NAME (FORCED) ----------------
         parts = [base_name]
 
+        # 🔹 language duplicate avoid (minimal & safe)
+        base_lower = base_name.lower()
+        added_langs = set()
+
         for lang in languages:
+            l = lang.lower()
+            if l in base_lower or l in added_langs:
+                continue
             parts.append(lang)
+            added_langs.add(l)
 
+        # 🔹 Optional: resolution duplicate avoid
+        added_res = set()
         if resolution_caption:
-            parts.append(resolution_caption)
+            r_upper = resolution_caption.upper()
+            if r_upper not in added_res:
+                parts.append(r_upper)
+                added_res.add(r_upper)
 
+        # 🔹 Optional: source duplicate avoid
+        added_src = set()
         if source_caption:
-            parts.append(source_caption)
+            if source_caption not in added_src:
+                parts.append(source_caption)
+                added_src.add(source_caption)
 
         file_name = " ".join(parts) + ext
 
