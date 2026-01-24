@@ -5,10 +5,10 @@ import logging
 from io import BytesIO
 from PIL import Image
 from info import DREAMXBOTZ_IMAGE_FETCH, TMDB_API_KEY
-from imdb import Cinemagoer
+from imdbkit import IMDBKit 
 
 logger = logging.getLogger(__name__)
-ia = Cinemagoer()
+ia = IMDBKit()
 LONG_IMDB_DESCRIPTION = False
 
 # -----------------------------
