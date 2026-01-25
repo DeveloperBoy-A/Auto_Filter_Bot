@@ -1706,11 +1706,25 @@ async def auto_filter(client, msg, spoll=False):
         if len(message.text) < 100:
             search = message.text
             search = search.lower()
-            m = await message.reply_text(f'**🫧 •『 🔍 ɪ ᴀᴍ ꜱᴇᴀʀᴄʜɪɴɢ 』•🫧 °** `{search}`', reply_to_message_id=message.id)
+            search = re.sub(
+    "["
+    "\U0001F600-\U0001F64F"  # emoticons
+    "\U0001F300-\U0001F5FF"  # symbols & pictographs
+    "\U0001F680-\U0001F6FF"  # transport & map
+    "\U0001F1E0-\U0001F1FF"  # flags
+    "\U00002700-\U000027BF"  # dingbats
+    "\U000024C2-\U0001F251"
+    "]+",
+    "",
+    search
+)
+            m = await message.reply_text(f'**•『 🔍 ɪ ᴀᴍ ꜱᴇᴀʀᴄʜɪɴɢ 』•** `{search}`', reply_to_message_id=message.id)
             find = search.split(" ")
             search = ""
             removes = ["in", "upload", "series", "full",
-                       "horror", "thriller", "mystery", "print", "file"]
+                       "horror", "thriller", "mystery", "print", "file", pls","please","send","give","movie","movies","new","latest","bro","bruh",
+    "link","dubbed","with","subtitle","subtitles","anyone","any",
+    "venum","iruka","pannunga","anuppunga","film","undo","kitti","kitty","tharu"]
             for x in find:
                 if x in removes:
                     continue
@@ -1720,6 +1734,8 @@ async def auto_filter(client, msg, spoll=False):
             search = re.sub(r"\s+", " ", search).strip()
             search = search.replace("-", " ")
             search = search.replace(":", "")
+  # 🔥 REMOVE SYMBOLS
+            search = re.sub(r"[!@#$%^&*()_+=\[\]{};\"'<>?/\\|]", "", search)
             files, offset, total_results = await get_search_results(message.chat.id, search, offset=0, filter=True)
             settings = await get_settings(message.chat.id)
             if not files:
@@ -1741,7 +1757,7 @@ async def auto_filter(client, msg, spoll=False):
     else:
         message = msg.message.reply_to_message
         search, files, offset, total_results = spoll
-        m = await message.reply_text(f'**🫧 •『 🔍 ɪ ᴀᴍ ꜱᴇᴀʀᴄʜɪɴɢ 』•🫧 °** `{search}`', reply_to_message_id=message.id)
+        m = await message.reply_text(f'**•『 🔍 ɪ ᴀᴍ ꜱᴇᴀʀᴄʜɪɴɢ 』•** `{search}`', reply_to_message_id=message.id)
         settings = await get_settings(message.chat.id)
         await msg.message.delete()
     key = f"{message.chat.id}-{message.id}"
