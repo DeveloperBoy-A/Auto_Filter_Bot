@@ -237,6 +237,7 @@ async def get_poster(query, bulk=False, id=False, file=None):
 
         movie_list = search_result.titles
 
+        # 🎯 Year filter
         if year_val:
             filtered = [m for m in movie_list if m.year and str(m.year) == str(year_val)]
             if not filtered:
@@ -244,17 +245,28 @@ async def get_poster(query, bulk=False, id=False, file=None):
         else:
             filtered = movie_list
 
+        # 🎬 Kind filter
         kind_filter = ['movie', 'tv series', 'tvSeries', 'tvMiniSeries', 'tvMovie']
         filtered_kind = [m for m in filtered if m.kind and m.kind in kind_filter]
 
         if not filtered_kind:
             filtered_kind = filtered
 
+        # 🔥 SORT BY VOTES (DESC) + YEAR (DESC)
+        filtered_kind.sort(
+            key=lambda m: (
+                -(m.get('votes') or 0),
+                -(m.year or 0)
+            )
+        )
+
+        # 🔒 TOP 10 SUGGESTIONS ONLY
         if bulk:
-            return filtered_kind
+            return filtered_kind[:10]
 
         movie_brief = filtered_kind[0]
-        movieid_str = movie_brief.imdb_id 
+        movieid_str = movie_brief.imdb_id
+
     else:
         movieid_str = query
 
@@ -262,6 +274,7 @@ async def get_poster(query, bulk=False, id=False, file=None):
     if not movie:
         return None
 
+    # 📅 Release date
     if movie.release_date:
         date = movie.release_date
     elif movie.year:
@@ -269,9 +282,10 @@ async def get_poster(query, bulk=False, id=False, file=None):
     else:
         date = "N/A"
 
+    # 📝 Plot limit
     plot = movie.plot or ""
     if plot and len(plot) > 800:
-        plot = plot[0:800] + "..."
+        plot = plot[:800] + "..."
 
     return {
         'title': movie.title,
@@ -297,8 +311,8 @@ async def get_poster(query, bulk=False, id=False, file=None):
         "producer": listx_to_str([p.name for p in movie.producers]),
         "composer": listx_to_str([p.name for p in movie.composers]),
         "cinematographer": listx_to_str([p.name for p in movie.cinematographers]),
-        "music_team": listx_to_str([p.name for p in movie.music_team]),
-        "distributors": listx_to_str([c.name for c in movie.distributors]),        
+        "music_team": listx_to_str(movie.music_team),
+        "distributors": listx_to_str([c.name for c in movie.distributors]),
         'release_date': date,
         'year': movie.year,
         'genres': listx_to_str(movie.genres),
