@@ -255,7 +255,7 @@ async def get_poster(query, bulk=False, id=False, file=None):
         # 🔥 SORT BY VOTES (DESC) + YEAR (DESC)
         filtered_kind.sort(
             key=lambda m: (
-                -(m.get('votes') or 0),
+                -(getattr(m, "votes", 0) or 0),
                 -(m.year or 0)
             )
         )
