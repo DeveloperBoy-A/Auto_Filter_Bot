@@ -1722,9 +1722,9 @@ async def auto_filter(client, msg, spoll=False):
             find = search.split(" ")
             search = ""
             removes = ["in", "upload", "series", "full",
-                       "horror", "thriller", "mystery", "print", "file", pls","please","send","give","movie","movies","new","latest","bro","bruh",
-    "link","dubbed","with","subtitle","subtitles","anyone","any",
-    "venum","iruka","pannunga","anuppunga","film","undo","kitti","kitty","tharu"]
+                       "horror", "thriller", "mystery", "print", "file", "pls", "please", "send", "give", "movie", "movies", "new", "latest", "bro", "bruh",
+     "link", "dubbed", "with", "subtitle", "subtitles", "anyone", "any",
+     "venum", "iruka", "pannunga", "anuppunga", "film", "undo", "kitti", "kitty", "tharu"]
             for x in find:
                 if x in removes:
                     continue
@@ -1734,7 +1734,7 @@ async def auto_filter(client, msg, spoll=False):
             search = re.sub(r"\s+", " ", search).strip()
             search = search.replace("-", " ")
             search = search.replace(":", "")
-  # 🔥 REMOVE SYMBOLS
+            # 🔥 REMOVE SYMBOLS
             search = re.sub(r"[!@#$%^&*()_+=\[\]{};\"'<>?/\\|]", "", search)
             files, offset, total_results = await get_search_results(message.chat.id, search, offset=0, filter=True)
             settings = await get_settings(message.chat.id)
