@@ -202,6 +202,29 @@ and start downloading from there.
 
 <blockquote>😌 यह ᴍᴏᴠɪᴇ मुझे ᴍᴇʀᴇ ᴅᴀᴛᴀʙᴀꜱᴇ में नहीं मिली।</blockquote>"""
 
+    REQUEST_GUIDE = """
+📝 ʜᴏᴡ ᴛᴏ sᴇɴᴅ ʀᴇǫᴜᴇꜱᴛ ɢᴜɪᴅᴇ
+(use only when movie not available in group)
+━━━━━━━━━━━━━━━━━━
+✅ 1️⃣ ʀᴇᴘʟʏ ᴍᴇᴛʜᴏᴅ (ʀᴇᴄᴏᴍᴍᴇɴᴅᴇᴅ 👍)
+• Reply on any movie / series message
+• Type: /request or #request
+
+✅ 2️⃣ ᴅɪʀᴇᴄᴛ ᴍᴇᴛʜᴏᴅ
+• Type in group:
+/request Movie Name
+#request Movie Name
+
+📌 Example:
+➡ /request Animal 2023 Hindi
+➡ #request Border 2 2026 Hindi
+
+⚠️ Fake request na bheje 🙏
+✔ Available hote hi upload / notify kiya jaayega
+
+━━━━━━━━━━━━━━━━━━
+⚡ Powered by 『 𝑻𝒐𝒌𝒚𝒐_𝑼𝒑𝒅𝒂𝒕𝒆𝒔 』
+"""
 
     TOP_ALRT_MSG = """ꜱᴇᴀʀᴄʜɪɴɢ ꜰᴏʀ ǫᴜᴇʀʏ ɪɴ ᴍʏ ᴅᴀᴛᴀʙᴀꜱᴇ..."""
 
