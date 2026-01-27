@@ -349,13 +349,13 @@ async def advantage_spoll_choker(bot, query):
     # Prepare auto-fill request button (always show to user)
     auto_fill_text = f"/request {movie}"
     if year:
-        auto_fill_text += f" {year}
+        auto_fill_text += f" {year}"
     
     btn = InlineKeyboardMarkup([
         [
             InlineKeyboardButton(
                 "📝Sᴇɴᴅ Rᴇǫᴜᴇsᴛ Tᴏ Aᴅᴍɪɴ📝",
-            switch_inline_query_current_chat=auto_fill_text"
+            switch_inline_query_current_chat=auto_fill_text
             )
         ],
         [
