@@ -675,119 +675,83 @@ async def save_template(client, message):
     )
 
 
- # Must set these before using    
-# REQST_CHANNEL = Channel ID where requests are sent    
-# ADMINS = List of admin IDs    
+
+
+@Client.on_message((filters.command(["request", "Request"]) | filters.regex(r"(?i)#request")) & filters.group)
+async def requests(bot, message):
+    if REQST_CHANNEL is None: 
+        return
     
-@Client.on_message(    
-    (filters.regex(r"(@\w+\s*)?/(request|Request)") |    
-     filters.regex(r"#(request|Request)")) &    
-    filters.group    
-)    
-async def requests(bot, message):    
-    
-    if REQST_CHANNEL is None:    
-        return    
-    
-    bot_obj = await bot.get_me()    
-    bot_username = bot_obj.username    
-    
-    reporter = str(message.from_user.id)    
-    mention = message.from_user.mention    
-    chat_title = message.chat.title or "Pʀɪᴠᴀᴛᴇ Gʀᴏᴜᴘ"    
-    success = False    
-    reported_post = None    
-    
-    if message.reply_to_message and message.reply_to_message.text:    
-        content = message.reply_to_message.text    
-    else:    
-        content = message.text or ""    
-        content = re.sub(    
-            rf"(@{bot_username}\s*)|(@{bot_username})|/(request|Request)|#(request|Request)",    
-            "",    
-            content,    
-            flags=re.IGNORECASE    
-        )    
-        content = content.strip()    
-    
-    if len(content) < 3:    
-        await message.reply_text(    
-            "<b>❌ Yᴏᴜ Mᴜsᴛ Tʏᴘᴇ A Rᴇǫᴜᴇsᴛ (Mɪɴɪᴍᴜᴍ 3 Cʜᴀʀᴀᴄᴛᴇʀs).</b>"    
-        )    
-        return    
-    
-    try:    
-        btn = [[    
-            InlineKeyboardButton(    
-                "📝 Vɪᴇᴡ Rᴇǫᴜᴇsᴛ 📝",    
-                url=message.reply_to_message.link if message.reply_to_message else message.link    
-            ),    
-            InlineKeyboardButton(    
-                "⚙️ Sʜᴏᴡ Oᴘᴛɪᴏɴs ⚙️",    
-                callback_data=f"show_option#{reporter}"    
-            )    
-        ]]    
-    
-        reported_post = await bot.send_message(    
-            chat_id=REQST_CHANNEL,    
-            text=(    
-                f"<b>📝 Rᴇǫᴜᴇsᴛ : <u>{content}</u>\n\n"    
-                f"📚 Rᴇᴘᴏʀᴛᴇᴅ Bʏ : {mention}\n"    
-                f"📖 Rᴇᴘᴏʀᴛᴇʀ ID : {reporter}\n"    
-                f"📍 Gʀᴏᴜᴘ : {chat_title}</b>"    
-            ),    
-            reply_markup=InlineKeyboardMarkup(btn)    
-        )    
-        success = True    
-    
-    except Exception as e:    
-        await message.reply_text(f"<b>Eʀʀᴏʀ:</b> <code>{e}</code>")    
-        return    
-    
-    if success and ADMINS:    
-        try:    
-            for admin in ADMINS:    
-                btn = [[    
-                    InlineKeyboardButton(    
-                        "📝 Vɪᴇᴡ Rᴇǫᴜᴇsᴛ 📝",    
-                        url=message.reply_to_message.link if message.reply_to_message else message.link    
-                    ),    
-                    InlineKeyboardButton(    
-                        "⚙️ Sʜᴏᴡ Oᴘᴛɪᴏɴs ⚙️",    
-                        callback_data=f"show_option#{reporter}"    
-                    )    
-                ]]    
-                await bot.send_message(    
-                    chat_id=admin,    
-                    text=(    
-                        f"<b>📝 Rᴇǫᴜᴇsᴛ : <u>{content}</u>\n\n"    
-                        f"📚 Rᴇᴘᴏʀᴛᴇᴅ Bʏ : {mention}\n"    
-                        f"📖 Rᴇᴘᴏʀᴛᴇʀ ID : {reporter}\n"    
-                        f"📍 Gʀᴏᴜᴘ : {chat_title}</b>"    
-                    ),    
-                    reply_markup=InlineKeyboardMarkup(btn)    
-                )    
-        except Exception:    
-            pass    
-    
-    if success and reported_post:    
-        try:    
-            link = await bot.create_chat_invite_link(int(REQST_CHANNEL))    
-            btn = [[    
-                InlineKeyboardButton("📢 Jᴏɪɴ Cʜᴀɴɴᴇʟ 📢", url=link.invite_link),    
-                InlineKeyboardButton("📝 Vɪᴇᴡ Rᴇǫᴜᴇsᴛ 📝", url=reported_post.link)    
-            ]]    
-    
-            sent_msg = await message.reply_text(    
-                "<b>✅ Yᴏᴜʀ Rᴇǫᴜᴇsᴛ Hᴀs Bᴇᴇɴ Aᴅᴅᴇᴅ Sᴜᴄᴄᴇssғᴜʟʟʏ!\n"    
-                "Pʟᴇᴀsᴇ Wᴀɪᴛ Fᴏʀ Sᴏᴍᴇ Tɪᴍᴇ Aᴅᴍɪɴs Tᴏ Pʀᴏᴄᴇss Iᴛ.\n\n"    
-                "Jᴏɪɴ Tʜᴇ Cʜᴀɴɴᴇʟ Fɪʀsᴛ & Vɪᴇᴡ Yᴏᴜʀ Rᴇǫᴜᴇsᴛ.</b>",    
-                reply_markup=InlineKeyboardMarkup(btn)    
-            )    
-            await asyncio.sleep(60)    
-            await sent_msg.delete()    
-        except Exception:    
-            pass
+    chat_id = message.chat.id
+    reporter = str(message.from_user.id)
+    mention = message.from_user.mention
+    group_name = message.chat.title
+    group_username = f"@{message.chat.username}" if message.chat.username else "Private Group"
+    success = False
+    reported_post = None
+
+    # 1. Content Extraction
+    if message.reply_to_message:
+        content = message.reply_to_message.text or message.reply_to_message.caption or ""
+        msg_link = message.reply_to_message.link
+    else:
+        content = message.text
+        content = re.sub(r"^(?i)(/request|#request)(?:@\w+)?", "", content).strip()
+        msg_link = message.link
+
+    # 2. Validation
+    if len(content) < 3:
+        err_msg = await message.reply_text("<b>ʏᴏᴜ ᴍᴜꜱᴛ ᴛʏᴘᴇ ᴀʙᴏᴜᴛ ʏᴏᴜʀ ʀᴇǫᴜᴇꜱᴛ [ᴍɪɴɪᴍᴜᴍ 3 ᴄʜᴀʀᴀᴄᴛᴇʀꜱ].</b>")
+        await asyncio.sleep(10) # Error message 10 second mein delete hoga
+        await err_msg.delete()
+        return
+
+    # 3. Processing
+    try:
+        btn = [[
+            InlineKeyboardButton('ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ', url=f"{msg_link}"),
+            InlineKeyboardButton('ꜱʜᴏᴡ ᴏᴘᴛɪᴏɴꜱ', callback_data=f'show_option#{reporter}')
+        ]]
+        
+        request_text = (
+            f"<b>📝 ʀᴇǫᴜᴇꜱᴛ : <u>{content}</u></b>\n\n"
+            f"<b>📚 ʀᴇᴘᴏʀᴛᴇᴅ ʙʏ :</b> {mention}\n"
+            f"<b>📖 ʀᴇᴘᴏʀᴛᴇʀ ɪᴅ :</b> <code>{reporter}</code>\n"
+            f"<b>👥 ꜰʀᴏᴍ ɢʀᴏᴜᴘ :</b> {group_name}"
+        )
+
+        reported_post = await bot.send_message(chat_id=REQST_CHANNEL, text=request_text, reply_markup=InlineKeyboardMarkup(btn))
+        success = True
+
+    except Exception as e:
+        await message.reply_text(f"Error: {e}")
+        success = False
+
+    # 4. Final Response & Auto-Delete
+    if success and reported_post:
+        try:
+            link = await bot.create_chat_invite_link(int(REQST_CHANNEL))
+            invite_link = link.invite_link
+        except:
+            invite_link = "https://t.me/your_channel_username"
+
+        user_btn = [[
+            InlineKeyboardButton('ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ', url=invite_link),
+            InlineKeyboardButton('ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ', url=f"{reported_post.link}")
+        ]]
+        
+        reply_msg = await message.reply_text(
+            "<b>ʏᴏᴜʀ ʀᴇǫᴜᴇꜱᴛ ʜᴀꜱ ʙᴇᴇɴ ᴀᴅᴅᴇᴅ! ᴘʟᴇᴀꜱᴇ ᴡᴀɪᴛ ꜰᴏʀ ꜱᴏᴍᴇ ᴛɪᴍᴇ.\n\nᴛʜɪꜱ ᴍᴇssᴀɢᴇ ᴡɪʟʟ ʙᴇ ᴅᴇʟᴇᴛᴇᴅ ɪɴ 5 ᴍɪɴᴜᴛᴇs.</b>", 
+            reply_markup=InlineKeyboardMarkup(user_btn)
+        )
+
+        # --- Auto Delete Logic ---
+        await asyncio.sleep(300) # 300 seconds = 5 minutes
+        try:
+            await message.delete()     # User ka command delete karega
+            await reply_msg.delete()   # Bot ka reply delete karega
+        except:
+            pass # Agar message pehle hi delete ho chuka ho
 
 
 @Client.on_message(filters.command("send") & filters.user(ADMINS))
