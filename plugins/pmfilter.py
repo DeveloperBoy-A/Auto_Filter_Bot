@@ -331,12 +331,31 @@ async def advantage_spoll_choker(bot, query):
             try:
                 await bot.send_message(chat_id=BIN_CHANNEL, text=script.NORSLTS.format(reqstr.id, reqstr.mention, movie))
             except Exception as e:
-                print(f"Error In Spol - {e}   Make Sure Bot Admin BIN CHANNEL")
-        btn = InlineKeyboardMarkup(
-            [[InlineKeyboardButton("🔰Cʟɪᴄᴋ ʜᴇʀᴇ & ʀᴇǫᴜᴇsᴛ ᴛᴏ ᴀᴅᴍɪɴ🔰", url=SUPPORT_CHAT)]])
-        k = await query.message.edit(script.MVE_NT_FND, reply_markup=btn)
-        await asyncio.sleep(10)
-        await k.delete()
+    print(f"Error In Spol - {e}   Make Sure Bot Admin BIN CHANNEL")
+
+ # Prepare auto-fill request button
+            auto_fill_text = f"/request {movie_title}"
+            if year:
+                auto_fill_text += f" {year}"
+
+            btn = InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton(
+                        "📝Cʟɪᴄᴋ ʜᴇʀᴇ & ʀᴇǫᴜᴇsᴛ ᴛᴏ ᴀᴅᴍɪɴ📝",
+                        switch_inline_query=auto_fill_text
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        "💬Join Support Group💬",
+                        url=SUPPORT_CHAT
+                    )
+                ]
+            ])
+
+k = await query.message.edit(script.MVE_NT_FND, reply_markup=btn)
+await asyncio.sleep(120)  # 2 minute baad auto delete
+await k.delete()
 
 # Qualities
 @Client.on_callback_query(filters.regex(r"^qualities#"))
