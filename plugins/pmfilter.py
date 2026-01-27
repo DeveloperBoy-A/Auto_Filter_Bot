@@ -331,7 +331,7 @@ async def advantage_spoll_choker(bot, query):
             try:
                 await bot.send_message(chat_id=BIN_CHANNEL, text=script.NORSLTS.format(reqstr.id, reqstr.mention, movie))
             except Exception as e:
-    print(f"Error In Spol - {e}   Make Sure Bot Admin BIN CHANNEL")
+                print(f"Error In Spol - {e}   Make Sure Bot Admin BIN CHANNEL")
 
  # Prepare auto-fill request button
             auto_fill_text = f"/request {movie_title}"
