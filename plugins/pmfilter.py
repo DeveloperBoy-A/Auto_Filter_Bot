@@ -313,21 +313,28 @@ async def next_page(bot, query):
 @Client.on_callback_query(filters.regex(r"^spol"))
 async def advantage_spoll_choker(bot, query):
     _, id, user = query.data.split('#')
+    
+    # Check if only the intended user can use this
     if int(user) != 0 and query.from_user.id != int(user):
         return await query.answer(script.ALRT_TXT.format(query.from_user.first_name), show_alert=True)
-
+    
+    # Get movie details
     movies = await get_poster(id, id=True)
-    movie = movies.get('original_title') or movies.get('title')
+    movie = movies.get('title') or "Unknown Movie"
     movie = re.sub(r"[:-]", " ", movie)
     movie = re.sub(r"\s+", " ", movie).strip()
-
+    year = movies.get('year')  # Optional: get year if available
+    
     await query.answer(script.TOP_ALRT_MSG)
-
+    
+    # Search results
     files, offset, total_results = await get_search_results(query.message.chat.id, movie, offset=0, filter=True)
+    
     if files:
         k = (movie, files, offset, total_results)
         await auto_filter(bot, query, k)
     else:
+        # Log to BIN_CHANNEL
         reqstr1 = query.from_user.id if query.from_user else 0
         reqstr = await bot.get_users(reqstr1)
         if NO_RESULTS_MSG:
@@ -338,30 +345,33 @@ async def advantage_spoll_choker(bot, query):
                 )
             except Exception as e:
                 print(f"Error In Spol - {e}   Make Sure Bot Admin BIN CHANNEL")
-
-        # Prepare auto-fill request button
-        auto_fill_text = f"/request {movie}"
-        if year:
-            auto_fill_text += f" {year}"
-
-        btn = InlineKeyboardMarkup([
-            [
-                InlineKeyboardButton(
-                    "📝Cʟɪᴄᴋ ʜᴇʀᴇ & ʀᴇǫᴜᴇsᴛ ᴛᴏ ᴀᴅᴍɪɴ📝",
-                    switch_inline_query=auto_fill_text
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    "💬Join Support Group💬",
-                    url=SUPPORT_CHAT
-                )
-            ]
-        ])
-
-        k = await query.message.edit(script.MVE_NT_FND, reply_markup=btn)
-        await asyncio.sleep(120)  # Auto delete after 2 minutes
-        await k.delete()
+    
+    # Prepare auto-fill request button (always show to user)
+    auto_fill_text = f"/request {movie}"
+    if year:
+        auto_fill_text += f" {year}"
+    
+    btn = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                "📝Cʟɪᴄᴋ ʜᴇʀᴇ & ʀᴇǫᴜᴇsᴛ ᴛᴏ ᴀᴅᴍɪɴ📝",
+                switch_inline_query=auto_fill_text
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "💬Join Support Group💬",
+                url=SUPPORT_CHAT
+            )
+        ]
+    ])
+    
+    # Edit message to show guide + buttons
+    k = await query.message.edit(script.MVE_NT_FND, reply_markup=btn)
+    
+    # Auto-delete after 2 minutes
+    await asyncio.sleep(120)
+    await k.delete()
 
 # Qualities
 @Client.on_callback_query(filters.regex(r"^qualities#"))
