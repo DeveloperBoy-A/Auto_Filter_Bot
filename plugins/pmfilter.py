@@ -313,65 +313,30 @@ async def next_page(bot, query):
 @Client.on_callback_query(filters.regex(r"^spol"))
 async def advantage_spoll_choker(bot, query):
     _, id, user = query.data.split('#')
-    
-    # Check if only the intended user can use this
     if int(user) != 0 and query.from_user.id != int(user):
         return await query.answer(script.ALRT_TXT.format(query.from_user.first_name), show_alert=True)
-    
-    # Get movie details
     movies = await get_poster(id, id=True)
-    movie = movies.get('title') or "Unknown Movie"
+    movie = movies.get('title')
     movie = re.sub(r"[:-]", " ", movie)
     movie = re.sub(r"\s+", " ", movie).strip()
-    year = movies.get('year')  # Optional: get year if available
-    
     await query.answer(script.TOP_ALRT_MSG)
-    
-    # Search results
     files, offset, total_results = await get_search_results(query.message.chat.id, movie, offset=0, filter=True)
-    
     if files:
         k = (movie, files, offset, total_results)
         await auto_filter(bot, query, k)
     else:
-        # Log to BIN_CHANNEL
         reqstr1 = query.from_user.id if query.from_user else 0
         reqstr = await bot.get_users(reqstr1)
         if NO_RESULTS_MSG:
             try:
-                await bot.send_message(
-                    chat_id=BIN_CHANNEL,
-                    text=script.NORSLTS.format(reqstr.id, reqstr.mention, movie)
-                )
+                await bot.send_message(chat_id=BIN_CHANNEL, text=script.NORSLTS.format(reqstr.id, reqstr.mention, movie))
             except Exception as e:
                 print(f"Error In Spol - {e}   Make Sure Bot Admin BIN CHANNEL")
-    
-    # Prepare auto-fill request button (always show to user)
-    auto_fill_text = f"/request {movie}"
-    if year:
-        auto_fill_text += f" {year}"
-    
-    btn = InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton(
-                "📝Sᴇɴᴅ Rᴇǫᴜᴇsᴛ Tᴏ Aᴅᴍɪɴ📝",
-            switch_inline_query_current_chat=auto_fill_text
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                "💬 Jᴏɪɴ Sᴜᴘᴘᴏʀᴛ Gʀᴏᴜᴘ 💬",
-                url=SUPPORT_CHAT
-            )
-        ]
-    ])
-    
-    # Edit message to show guide + buttons
-    k = await query.message.edit(script.MVE_NT_FND, reply_markup=btn)
-    
-    # Auto-delete after 2 minutes
-    await asyncio.sleep(120)
-    await k.delete()
+        btn = InlineKeyboardMarkup(
+            [[InlineKeyboardButton("🔰Cʟɪᴄᴋ ʜᴇʀᴇ & ʀᴇǫᴜᴇsᴛ ᴛᴏ ᴀᴅᴍɪɴ🔰", url=SUPPORT_CHAT)]])
+        k = await query.message.edit(script.MVE_NT_FND, reply_markup=btn)
+        await asyncio.sleep(10)
+        await k.delete()
 
 # Qualities
 @Client.on_callback_query(filters.regex(r"^qualities#"))
@@ -692,7 +657,7 @@ async def seasons_cb_handler(client: Client, query: CallbackQuery):
     try:
         if int(query.from_user.id) not in [query.message.reply_to_message.from_user.id, 0]:
             return await query.answer(
-                f"⚠️ ʜᴇʟʟᴏ {query.from_user.first_name},\nᴛʜɪꜱ ɪꜱ ɴᴏᴛ ʏᴏᴜʀ ᴍᴏᴠɪᴇ ʀᴇǫᴜᴇꜱᴛ,\nʀᴇǫᴜᴇꜱᴛ ʏᴏᴜʀ'ꜱ…",
+                f"⚠️ ʜᴇʟʟᴏ {query.from_user.first_name},\nᴛʜɪꜱ ɪꜱ ɴᴏᴛ ʏᴏᴜʀ ᴍᴏᴠɪᴇ ʀᴇǫᴜᴇꜱᴛ,\nʀᴇǫᴜᴇꜱᴛ ʏᴏᴜʀ'ꜱ…",
                 show_alert=True,
             )
     except Exception:
@@ -712,9 +677,9 @@ async def seasons_cb_handler(client: Client, query: CallbackQuery):
 
     btn.insert(
         0,
-        [InlineKeyboardButton("⇊ ꜱᴇʟᴇᴄᴛ ꜱᴇᴀꜱᴏɴ ⇊", callback_data="ident")],
+        [InlineKeyboardButton("⇊ ꜱᴇʟᴇᴄᴛ ꜱᴇᴀꜱᴏɴ ⇊", callback_data="ident")],
     )
-    btn.append([InlineKeyboardButton(text="↭ ʙᴀᴄᴋ ᴛᴏ ꜰɪʟᴇs ​↭",
+    btn.append([InlineKeyboardButton(text="↭ ʙᴀᴄᴋ ᴛᴏ ꜰɪʟᴇs ↭",
                callback_data=f"next_{req}_{key}_{offset}")])
     await query.edit_message_reply_markup(InlineKeyboardMarkup(btn))
     await query.answer()
@@ -1417,8 +1382,8 @@ async def cb_handler(client: Client, query: CallbackQuery):
             print(e)
             await query.answer(f"⚠️ SOMETHING WENT WRONG STREAM LINK  \n\n{e}", show_alert=True)
             return
-        
-        
+
+
     elif query.data == "prestream":
         await query.answer(text=script.PRE_STREAM_ALERT, show_alert=True)
         dreamcinezone = await client.send_photo(
@@ -1573,7 +1538,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
     elif query.data == "ref_point":
         await query.answer(f'You Have: {referdb.get_refer_points(query.from_user.id)} Refferal points.', show_alert=True)
-    
+
     elif query.data == "disclaimer":
             btn = [[
                     InlineKeyboardButton("⇋ ʙᴀᴄᴋ ⇋", callback_data="about")
@@ -1729,15 +1694,10 @@ async def cb_handler(client: Client, query: CallbackQuery):
     #______________________________________________________AUTO_FILTER____________________________________________________________
 
 
-
 async def auto_filter(client, msg, spoll=False):
     curr_time = datetime.now(pytz.timezone('Asia/Kolkata')).time()
     if not spoll:
         message = msg
-        # 🛑 STOP SEARCH IF IT'S A REQUEST (Fix for @botusername /request)
-        if message.text:
-            if "/request" in message.text.lower() or "#request" in message.text.lower():
-                return  # रिक्वेस्ट मैसेज है, सर्च बंद
         if message.text.startswith("/"):
             return
         if re.findall(r"((^\/|^,|^!|^\.|^[\U0001F600-\U000E007F]).*)", message.text):
@@ -1987,7 +1947,6 @@ async def auto_filter(client, msg, spoll=False):
             await asyncio.sleep(DELETE_TIME)
             await dxb.delete()
             await message.delete()
-
 #_______________________________________________________ai_spell_check________________________________________________________
 
 
