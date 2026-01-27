@@ -350,17 +350,19 @@ async def advantage_spoll_choker(bot, query):
     auto_fill_text = f"/request {movie}"
     if year:
         auto_fill_text += f" {year}"
+    # Encode text (important)
+        encoded_text = quote_plus(auto_fill_text)
     
     btn = InlineKeyboardMarkup([
         [
             InlineKeyboardButton(
-                "📝 Rᴇǫᴜᴇsᴛ Tᴏ Aᴅᴍɪɴ 📝",
-                switch_inline_query_current_chat=auto_fill_text
+                "📝Sᴇɴᴅ Rᴇǫᴜᴇsᴛ Tᴏ Aᴅᴍɪɴ📝",
+            url=f"{SUPPORT_CHAT}?text={encoded_text}"
             )
         ],
         [
             InlineKeyboardButton(
-                "💬Join Support Group💬",
+                "💬 Jᴏɪɴ Sᴜᴘᴘᴏʀᴛ Gʀᴏᴜᴘ 💬",
                 url=SUPPORT_CHAT
             )
         ]
