@@ -675,82 +675,172 @@ async def save_template(client, message):
     )
 
 
-# --- REQUEST HANDLER (Font Style Applied) ---
-@Client.on_message((filters.regex(r"(@\w+\s+)?/(request|Request)") | filters.regex(r"#(request|Request)")) & filters.group)
+# --- REQUEST HANDLER (Font Style Applied) # Must add REQST_CHANNEL and SUPPORT_CHAT_ID to use this feature
+
+@Client.on_message((filters.command(["request", "Request"]) | filters.regex("#request") | filters.regex("#Request")) & filters.group)
 async def requests(bot, message):
-    if REQST_CHANNEL is None: return
-    
-    bot_obj = await bot.get_me()
-    bot_username = bot_obj.username
+    if REQST_CHANNEL is None: 
+        return
+    reporter = str(message.from_user.id)
+    mention = message.from_user.mention
+    group_name = message.chat.title or "Unknown Group"
+    group_id = message.chat.id
+    success = False
+    reported_post = None
 
-    # Case 1: Reply to a message
     if message.reply_to_message:
-        chat_id = message.chat.id
-        reporter = str(message.from_user.id)
-        mention = message.from_user.mention
-        success = True
-        content = message.reply_to_message.text
+        content = message.reply_to_message.text or ""
+        # clean command keywords and bot username
+        for keyword in ["/request", "#request", "/Request", "#Request"]:
+            content = content.replace(keyword, "")
+        content = content.replace(f"@{bot.me.username}", "").strip()
+
         try:
-            btn = [[
-                InlineKeyboardButton('📝 Vɪᴇᴡ Rᴇǫᴜᴇsᴛ 📝', url=f"{message.reply_to_message.link}"),
-                InlineKeyboardButton('⚙️ Sʜᴏᴡ Oᴘᴛɪᴏɴs ⚙️', callback_data=f'show_option#{reporter}')
-            ]]
-            reported_post = await bot.send_message(chat_id=REQST_CHANNEL, text=f"<b>📝 Rᴇǫᴜᴇsᴛ : <u>{content}</u>\n\n📚 Rᴇᴘᴏʀᴛᴇᴅ Bʏ : {mention}\n📖 Rᴇᴘᴏʀᴛᴇʀ ID : {reporter}\n\n</b>", reply_markup=InlineKeyboardMarkup(btn))
-            success = True
+            if REQST_CHANNEL is not None and len(content) >= 3:
+                btn = [[
+                    InlineKeyboardButton('ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ', url=f"{message.reply_to_message.link}"),
+                    InlineKeyboardButton('ꜱʜᴏᴡ ᴏᴘᴛɪᴏɴꜱ', callback_data=f'show_option#{reporter}')
+                ]]
+                reported_post = await bot.send_message(chat_id=REQST_CHANNEL, text=f"<b>📝 ʀᴇǫᴜᴇꜱᴛ : <u>{content}</u>\n\n👥 ɢʀᴏᴜᴘ : {group_name}\n🆔 ɢʀᴏᴜᴘ ɪᴅ : {group_id}\n\n📚 ʀᴇᴘᴏʀᴛᴇᴅ ʙʏ : {mention}\n📖 ʀᴇᴘᴏʀᴛᴇʀ ɪᴅ : {reporter}\n\n</b>", reply_markup=InlineKeyboardMarkup(btn))
+                success = True
+            elif len(content) >= 3:
+                for admin in ADMINS:
+                    btn = [[
+                        InlineKeyboardButton('ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ', url=f"{message.reply_to_message.link}"),
+                        InlineKeyboardButton('ꜱʜᴏᴡ ᴏᴘᴛɪᴏɴꜱ', callback_data=f'show_option#{reporter}')
+                    ]]
+                    reported_post = await bot.send_message(chat_id=admin, text=f"<b>📝 ʀᴇǫᴜᴇꜱᴛ : <u>{content}</u>\n\n👥 ɢʀᴏᴜᴘ : {group_name}\n🆔 ɢʀᴏᴜᴘ ɪᴅ : {group_id}\n\n📚 ʀᴇᴘᴏʀᴛᴇᴅ ʙʏ : {mention}\n📖 ʀᴇᴘᴏʀᴛᴇʀ ɪᴅ : {reporter}\n\n</b>", reply_markup=InlineKeyboardMarkup(btn))
+                    success = True
+            else:
+                if len(content) < 3:
+                    await message.reply_text("<b>ʏᴏᴜ ᴍᴜꜱᴛ ᴛʏᴘᴇ ᴀʙᴏᴜᴛ ʏᴏᴜʀ ʀᴇǫᴜᴇꜱᴛ [ᴍɪɴɪᴍᴜᴍ 3 ᴄʜᴀʀᴀᴄᴛᴇʀꜱ]. ʀᴇǫᴜᴇꜱᴛꜱ ᴄᴀɴ'ᴛ ʙᴇ ᴇᴍᴘᴛʏ.</b>")
+                success = False
         except Exception as e:
-            await message.reply_text(f"Eʀʀᴏʀ: {e}")
-            success = False
-            
-    # Case 2: Direct text request
+            await message.reply_text(f"Error: {e}")
+            pass
+
     else:
-        reporter = str(message.from_user.id)
-        mention = message.from_user.mention
-        
-        # Cleaning @botusername and /request logic
-        content = message.text
-        content = re.sub(rf"(@{bot_username}\s+)?/(request|Request)(@{bot_username})?|#(request|Request)", "", content, flags=re.IGNORECASE).strip()
-
-        if len(content) < 3:
-            await message.reply_text("<b>❌ Yᴏᴜ Mᴜsᴛ Tʏᴘᴇ A Rᴇǫᴜᴇsᴛ (Mɪɴɪᴍᴜᴍ 3 Cʜᴀʀᴀᴄᴛᴇʀs).</b>")
-            return
+        content = message.text or ""
+        for keyword in ["/request", "#request", "/Request", "#Request"]:
+            content = content.replace(keyword, "")
+        content = content.replace(f"@{bot.me.username}", "").strip()
 
         try:
-            btn = [[
-                InlineKeyboardButton('📝 Vɪᴇᴡ Rᴇǫᴜᴇsᴛ 📝', url=f"{message.link}"),
-                InlineKeyboardButton('⚙️ Sʜᴏᴡ Oᴘᴛɪᴏɴs ⚙️', callback_data=f'show_option#{reporter}')
-            ]]
-            reported_post = await bot.send_message(chat_id=REQST_CHANNEL, text=f"<b>📝 Rᴇǫᴜᴇsᴛ : <u>{content}</u>\n\n📚 Rᴇᴘᴏʀᴛᴇᴅ Bʏ : {mention}\n📖 Rᴇᴘᴏʀᴛᴇʀ ID : {reporter}\n\n</b>", reply_markup=InlineKeyboardMarkup(btn))
-            success = True
+            if REQST_CHANNEL is not None and len(content) >= 3:
+                btn = [[
+                    InlineKeyboardButton('ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ', url=f"{message.link}"),
+                    InlineKeyboardButton('ꜱʜᴏᴡ ᴏᴘᴛɪᴏɴꜱ', callback_data=f'show_option#{reporter}')
+                ]]
+                reported_post = await bot.send_message(chat_id=REQST_CHANNEL, text=f"<b>📝 ʀᴇǫᴜᴇꜱᴛ : <u>{content}</u>\n\n👥 ɢʀᴏᴜᴘ : {group_name}\n🆔 ɢʀᴏᴜᴘ ɪᴅ : {group_id}\n\n📚 ʀᴇᴘᴏʀᴛᴇᴅ ʙʏ : {mention}\n📖 ʀᴇᴘᴏʀᴛᴇʀ ɪᴅ : {reporter}\n\n</b>", reply_markup=InlineKeyboardMarkup(btn))
+                success = True
+            elif len(content) >= 3:
+                for admin in ADMINS:
+                    btn = [[
+                        InlineKeyboardButton('ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ', url=f"{message.link}"),
+                        InlineKeyboardButton('ꜱʜᴏᴡ ᴏᴘᴛɪᴏɴꜱ', callback_data=f'show_option#{reporter}')
+                    ]]
+                    reported_post = await bot.send_message(chat_id=admin, text=f"<b>📝 ʀᴇǫᴜᴇꜱᴛ : <u>{content}</u>\n\n👥 ɢʀᴏᴜᴘ : {group_name}\n🆔 ɢʀᴏᴜᴘ ɪᴅ : {group_id}\n\n📚 ʀᴇᴘᴏʀᴛᴇᴅ ʙʏ : {mention}\n📖 ʀᴇᴘᴏʀᴛᴇʀ ɪᴅ : {reporter}\n\n</b>", reply_markup=InlineKeyboardMarkup(btn))
+                    success = True
+            else:
+                if len(content) < 3:
+                    await message.reply_text("<b>ʏᴏᴜ ᴍᴜꜱᴛ ᴛʏᴘᴇ ᴀʙᴏᴜᴛ ʏᴏᴜʀ ʀᴇǫᴜᴇꜱᴛ [ᴍɪɴɪᴍᴜᴍ 3 ᴄʜᴀʀᴀᴄᴛᴇʀꜱ]. ʀᴇǫᴜᴇꜱᴛꜱ ᴄᴀɴ'ᴛ ʙᴇ ᴇᴍᴘᴛʏ.</b>")
+                success = False
         except Exception as e:
-            await message.reply_text(f"Eʀʀᴏʀ: {e}")
-            success = False
+            await message.reply_text(f"Error: {e}")
+            pass
 
-    # Confirmation to User
     if success:
         try:
             link = await bot.create_chat_invite_link(int(REQST_CHANNEL))
             btn = [[
-                InlineKeyboardButton('📢 Jᴏɪɴ Cʜᴀɴɴᴇʟ 📢', url=link.invite_link),
-                InlineKeyboardButton('📝 Vɪᴇᴡ Rᴇǫᴜᴇsᴛ 📝', url=f"{reported_post.link}")
+                InlineKeyboardButton('ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ', url=link.invite_link),
+                InlineKeyboardButton('ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ', url=f"{reported_post.link}")
             ]]
-            sent_msg = await message.reply_text("<b>✅ Yᴏᴜʀ Rᴇǫᴜᴇsᴛ Hᴀs Bᴇᴇɴ Aᴅᴅᴇᴅ Sᴜᴄᴄᴇssғᴜʟʟʏ!\n\nJᴏɪɴ Tʜᴇ Cʜᴀɴɴᴇʟ Fɪʀsᴛ & Vɪᴇᴡ Yᴏᴜʀ Rᴇǫᴜᴇsᴛ.</b>", reply_markup=InlineKeyboardMarkup(btn))
-            await asyncio.sleep(60)
-            await sent_msg.delete()
-        except: pass
+        except:
+            btn = [[InlineKeyboardButton('ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ', url=f"{reported_post.link}")]]
+        await message.reply_text("<b>ʏᴏᴜʀ ʀᴇǫᴜᴇꜱᴛ ʜᴀꜱ ʙᴇᴇɴ ᴀᴅᴅᴇᴅ! ᴘʟᴇᴀꜱᴇ ᴡᴀɪᴛ ꜰᴏʀ ꜱᴏᴍᴇ ᴛɪᴍᴇ.\n\nᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ ꜰɪʀꜱᴛ & ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ.</b>", reply_markup=InlineKeyboardMarkup(btn))
 
-# --- ADMIN SEND COMMAND ---
+
 @Client.on_message(filters.command("send") & filters.user(ADMINS))
 async def send_msg(bot, message):
     if message.reply_to_message:
+        target_id = message.text.split(" ", 1)[1]
+        out = "Users Saved In DB Are:\n\n"
+        success = False
         try:
-            target_id = message.text.split(" ", 1)[1]
             user = await bot.get_users(target_id)
-            await message.reply_to_message.copy(int(user.id))
-            await message.reply_text(f"<b>✅ Yᴏᴜ Rᴇᴘʟɪᴇᴅ Sᴜᴄᴄᴇssғᴜʟʟʏ Tᴏ {user.mention}.</b>")
+            users = await db.get_all_users()
+            async for usr in users:
+                out += f"{usr['id']}"
+                out += '\n'
+            if str(user.id) in str(out):
+                await message.reply_to_message.copy(int(user.id))
+                success = True
+            else:
+                success = False
+            if success:
+                await message.reply_text(f"<b>ʏᴏᴜʀ ᴍᴇꜱꜱᴀɢᴇ ʜᴀꜱ ʙᴇᴇɴ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ꜱᴇɴᴛ ᴛᴏ {user.mention}.</b>")
+            else:
+                await message.reply_text("<b>ᴛʜɪꜱ ᴜꜱᴇʀ ᴅɪᴅɴ'ᴛ ꜱᴛᴀʀᴛᴇᴅ ᴛʜɪꜱ ʙᴏᴛ ʏᴇᴛ !</b>")
         except Exception as e:
-            await message.reply_text(f"<b>Eʀʀᴏʀ: {e}</b>")
+            await message.reply_text(f"<b>Error: {e}</b>")
     else:
-        await message.reply_text("<b>⚠️ Usᴇ Tʜɪs Cᴏᴍᴍᴀɴᴅ As A Rᴇᴘʟʏ Wɪᴛʜ Tᴀʀɢᴇᴛ ID.</b>")
+        await message.reply_text("<b>ᴜꜱᴇ ᴛʜɪꜱ ᴄᴏᴍᴍᴀɴᴅ ᴀꜱ ᴀ ʀᴇᴘʟʏ ᴛᴏ ᴀɴʏ ᴍᴇꜱꜱᴀɢᴇ ᴜꜱɪɴɢ ᴛʜᴇ ᴛᴀʀɢᴇᴛ ᴄʜᴀᴛ ɪᴅ. ꜰᴏʀ ᴇɢ:  /send ᴜꜱᴇʀɪᴅ</b>")
+
+
+@Client.on_message(filters.command("send") & filters.user(ADMINS))
+async def send_msg(bot, message):
+    if message.reply_to_message:
+        target_id = message.text.split(" ", 1)[1]
+        out = "Users Saved In DB Are:\n\n"
+        success = False
+        try:
+            user = await bot.get_users(target_id)
+            users = await db.get_all_users()
+            async for usr in users:
+                out += f"{usr['id']}"
+                out += '\n'
+            if str(user.id) in str(out):
+                await message.reply_to_message.copy(int(user.id))
+                success = True
+            else:
+                success = False
+            if success:
+                await message.reply_text(f"<b>ʏᴏᴜʀ ᴍᴇꜱꜱᴀɢᴇ ʜᴀꜱ ʙᴇᴇɴ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ꜱᴇɴᴛ ᴛᴏ {user.mention}.</b>")
+            else:
+                await message.reply_text("<b>ᴛʜɪꜱ ᴜꜱᴇʀ ᴅɪᴅɴ'ᴛ ꜱᴛᴀʀᴛᴇᴅ ᴛʜɪꜱ ʙᴏᴛ ʏᴇᴛ !</b>")
+        except Exception as e:
+            await message.reply_text(f"<b>Error: {e}</b>")
+    else:
+        await message.reply_text("<b>ᴜꜱᴇ ᴛʜɪꜱ ᴄᴏᴍᴍᴀɴᴅ ᴀꜱ ᴀ ʀᴇᴘʟʏ ᴛᴏ ᴀɴʏ ᴍᴇꜱꜱᴀɢᴇ ᴜꜱɪɴɢ ᴛʜᴇ ᴛᴀʀɢᴇᴛ ᴄʜᴀᴛ ɪᴅ. ꜰᴏʀ ᴇɢ:  /send ᴜꜱᴇʀɪᴅ</b>")  
+  
+
+
+@Client.on_message(filters.command("send") & filters.user(ADMINS))  
+async def send_msg(bot, message):  
+    if message.reply_to_message:  
+        target_id = message.text.split(" ", 1)[1]  
+        out = "Users Saved In DB Are:\n\n"  
+        success = False  
+        try:  
+            user = await bot.get_users(target_id)  
+            users = await db.get_all_users()  
+            async for usr in users:  
+                out += f"{usr['id']}"  
+                out += '\n'  
+            if str(user.id) in str(out):  
+                await message.reply_to_message.copy(int(user.id))  
+                success = True  
+            else:  
+                success = False  
+            if success:  
+                await message.reply_text(f"<b>ʏᴏᴜʀ ᴍᴇꜱꜱᴀɢᴇ ʜᴀꜱ ʙᴇᴇɴ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ꜱᴇɴᴛ ᴛᴏ {user.mention}.</b>")  
+            else:  
+                await message.reply_text("<b>ᴛʜɪꜱ ᴜꜱᴇʀ ᴅɪᴅɴ'ᴛ ꜱᴛᴀʀᴛᴇᴅ ᴛʜɪꜱ ʙᴏᴛ ʏᴇᴛ !</b>")  
+        except Exception as e:  
+            await message.reply_text(f"<b>Error: {e}</b>")  
+    else:  
+        await message.reply_text("<b>ᴜꜱᴇ ᴛʜɪꜱ ᴄᴏᴍᴍᴀɴᴅ ᴀꜱ ᴀ ʀᴇᴘʟʏ ᴛᴏ ᴀɴʏ ᴍᴇꜱꜱᴀɢᴇ ᴜꜱɪɴɢ ᴛʜᴇ ᴛᴀʀɢᴇᴛ ᴄʜᴀᴛ ɪᴅ. ꜰᴏʀ ᴇɢ:  /send ᴜꜱᴇʀɪᴅ</b>")
 
 
 
