@@ -354,8 +354,8 @@ async def advantage_spoll_choker(bot, query):
     btn = InlineKeyboardMarkup([
         [
             InlineKeyboardButton(
-                "📝Cʟɪᴄᴋ ʜᴇʀᴇ & ʀᴇǫᴜᴇsᴛ ᴛᴏ ᴀᴅᴍɪɴ📝",
-                switch_inline_query=auto_fill_text
+                "📝 Rᴇǫᴜᴇsᴛ Tᴏ Aᴅᴍɪɴ 📝",
+                switch_inline_query_current_chat=auto_fill_text
             )
         ],
         [
