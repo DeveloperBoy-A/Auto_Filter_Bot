@@ -675,121 +675,104 @@ async def save_template(client, message):
     )
 
 
-# Must add REQST_CHANNEL to use this feature
-
+# Must add REQST_CHANNEL and SUPPORT_CHAT_ID to use this feature
 @Client.on_message(
-    (filters.command(["request", "Request"]) |
-     filters.regex("#request") |
-     filters.regex("#Request"))
-    & filters.group
+    (filters.command(["request", "Request"]) | filters.regex("#request") | filters.regex("#Request")) & filters.group
 )
 async def requests(bot, message):
+    try:
+        # ------------------------------
+        # Group name and user info
+        # ------------------------------
+        group_name = message.chat.title or "this group"
+        reporter = str(message.from_user.id)
+        mention = message.from_user.mention
+        success = True
+        AUTO_DELETE_TIME = 60  # seconds
 
-    if REQST_CHANNEL is None:
-        return
+        # ------------------------------
+        # Determine content
+        # ------------------------------
+        content = None
+        link = getattr(message, "link", None)
 
-    reporter = str(message.from_user.id)
-    mention = message.from_user.mention
-    success = False
+        # Handle reply-to message
+        if message.reply_to_message:
+            content = message.reply_to_message.text
 
-    # -------------------------
-    # 1️⃣ REQUEST AS REPLY
-    # -------------------------
-    if message.reply_to_message:
-        content = message.reply_to_message.text or ""
+        # Handle normal message with bot mention and command
+        if not content:
+            text = message.text or ""
+            # Remove bot mention if exists
+            if f"@{BOT_USERNAME}" in text:
+                text = text.replace(f"@{BOT_USERNAME}", "").strip()
+            # Remove command keywords
+            for keyword in ["/request", "/Request", "#request", "#Request"]:
+                text = text.replace(keyword, "").strip()
+            content = text
 
-        if len(content) < 3:
-            await message.reply_text(
-                "<b>ʏᴏᴜ ᴍᴜꜱᴛ ᴛʏᴘᴇ ᴀ ᴠᴀʟɪᴅ ʀᴇǫᴜᴇꜱᴛ (ᴍɪɴ 3 ᴄʜᴀʀᴀᴄᴛᴇʀꜱ).</b>"
+        # ------------------------------
+        # Check minimum length
+        # ------------------------------
+        if not content or len(content.strip()) < 3:
+            msg = await message.reply_text(
+                "⚠️ <b>ʏᴏᴜ ᴍᴜꜱᴛ ᴛʏᴘᴇ ᴀʙᴏᴜᴛ ʏᴏᴜʀ ʀᴇǫᴜᴇꜱᴛ [ᴍɪɴɪᴍᴜᴍ 3 ᴄʜᴀʀᴀᴄᴛᴇʀꜱ]. ʀᴇǫᴜᴇꜱᴛꜱ ᴄᴀɴ'ᴛ ʙᴇ ᴇᴍᴘᴛʏ.</b>"
             )
+            await asyncio.sleep(AUTO_DELETE_TIME)
+            await msg.delete()
             return
 
+        # ------------------------------
+        # Prepare inline buttons
+        # ------------------------------
         btn = [[
-            InlineKeyboardButton(
-                'ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ',
-                url=message.reply_to_message.link
-            ),
-            InlineKeyboardButton(
-                'ꜱʜᴏᴡ ᴏᴘᴛɪᴏɴꜱ',
-                callback_data=f'show_option#{reporter}'
-            )
+            InlineKeyboardButton('📝 ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ', url=link or "https://t.me/"),
+            InlineKeyboardButton('⚙️ ꜱʜᴏᴡ ᴏᴘᴛɪᴏɴꜱ', callback_data=f"show_option#{reporter}")
         ]]
 
-        reported_post = await bot.send_message(
-            chat_id=REQST_CHANNEL,
-            text=(
-                f"<b>📝 ʀᴇǫᴜᴇꜱᴛ : <u>{content}</u>\n\n"
-                f"📚 ʀᴇᴘᴏʀᴛᴇᴅ ʙʏ : {mention}\n"
-                f"📖 ʀᴇᴘᴏʀᴛᴇʀ ɪᴅ : {reporter}</b>"
-            ),
-            reply_markup=InlineKeyboardMarkup(btn)
-        )
+        # ------------------------------
+        # Send to REQST_CHANNEL or fallback to ADMINS
+        # ------------------------------
+        targets = []
+        if REQST_CHANNEL is not None:
+            targets.append(REQST_CHANNEL)
+        elif len(content.strip()) >= 3:
+            targets.extend(ADMINS)
 
-        success = True
-
-    # -------------------------
-    # 2️⃣ NORMAL /request TEXT
-    # -------------------------
-    else:
-        content = message.text or ""
-        keywords = ["#request", "/request", "#Request", "/Request"]
-
-        for k in keywords:
-            content = content.replace(k, "")
-
-        content = content.strip()
-
-        if len(content) < 3:
-            await message.reply_text(
-                "<b>ʏᴏᴜ ᴍᴜꜱᴛ ᴛʏᴘᴇ ᴀ ᴠᴀʟɪᴅ ʀᴇǫᴜᴇꜱᴛ (ᴍɪɴ 3 ᴄʜᴀʀᴀᴄᴛᴇʀꜱ).</b>"
+        reported_post = None
+        for target in targets:
+            reported_post = await bot.send_message(
+                chat_id=target,
+                text=(
+                    f"📝 <b>ʀᴇǫᴜᴇꜱᴛ : <u>{content}</u></b>\n\n"
+                    f"📚 <b>ʀᴇᴘᴏʀᴛᴇᴅ ʙʏ :</b> {mention}\n"
+                    f"👥 <b>ɢʀᴏᴜᴘ :</b> {group_name}\n"  # emoji changed
+                    f"📖 <b>ʀᴇᴘᴏʀᴛᴇʀ ɪᴅ :</b> {reporter}"
+                ),
+                reply_markup=InlineKeyboardMarkup(btn)
             )
-            return
 
-        btn = [[
-            InlineKeyboardButton(
-                'ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ',
-                url=message.link
-            ),
-            InlineKeyboardButton(
-                'ꜱʜᴏᴡ ᴏᴘᴛɪᴏɴꜱ',
-                callback_data=f'show_option#{reporter}'
+        # ------------------------------
+        # Reply to user with final buttons
+        # ------------------------------
+        if REQST_CHANNEL and reported_post:
+            link_invite = await bot.create_chat_invite_link(int(REQST_CHANNEL))
+            btn_final = [[
+                InlineKeyboardButton('✅ ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ', url=link_invite.invite_link),
+                InlineKeyboardButton('📝 ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ', url=reported_post.link)
+            ]]
+            msg_user = await message.reply_text(
+                "✅ <b>ʏᴏᴜʀ ʀᴇǫᴜᴇꜱᴛ ʜᴀꜱ ʙᴇᴇɴ ᴀᴅᴅᴇᴅ! ᴘʟᴇᴀꜱᴇ ᴡᴀɪᴛ ꜰᴏʀ ꜱᴏᴍᴇ ᴛɪᴍᴇ.\n\n"
+                "ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ ꜰɪʀꜱᴛ & ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ.</b>",
+                reply_markup=InlineKeyboardMarkup(btn_final)
             )
-        ]]
+            # Auto delete user reply after AUTO_DELETE_TIME
+            await asyncio.sleep(AUTO_DELETE_TIME)
+            await msg_user.delete()
 
-        reported_post = await bot.send_message(
-            chat_id=REQST_CHANNEL,
-            text=(
-                f"<b>📝 ʀᴇǫᴜᴇꜱᴛ : <u>{content}</u>\n\n"
-                f"📚 ʀᴇᴘᴏʀᴛᴇᴅ ʙʏ : {mention}\n"
-                f"📖 ʀᴇᴘᴏʀᴛᴇʀ ɪᴅ : {reporter}</b>"
-            ),
-            reply_markup=InlineKeyboardMarkup(btn)
-        )
-
-        success = True
-
-    # -------------------------
-    # 3️⃣ CONFIRMATION MESSAGE
-    # -------------------------
-    if success:
-        link = await bot.create_chat_invite_link(int(REQST_CHANNEL))
-
-        btn = [[
-            InlineKeyboardButton(
-                'ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ',
-                url=link.invite_link
-            ),
-            InlineKeyboardButton(
-                'ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ',
-                url=reported_post.link
-            )
-        ]]
-
-        await message.reply_text(
-            "<b>ʏᴏᴜʀ ʀᴇǫᴜᴇꜱᴛ ʜᴀꜱ ʙᴇᴇɴ ᴀᴅᴅᴇᴅ!\n\n"
-            "ᴘʟᴇᴀꜱᴇ ᴡᴀɪᴛ ꜰᴏʀ ꜱᴏᴍᴇ ᴛɪᴍᴇ.</b>",
-            reply_markup=InlineKeyboardMarkup(btn)
-        )
+    except Exception as e:
+        await message.reply_text(f"❌ <b>Error:</b> {e}")
+        logging.error(f"Request command error: {e}")
 
 
 
