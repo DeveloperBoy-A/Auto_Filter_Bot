@@ -1734,6 +1734,10 @@ async def auto_filter(client, msg, spoll=False):
     curr_time = datetime.now(pytz.timezone('Asia/Kolkata')).time()
     if not spoll:
         message = msg
+        # 🛑 STOP SEARCH IF IT'S A REQUEST (Fix for @botusername /request)
+        if message.text:
+            if "/request" in message.text.lower() or "#request" in message.text.lower():
+                return  # रिक्वेस्ट मैसेज है, सर्च बंद
         if message.text.startswith("/"):
             return
         if re.findall(r"((^\/|^,|^!|^\.|^[\U0001F600-\U000E007F]).*)", message.text):
