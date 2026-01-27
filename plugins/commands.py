@@ -677,81 +677,86 @@ async def save_template(client, message):
 
 
 
-@Client.on_message((filters.command(["request", "Request"]) | filters.regex(r"(?i)#request")) & filters.group)
+# Must add REQST_CHANNEL to use this feature
+@Client.on_message((filters.command(["request", "Request"]) | filters.regex("#request") | filters.regex("#Request")) & filters.group)
 async def requests(bot, message):
-    if REQST_CHANNEL is None: 
-        return
-    
-    chat_id = message.chat.id
-    reporter = str(message.from_user.id)
-    mention = message.from_user.mention
-    group_name = message.chat.title
-    group_username = f"@{message.chat.username}" if message.chat.username else "Private Group"
-    success = False
-    reported_post = None
-
-    # 1. Content Extraction
+    if REQST_CHANNEL is None: return 
     if message.reply_to_message:
-        content = message.reply_to_message.text or message.reply_to_message.caption or ""
-        msg_link = message.reply_to_message.link
-    else:
-        content = message.text
-        content = re.sub(r"^(?i)(/request|#request)(?:@\w+)?", "", content).strip()
-        msg_link = message.link
-
-    # 2. Validation
-    if len(content) < 3:
-        err_msg = await message.reply_text("<b>ʏᴏᴜ ᴍᴜꜱᴛ ᴛʏᴘᴇ ᴀʙᴏᴜᴛ ʏᴏᴜʀ ʀᴇǫᴜᴇꜱᴛ [ᴍɪɴɪᴍᴜᴍ 3 ᴄʜᴀʀᴀᴄᴛᴇʀꜱ].</b>")
-        await asyncio.sleep(10) # Error message 10 second mein delete hoga
-        await err_msg.delete()
-        return
-
-    # 3. Processing
-    try:
-        btn = [[
-            InlineKeyboardButton('ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ', url=f"{msg_link}"),
-            InlineKeyboardButton('ꜱʜᴏᴡ ᴏᴘᴛɪᴏɴꜱ', callback_data=f'show_option#{reporter}')
-        ]]
-        
-        request_text = (
-            f"<b>📝 ʀᴇǫᴜᴇꜱᴛ : <u>{content}</u></b>\n\n"
-            f"<b>📚 ʀᴇᴘᴏʀᴛᴇᴅ ʙʏ :</b> {mention}\n"
-            f"<b>📖 ʀᴇᴘᴏʀᴛᴇʀ ɪᴅ :</b> <code>{reporter}</code>\n"
-            f"<b>👥 ꜰʀᴏᴍ ɢʀᴏᴜᴘ :</b> {group_name}"
-        )
-
-        reported_post = await bot.send_message(chat_id=REQST_CHANNEL, text=request_text, reply_markup=InlineKeyboardMarkup(btn))
+        chat_id = message.chat.id
+        reporter = str(message.from_user.id)
+        mention = message.from_user.mention
         success = True
-
-    except Exception as e:
-        await message.reply_text(f"Error: {e}")
-        success = False
-
-    # 4. Final Response & Auto-Delete
-    if success and reported_post:
+        content = message.reply_to_message.text
         try:
-            link = await bot.create_chat_invite_link(int(REQST_CHANNEL))
-            invite_link = link.invite_link
-        except:
-            invite_link = "https://t.me/your_channel_username"
-
-        user_btn = [[
-            InlineKeyboardButton('ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ', url=invite_link),
-            InlineKeyboardButton('ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ', url=f"{reported_post.link}")
-        ]]
+            if REQST_CHANNEL is not None:
+                btn = [[
+                        InlineKeyboardButton('ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ', url=f"{message.reply_to_message.link}"),
+                        InlineKeyboardButton('ꜱʜᴏᴡ ᴏᴘᴛɪᴏɴꜱ', callback_data=f'show_option#{reporter}')
+                      ]]
+                reported_post = await bot.send_message(chat_id=REQST_CHANNEL, text=f"<b>📝 ʀᴇǫᴜᴇꜱᴛ : <u>{content}</u>\n\n📚 ʀᴇᴘᴏʀᴛᴇᴅ ʙʏ : {mention}\n📖 ʀᴇᴘᴏʀᴛᴇʀ ɪᴅ : {reporter}\n👥 ꜰʀᴏᴍ ɢʀᴏᴜᴘ : {message.chat.title}\n\n</b>", reply_markup=InlineKeyboardMarkup(btn))
+                success = True
+            elif len(content) >= 3:
+                for admin in ADMINS:
+                    btn = [[
+                            InlineKeyboardButton('ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ', url=f"{message.reply_to_message.link}"),
+                            InlineKeyboardButton('ꜱʜᴏᴡ ᴏᴘᴛɪᴏɴꜱ', callback_data=f'show_option#{reporter}')
+                          ]]
+                    reported_post = await bot.send_message(chat_id=admin, text=f"<b>📝 ʀᴇǫᴜᴇꜱᴛ : <u>{content}</u>\n\n📚 ʀᴇᴘᴏʀᴛᴇᴅ ʙʏ : {mention}\n📖 ʀᴇᴘᴏʀᴛᴇʀ ɪᴅ : {reporter}\n👥 ꜰʀᴏᴍ ɢʀᴏᴜᴘ : {message.chat.title}\n\n</b>", reply_markup=InlineKeyboardMarkup(btn))
+                    success = True
+            else:
+                if len(content) < 3:
+                    await message.reply_text("<b>ʏᴏᴜ ᴍᴜꜱᴛ ᴛʏᴘᴇ ᴀʙᴏᴜᴛ ʏᴏᴜʀ ʀᴇǫᴜᴇꜱᴛ [ᴍɪɴɪᴍᴜᴍ 3 ᴄʜᴀʀᴀᴄᴛᴇʀꜱ]. ʀᴇǫᴜᴇꜱᴛꜱ ᴄᴀɴ'ᴛ ʙᴇ ᴇᴍᴘᴛʏ.</b>")
+            if len(content) < 3:
+                success = False
+        except Exception as e:
+            await message.reply_text(f"Error: {e}")
+            pass
+    else:
+        chat_id = message.chat.id
+        reporter = str(message.from_user.id)
+        mention = message.from_user.mention
+        success = True
+        content = message.text
+        keywords = ["#request", "/request", "#Request", "/Request"]
+        for keyword in keywords:
+            content = content.replace(keyword, "")
         
-        reply_msg = await message.reply_text(
-            "<b>ʏᴏᴜʀ ʀᴇǫᴜᴇꜱᴛ ʜᴀꜱ ʙᴇᴇɴ ᴀᴅᴅᴇᴅ! ᴘʟᴇᴀꜱᴇ ᴡᴀɪᴛ ꜰᴏʀ ꜱᴏᴍᴇ ᴛɪᴍᴇ.\n\nᴛʜɪꜱ ᴍᴇssᴀɢᴇ ᴡɪʟʟ ʙᴇ ᴅᴇʟᴇᴛᴇᴅ ɪɴ 5 ᴍɪɴᴜᴛᴇs.</b>", 
-            reply_markup=InlineKeyboardMarkup(user_btn)
-        )
+        # Bot username remove karne ke liye
+        if "@" in content:
+            import re
+            content = re.sub(r"@\w+", "", content).strip()
 
-        # --- Auto Delete Logic ---
-        await asyncio.sleep(300) # 300 seconds = 5 minutes
         try:
-            await message.delete()     # User ka command delete karega
-            await reply_msg.delete()   # Bot ka reply delete karega
-        except:
-            pass # Agar message pehle hi delete ho chuka ho
+            if REQST_CHANNEL is not None and len(content) >= 3:
+                btn = [[
+                        InlineKeyboardButton('ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ', url=f"{message.link}"),
+                        InlineKeyboardButton('ꜱʜᴏᴡ ᴏᴘᴛɪᴏɴꜱ', callback_data=f'show_option#{reporter}')
+                      ]]
+                reported_post = await bot.send_message(chat_id=REQST_CHANNEL, text=f"<b>📝 ʀᴇǫᴜᴇꜱᴛ : <u>{content}</u>\n\n📚 ʀᴇᴘᴏʀᴛᴇᴅ ʙʏ : {mention}\n📖 ʀᴇᴘᴏʀᴛᴇʀ ɪᴅ : {reporter}\n👥 ꜰʀᴏᴍ ɢʀᴏᴜᴘ : {message.chat.title}\n\n</b>", reply_markup=InlineKeyboardMarkup(btn))
+                success = True
+            elif len(content) >= 3:
+                for admin in ADMINS:
+                    btn = [[
+                            InlineKeyboardButton('ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ', url=f"{message.link}"),
+                            InlineKeyboardButton('ꜱʜᴏᴡ ᴏᴘᴛɪᴏɴꜱ', callback_data=f'show_option#{reporter}')
+                          ]]
+                    reported_post = await bot.send_message(chat_id=admin, text=f"<b>📝 ʀᴇǫᴜᴇꜱᴛ : <u>{content}</u>\n\n📚 ʀᴇᴘᴏʀᴛᴇᴅ ʙʏ : {mention}\n📖 ʀᴇᴘᴏʀᴛᴇʀ ɪᴅ : {reporter}\n👥 ꜰʀᴏᴍ ɢʀᴏᴜᴘ : {message.chat.title}\n\n</b>", reply_markup=InlineKeyboardMarkup(btn))
+                    success = True
+            else:
+                if len(content) < 3:
+                    await message.reply_text("<b>ʏᴏᴜ ᴍᴜꜱᴛ ᴛʏᴘᴇ ᴀʙᴏᴜᴛ ʏᴏᴜʀ ʀᴇǫᴜᴇꜱᴛ [ᴍɪɴɪᴍᴜᴍ 3 ᴄʜᴀʀᴀᴄᴛᴇʀꜱ]. ʀᴇǫᴜᴇꜱᴛꜱ ᴄᴀɴ'ᴛ ʙᴇ ᴇᴍᴘᴛʏ.</b>")
+            if len(content) < 3:
+                success = False
+        except Exception as e:
+            await message.reply_text(f"Error: {e}")
+            pass
+    if success:
+        link = await bot.create_chat_invite_link(int(REQST_CHANNEL))
+        btn = [[
+                InlineKeyboardButton('ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ', url=link.invite_link),
+                InlineKeyboardButton('ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ', url=f"{reported_post.link}")
+              ]]
+        await message.reply_text("<b>ʏᴏᴜʀ ʀᴇǫᴜᴇꜱᴛ ʜᴀꜱ ʙᴇᴇɴ ᴀᴅᴅᴇᴅ! ᴘʟᴇᴀꜱᴇ ᴡᴀɪᴛ ꜰᴏʀ ꜱᴏᴍᴇ ᴛɪᴍᴇ.\n\nᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ ꜰɪʀꜱᴛ & ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ.</b>", reply_markup=InlineKeyboardMarkup(btn))
 
 
 @Client.on_message(filters.command("send") & filters.user(ADMINS))
