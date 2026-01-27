@@ -674,124 +674,121 @@ async def save_template(client, message):
         f"✅ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ᴜᴘᴅᴀᴛᴇᴅ ᴛᴇᴍᴘʟᴀᴛᴇ ꜰᴏʀ <code>{title}</code> ᴛᴏ:\n\n{template}"
     )
 
-
-# Must add REQST_CHANNEL, ADMINS in info.py
-
-import re
-import asyncio
-from pyrogram import Client, filters
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-
-
-def clean_request_text(text: str) -> str:
-    if not text:
-        return ""
-
-    text = re.sub(r'@\w+', '', text)
-
-    for k in ["/request", "/Request", "#request", "#Request"]:
-        text = text.replace(k, "")
-
-    text = re.sub(r'[^\w\s\-.,()]', '', text)
-    text = re.sub(r'\s+', ' ', text)
-
-    return text.strip()
-
+# Must add REQST_CHANNEL to use this feature
 
 @Client.on_message(
-    (filters.command(["request", "Request"], prefixes=["/", "@"]) |
-     filters.regex(r"#request|#Request")) &
-    filters.group
+    (filters.command(["request", "Request"]) |
+     filters.regex("#request") |
+     filters.regex("#Request"))
+    & filters.group
 )
 async def requests(bot, message):
 
-    success = False
+    if REQST_CHANNEL is None:
+        return
+
     reporter = str(message.from_user.id)
     mention = message.from_user.mention
-    group_name = message.chat.title or "Unknown Group"
+    success = False
 
-    # 🔹 REPLY vs NORMAL
+    # -------------------------
+    # 1️⃣ REQUEST AS REPLY
+    # -------------------------
     if message.reply_to_message:
-        raw_text = message.reply_to_message.text
-        link = message.reply_to_message.link
-    else:
-        raw_text = message.text
-        link = message.link
+        content = message.reply_to_message.text or ""
 
-    content = clean_request_text(raw_text)
-
-    if len(content) < 3:
-        await message.reply_text(
-            "<b>❌ You must type a valid request (min 3 characters).</b>"
-        )
-        return
-
-    btn = [[
-        InlineKeyboardButton("👀 View Request", url=link),
-        InlineKeyboardButton("⚙️ Show Options", callback_data=f"show_option#{reporter}")
-    ]]
-
-    try:
-        # 🔹 PRIMARY: REQUEST CHANNEL
-        if REQST_CHANNEL:
-            reported_post = await bot.send_message(
-                chat_id=REQST_CHANNEL,
-                text=(
-                    f"<b>📝 REQUEST</b>\n\n"
-                    f"<b>🎬 Title :</b> <u>{content}</u>\n\n"
-                    f"<b>👥 Group :</b> {group_name}\n"
-                    f"<b>🙋 Requested By :</b> {mention}\n"
-                    f"<b>🆔 User ID :</b> {reporter}"
-                ),
-                reply_markup=InlineKeyboardMarkup(btn)
+        if len(content) < 3:
+            await message.reply_text(
+                "<b>ʏᴏᴜ ᴍᴜꜱᴛ ᴛʏᴘᴇ ᴀ ᴠᴀʟɪᴅ ʀᴇǫᴜᴇꜱᴛ (ᴍɪɴ 3 ᴄʜᴀʀᴀᴄᴛᴇʀꜱ).</b>"
             )
-            success = True
+            return
 
-        # 🔹 FALLBACK: ADMINS
-        else:
-            for admin in ADMINS:
-                reported_post = await bot.send_message(
-                    chat_id=admin,
-                    text=(
-                        f"<b>📝 REQUEST</b>\n\n"
-                        f"<b>🎬 Title :</b> <u>{content}</u>\n\n"
-                        f"<b>👥 Group :</b> {group_name}\n"
-                        f"<b>🙋 Requested By :</b> {mention}\n"
-                        f"<b>🆔 User ID :</b> {reporter}"
-                    ),
-                    reply_markup=InlineKeyboardMarkup(btn)
-                )
-            success = True
-
-    except Exception as e:
-        await message.reply_text(f"<b>Error:</b> <code>{e}</code>")
-        return
-
-    # 🔹 SUCCESS CONFIRMATION
-    if success:
-        if REQST_CHANNEL:
-            link2 = await bot.create_chat_invite_link(int(REQST_CHANNEL))
-            join_btn = InlineKeyboardButton("📢 Join Channel", url=link2.invite_link)
-        else:
-            join_btn = InlineKeyboardButton("👑 Contact Admin", url="https://t.me/")
-
-        btn2 = [[
-            join_btn,
-            InlineKeyboardButton("👀 View Request", url=reported_post.link)
+        btn = [[
+            InlineKeyboardButton(
+                'ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ',
+                url=message.reply_to_message.link
+            ),
+            InlineKeyboardButton(
+                'ꜱʜᴏᴡ ᴏᴘᴛɪᴏɴꜱ',
+                callback_data=f'show_option#{reporter}'
+            )
         ]]
 
-        reply = await message.reply_text(
-            "<b>✅ Your request has been submitted successfully!\n\n"
-            "⏳ Please wait for admin response.</b>",
-            reply_markup=InlineKeyboardMarkup(btn2)
+        reported_post = await bot.send_message(
+            chat_id=REQST_CHANNEL,
+            text=(
+                f"<b>📝 ʀᴇǫᴜᴇꜱᴛ : <u>{content}</u>\n\n"
+                f"📚 ʀᴇᴘᴏʀᴛᴇᴅ ʙʏ : {mention}\n"
+                f"📖 ʀᴇᴘᴏʀᴛᴇʀ ɪᴅ : {reporter}</b>"
+            ),
+            reply_markup=InlineKeyboardMarkup(btn)
         )
 
-        # 🔹 AUTO DELETE
-        await asyncio.sleep(60)
-        try:
-            await reply.delete()
-        except:
-            pass
+        success = True
+
+    # -------------------------
+    # 2️⃣ NORMAL /request TEXT
+    # -------------------------
+    else:
+        content = message.text or ""
+        keywords = ["#request", "/request", "#Request", "/Request"]
+
+        for k in keywords:
+            content = content.replace(k, "")
+
+        content = content.strip()
+
+        if len(content) < 3:
+            await message.reply_text(
+                "<b>ʏᴏᴜ ᴍᴜꜱᴛ ᴛʏᴘᴇ ᴀ ᴠᴀʟɪᴅ ʀᴇǫᴜᴇꜱᴛ (ᴍɪɴ 3 ᴄʜᴀʀᴀᴄᴛᴇʀꜱ).</b>"
+            )
+            return
+
+        btn = [[
+            InlineKeyboardButton(
+                'ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ',
+                url=message.link
+            ),
+            InlineKeyboardButton(
+                'ꜱʜᴏᴡ ᴏᴘᴛɪᴏɴꜱ',
+                callback_data=f'show_option#{reporter}'
+            )
+        ]]
+
+        reported_post = await bot.send_message(
+            chat_id=REQST_CHANNEL,
+            text=(
+                f"<b>📝 ʀᴇǫᴜᴇꜱᴛ : <u>{content}</u>\n\n"
+                f"📚 ʀᴇᴘᴏʀᴛᴇᴅ ʙʏ : {mention}\n"
+                f"📖 ʀᴇᴘᴏʀᴛᴇʀ ɪᴅ : {reporter}</b>"
+            ),
+            reply_markup=InlineKeyboardMarkup(btn)
+        )
+
+        success = True
+
+    # -------------------------
+    # 3️⃣ CONFIRMATION MESSAGE
+    # -------------------------
+    if success:
+        link = await bot.create_chat_invite_link(int(REQST_CHANNEL))
+
+        btn = [[
+            InlineKeyboardButton(
+                'ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ',
+                url=link.invite_link
+            ),
+            InlineKeyboardButton(
+                'ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ',
+                url=reported_post.link
+            )
+        ]]
+
+        await message.reply_text(
+            "<b>ʏᴏᴜʀ ʀᴇǫᴜᴇꜱᴛ ʜᴀꜱ ʙᴇᴇɴ ᴀᴅᴅᴇᴅ!\n\n"
+            "ᴘʟᴇᴀꜱᴇ ᴡᴀɪᴛ ꜰᴏʀ ꜱᴏᴍᴇ ᴛɪᴍᴇ.</b>",
+            reply_markup=InlineKeyboardMarkup(btn)
+        )
 
 
 
