@@ -712,16 +712,17 @@ async def requests(bot, message):
     # --- 3. VALIDATION & HINDI-ENGLISH TEMPLATE ---
     if not content or len(content) < 3:
         template_text = (
-            "<b>❌ अपनी मूवी या सीरीज का नाम तो लिखिये!</b>\n\n"
-            "<code>━━━━━━━━━━━━━━━━━━━━━━</code>\n"
+            "<b>❌ अपनी मूवी या सीरीज का नाम तो लिखिये!</b>\n"
+         
+"<code>━━━━━━━━━━━━━━━━━━━━━</code>\n"
             "<b>📝 सही तरीका (Format):</b>\n"
             "<code>/request [Name] [Year] [Lang]</code>\n\n"
             "<b>🎬 मूवी का उदाहरण (Movie Example):</b>\n"
             "<blockquote><code>/request Stree 2 2024 Hindi</code></blockquote>\n\n"
             "<b>📺 सीरीज का उदाहरण (Series Example):</b>\n"
             "<blockquote><code>/request Mirzapur S03 Hindi</code></blockquote>\n"
-            "<code>━━━━━━━━━━━━━━━━━━━━━━</code>\n"
-            "<b>✨ Tip:</b> <i>Reply करके भी Request कर सकते हैं।</i>"
+            "<code>━━━━━━━━━━━━━━━━━━━━━</code>\n"
+            "<b>✨ Tip:</b> <i>Msg पर Reply करके भी Request कर सकते हैं।</i>"
         )
         error_msg = await message.reply_text(template_text)
         await asyncio.sleep(60) # 1 min auto-delete
@@ -732,8 +733,8 @@ async def requests(bot, message):
     # --- 4. SENDING REQUEST TO ADMIN/CHANNEL ---
     try:
         btn_admin = [[
-            InlineKeyboardButton('ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ ', url=f"{source_link}"),
-            InlineKeyboardButton('ꜱʜᴏᴡ ᴏᴘᴛɪᴏɴꜱ ', callback_data=f'show_option#{reporter}')
+            InlineKeyboardButton('👁️ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ👁️', url=f"{source_link}"),
+            InlineKeyboardButton('💢ꜱʜᴏᴡ ᴏᴘᴛɪᴏɴꜱ💢', callback_data=f'show_option#{reporter}')
         ]]
 
         request_text = (
@@ -769,7 +770,7 @@ async def requests(bot, message):
         try:
             link = await bot.create_chat_invite_link(int(REQST_CHANNEL))
             btn_user = [[
-                InlineKeyboardButton('ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ 📢', url=link.invite_link),
+                InlineKeyboardButton('ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ📢', url=link.invite_link),
                 InlineKeyboardButton('ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ👁‍🗨', url=f"{reported_post.link}")
             ]]
             
