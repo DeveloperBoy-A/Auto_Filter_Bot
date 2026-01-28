@@ -674,44 +674,117 @@ async def save_template(client, message):
         f"✅ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ᴜᴘᴅᴀᴛᴇᴅ ᴛᴇᴍᴘʟᴀᴛᴇ ꜰᴏʀ <code>{title}</code> ᴛᴏ:\n\n{template}"
     )
 
+ ------------------------------------------
 # Must add REQST_CHANNEL to use this feature
+# Universal Filter: Jo message mein kahin bhi command hone par trigger ho jaye
+# ---------------------------------------------------------
+request_filter = filters.regex(r"(?i)(/request|#request)")
 
-@Client.on_message(
-    (filters.command(["request", "Request"]) | filters.regex("#request") | filters.regex("#Request")) 
-    & filters.group
-)
+@Client.on_message(request_filter & filters.group)
 async def requests(bot, message):
-    if REQST_CHANNEL is None: return
+    # Agar Request Channel set nahi hai toh return ho jaye
+    if REQST_CHANNEL is None:
+        return
 
-    # Content extraction
+    reporter = str(message.from_user.id)
+    mention = message.from_user.mention
+    group_name = message.chat.title
+    success = False
+    reported_post = None
+
+    # --- 1. CLEANING PROCESS ---
+    # Message se @usernames aur commands ko remove karna
+    raw_text = message.text or message.caption or ""
+    clean_content = re.sub(r"@\w+", "", raw_text)
+    clean_content = re.sub(r"(?i)/request|#request", "", clean_content).strip()
+
+    # --- 2. LOGIC SELECTION (Reply vs Direct) ---
     if message.reply_to_message:
+        # Reply hone par us message ka text lena
         content = message.reply_to_message.text or message.reply_to_message.caption or ""
         source_link = message.reply_to_message.link
     else:
-        content = re.sub(r"@\w+", "", message.text)
-        content = re.sub(r"/(request)|#(request)", "", content, flags=re.IGNORECASE).strip()
+        # Direct text hone par cleaned content lena
+        content = clean_content
         source_link = message.link
 
+    # --- 3. VALIDATION & HINDI-ENGLISH TEMPLATE ---
     if not content or len(content) < 3:
-        return await message.reply_text("<b>❌ ᴀᴘɴɪ ᴍᴏᴠɪᴇ ʏᴀ sᴇʀɪᴇs ᴋᴀ ɴᴀᴀᴍ ᴛᴏ ʟɪᴋʜɪʏᴇ!</b>")
-
-    # Formatting and Sending
-    request_text = f"<b>🎬 ʀᴇǫᴜᴇꜱᴛ : <u>{content}</u>\n\n👤 ʀᴇᴘᴏʀᴛᴇᴅ ʙʏ : {message.from_user.mention}\n🆔 ʀᴇᴘᴏʀᴛᴇʀ ɪᴅ : <code>{message.from_user.id}</code>\n🏰 ɢʀᴏᴜᴘ ɴᴀᴍᴇ : <code>{message.chat.title}</code>\n\n#ʀᴇǫᴜᴇꜱᴛ ⚡️</b>"
-    btn = [[InlineKeyboardButton('ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ 🔗', url=source_link), InlineKeyboardButton('ꜱʜᴏᴡ ᴏᴘᴛɪᴏɴꜱ ⚙️', callback_data=f'show_option#{message.from_user.id}')]]
-
-    try:
-        dest = REQST_CHANNEL if REQST_CHANNEL else ADMINS[0] # Priority: Channel > First Admin
-        reported_post = await bot.send_message(chat_id=dest, text=request_text, reply_markup=InlineKeyboardMarkup(btn))
-        
-        link = await bot.create_chat_invite_link(int(REQST_CHANNEL))
-        btn_user = [[InlineKeyboardButton('ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ 📢', url=link.invite_link), InlineKeyboardButton('ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ 👁‍🗨', url=reported_post.link)]]
-        
-        reply = await message.reply_text("<b>✅ ʏᴏᴜʀ ʀᴇǫᴜᴇꜱᴛ ʜᴀꜱ ʙᴇᴇɴ ᴀᴅᴅᴇᴅ!</b>", reply_markup=InlineKeyboardMarkup(btn_user))
-        await asyncio.sleep(60)
-        await reply.delete()
+        template_text = (
+            "<b>❌ अपनी मूवी या सीरीज का नाम तो लिखिये!</b>\n\n"
+            "<code>━━━━━━━━━━━━━━━━━━━━━━</code>\n"
+            "<b>📝 सही तरीका (Format):</b>\n"
+            "<code>/request [Name] [Year] [Lang]</code>\n\n"
+            "<b>🎬 मूवी का उदाहरण (Movie Example):</b>\n"
+            "<blockquote><code>/request Stree 2 2024 Hindi</code></blockquote>\n\n"
+            "<b>📺 सीरीज का उदाहरण (Series Example):</b>\n"
+            "<blockquote><code>/request Mirzapur S03 Hindi</code></blockquote>\n"
+            "<code>━━━━━━━━━━━━━━━━━━━━━━</code>\n"
+            "<b>✨ Tip:</b> <i>Reply करके भी Request कर सकते हैं।</i>"
+        )
+        error_msg = await message.reply_text(template_text)
+        await asyncio.sleep(60) # 1 min auto-delete
+        await error_msg.delete()
         await message.delete()
+        return
+
+    # --- 4. SENDING REQUEST TO ADMIN/CHANNEL ---
+    try:
+        btn_admin = [[
+            InlineKeyboardButton('ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ ', url=f"{source_link}"),
+            InlineKeyboardButton('ꜱʜᴏᴡ ᴏᴘᴛɪᴏɴꜱ ', callback_data=f'show_option#{reporter}')
+        ]]
+
+        request_text = (
+            f"<b>🎬 ʀᴇǫᴜᴇꜱᴛ : <u>{content}</u>\n\n"
+            f"👤 ʀᴇᴘᴏʀᴛᴇᴅ ʙʏ : {mention}\n"
+            f"🆔 ʀᴇᴘᴏʀᴛᴇʀ ɪᴅ : <code>{reporter}</code>\n"
+            f"👥 ɢʀᴏᴜᴘ ɴᴀᴍᴇ : <code>{group_name}</code>\n\n"
+            f"#ʀᴇǫᴜᴇꜱᴛ ⚡️</b>"
+        )
+
+        if REQST_CHANNEL:
+            reported_post = await bot.send_message(
+                chat_id=REQST_CHANNEL, 
+                text=request_text, 
+                reply_markup=InlineKeyboardMarkup(btn_admin)
+            )
+            success = True
+        elif ADMINS:
+            for admin in ADMINS:
+                reported_post = await bot.send_message(
+                    chat_id=admin, 
+                    text=request_text, 
+                    reply_markup=InlineKeyboardMarkup(btn_admin)
+                )
+            success = True
+
     except Exception as e:
-        await message.reply_text(f"Error: {e}")
+        await message.reply_text(f"<b>ᴇʀʀᴏʀ:</b> <code>{e}</code>")
+        return
+
+    # --- 5. USER NOTIFICATION & AUTO-DELETE ---
+    if success and reported_post:
+        try:
+            link = await bot.create_chat_invite_link(int(REQST_CHANNEL))
+            btn_user = [[
+                InlineKeyboardButton('ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ 📢', url=link.invite_link),
+                InlineKeyboardButton('ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ👁‍🗨', url=f"{reported_post.link}")
+            ]]
+            
+            confirm_msg = await message.reply_text(
+                "<b>✅ आपकी रिक्वेस्ट सफलतापूर्वक भेज दी गई है!\n\n"
+                "⌛ थोड़ा इंतज़ार (Wait) कीजिये...\n"
+                "📢 नीचे दिए गए बटन पर क्लिक करके चैनल Join करें और अपनी रिक्वेस्ट चेक करें।</b>",
+                reply_markup=InlineKeyboardMarkup(btn_user)
+            )
+            
+            # 60 seconds baad command aur response dono delete ho jayenge
+            await asyncio.sleep(60)
+            await confirm_msg.delete()
+            await message.delete()
+        except:
+            pass
 
 
 @Client.on_message(filters.command("send") & filters.user(ADMINS))
