@@ -674,10 +674,11 @@ async def save_template(client, message):
         f"✅ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ᴜᴘᴅᴀᴛᴇᴅ ᴛᴇᴍᴘʟᴀᴛᴇ ꜰᴏʀ <code>{title}</code> ᴛᴏ:\n\n{template}"
     )
 
- ------------------------------------------
+ #-----------------------------------------
 # Must add REQST_CHANNEL to use this feature
 # Universal Filter: Jo message mein kahin bhi command hone par trigger ho jaye
-# ---------------------------------------------------------
+#-----------------------------------------
+
 request_filter = filters.regex(r"(?i)(/request|#request)")
 
 @Client.on_message(request_filter & filters.group)
