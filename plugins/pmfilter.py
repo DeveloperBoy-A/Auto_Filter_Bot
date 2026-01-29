@@ -1992,13 +1992,13 @@ async def auto_filter(client, msg, spoll=False):
 
 async def ai_spell_check(chat_id, wrong_name):
     async def search_movie(wrong_name):
-        search_results = imdb.search_movie(wrong_name)
+                search_results = await asyncio.to_thread(imdb.search_movie, wrong_name)
         movie_list = [movie.title for movie in search_results.titles]
         return movie_list
     movie_list = await search_movie(wrong_name)
     if not movie_list:
         return
-    for _ in range(5):
+    for _ in range(3):
         closest_match = process.extractOne(wrong_name, movie_list)
         if not closest_match or closest_match[1] <= 80:
             return
