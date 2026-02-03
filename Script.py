@@ -153,21 +153,16 @@ Nᴀᴍᴇ - {}
 
 <blockquote>👇 नीचे दिए गए विकल्पों में से movie के नाम की सही spelling चुनें</blockquote>"""
 
-    
+
 
     DEL_MSG = """
-<b>❗️⚠️ IMPORTANT WARNING ⚠️❗️</b>
+<b>❗️⚠️ Iᴍᴘᴏʀᴛᴀɴᴛ Wᴀʀɴɪɴɢ ⚠️❗️</b>
 ────────────────────
-💢 This file / video will be <b>automatically deleted</b>.
-Please forward this file to <b>Saved Messages</b> or somewhere else
-and start downloading from there.
+💢 Nᴏᴛᴇ : Tʜɪs Fɪʟᴇ / Vɪᴅᴇᴏ Wɪʟʟ Bᴇ <b>Aᴜᴛᴏᴍᴀᴛɪᴄᴀʟʟʏ Dᴇʟᴇᴛᴇᴅ.</b> Pʟᴇᴀsᴇ Fᴏʀᴡᴀʀᴅ Tʜɪs Fɪʟᴇ Tᴏ <b>Sᴀᴠᴇᴅ Mᴇssᴀɢᴇs</b> Oʀ Sᴏᴍᴇᴡʜᴇʀᴇ Eʟsᴇ Aɴᴅ Sᴛᴀʀᴛ Dᴏᴡɴʟᴏᴀᴅɪɴɢ Fʀᴏᴍ Tʜᴇʀᴇ.
 
-⏳🗑️ <b>Deletion Time:</b> <b><u>{}</u></b>
+⏳🗑️ <b>Dᴇʟᴇᴛɪᴏɴ Tɪᴍᴇ :</b> <b><u>{}</u></b>
 
-⚠️ <b>यह फ़ाइल / वीडियो स्वचालित रूप से हटा दी जाएगी</b>
-<blockquote>
-<b><i>📌 कृपया इसे अपने <u>SAVED MESSAGES</u> पर फ़ॉरवर्ड ⏩ करें और वहीं से डाउनलोड करें।</i></b>
-</blockquote>
+💢 नोट : <b>यह Fɪʟᴇ / Vɪᴅᴇᴏ स्वचालित रूप से हटा दी जाएगी,</b><b><i>कृपया इसे अपने <u>Sᴀᴠᴇᴅ Mᴇssᴀɢᴇs</u> पर Fᴏʀᴡᴀʀᴅ ⏩ करें और वहीं से डाउनलोड करें।</i></b>
 """
 
     DEL_MSG_2 = """
@@ -202,29 +197,6 @@ and start downloading from there.
 
 <blockquote>😌 यह ᴍᴏᴠɪᴇ मुझे ᴍᴇʀᴇ ᴅᴀᴛᴀʙᴀꜱᴇ में नहीं मिली।</blockquote>"""
 
-    REQUEST_GUIDE = """
-📝 ʜᴏᴡ ᴛᴏ sᴇɴᴅ ʀᴇǫᴜᴇꜱᴛ ɢᴜɪᴅᴇ
-(use only when movie not available in group)
-━━━━━━━━━━━━━━━━━━
-✅ 1️⃣ ʀᴇᴘʟʏ ᴍᴇᴛʜᴏᴅ (ʀᴇᴄᴏᴍᴍᴇɴᴅᴇᴅ 👍)
-• Reply on any movie / series message
-• Type: /request or #request
-
-✅ 2️⃣ ᴅɪʀᴇᴄᴛ ᴍᴇᴛʜᴏᴅ
-• Type in group:
-/request Movie Name
-#request Movie Name
-
-📌 Example:
-➡ /request Animal 2023 Hindi
-➡ #request Border 2 2026 Hindi
-
-⚠️ Fake request na bheje 🙏
-✔ Available hote hi upload / notify kiya jaayega
-
-━━━━━━━━━━━━━━━━━━
-⚡ Powered by 『 𝑻𝒐𝒌𝒚𝒐_𝑼𝒑𝒅𝒂𝒕𝒆𝒔 』
-"""
 
     TOP_ALRT_MSG = """ꜱᴇᴀʀᴄʜɪɴɢ ꜰᴏʀ ǫᴜᴇʀʏ ɪɴ ᴍʏ ᴅᴀᴛᴀʙᴀꜱᴇ..."""
 
@@ -283,17 +255,19 @@ Mᴇꜱꜱᴀɢᴇ : <b>{}</b>"""
 
 
     MOVIE_UPDATE_NOTIFY_TXT = """
-</b><a href={poster_url}>🖼️</a><a href={imdb_url}>🆕</a></b> <code>【{filename}】</code> ✅
+<b><a href="{poster_url}">🖼️</a><a href="{imdb_url}">🆕</a></b> <code>【{filename}】</code> ✅
 
-🎭 Gᴇɴʀᴇs : <b>{genres}</b>
-📺 ᴏᴛᴛ    : <b>{ott}</b>
-🖼️ Pɪxᴇʟs  : <b>{quality}</b>
-🎧 Aᴜᴅɪᴏ   : <b>{language}</b>
-🔥 Rᴀᴛɪɴɢ   : <b>{rating}</b>
-📢  : {episodes}
+🎭 𝑮𝒆𝒏𝒓𝒆𝒔 : <b>{genres}</b>
+📺 𝑶𝑻𝑻 : <b>{ott}</b>
+🖼️ 𝑷𝒊𝒙𝒆𝒍𝒔 : <b>{quality}</b>
+🎧 𝑨𝒖𝒅𝒊𝒐 : <b>{language}</b>
+🔥 𝑹𝒂𝒕𝒊𝒏𝒈 : <b>{rating}</b>
 
-<blockquote>🌿 Powered by : [🔰𝑵𝒆𝒘 𝒎𝒐𝒗𝒊𝒆 & 𝒘𝒆𝒃 𝒔𝒆𝒓𝒊𝒆𝒔🔰]</blockquote>
+{episodes}
+
+<blockquote>🌿 𝑷𝒐𝒘𝒆𝒓𝒆𝒅 𝒃𝒚 : [🔰𝑵𝒆𝒘 𝒎𝒐𝒗𝒊𝒆 & 𝒘𝒆𝒃 𝒔𝒆𝒓𝒊𝒆𝒔🔰]</blockquote>
 """
+
 
 
     IMDB_TEMPLATE_TXT = """
@@ -569,7 +543,4 @@ This Is An Open-Source Project. You Can Use It Freely, But Selling The Source Co
 • /remove_fsub - ʀᴇᴍᴏᴠᴇ ᴄᴜꜱᴛᴏᴍ ꜰᴏʀᴄᴇ ꜱᴜʙ ᴄʜᴀɴɴᴇʟ.
 • /reset_group - ʀᴇꜱᴇᴛ ʏᴏᴜʀ ꜱᴇᴛᴛɪɴɢꜱ.
 • /details - ᴄʜᴇᴄᴋ ʏᴏᴜʀ ꜱᴇᴛᴛɪɴɢꜱ."""    
-
-
-
 
