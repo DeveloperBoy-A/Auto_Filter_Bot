@@ -280,14 +280,21 @@ async def start(client, message):
             settings = await get_settings(grp_id)
             is_second_shortener = await db.use_second_shortener(user_id, settings.get('verify_time', TWO_VERIFY_GAP)) 
             is_third_shortener = await db.use_third_shortener(user_id, settings.get('third_verify_time', THREE_VERIFY_GAP))
-            if settings.get("is_verify", IS_VERIFY) and (not user_verified or is_second_shortener or is_third_shortener):
+            
+            # --- बदलाव यहाँ है ---
+            # हमने (message.command[1].startswith('allfiles')) जोड़ा है 
+            # ताकि 'allfiles' होने पर 'user_verified' चेक न हो और वेरिफिकेशन हमेशा चले।
+            
+            if settings.get("is_verify", IS_VERIFY) and (message.command[1].startswith('allfiles') or not user_verified or is_second_shortener or is_third_shortener):
                 verify_id = ''.join(random.choices(string.ascii_uppercase + string.digits, k=7))
                 await db.create_verify_id(user_id, verify_id)
                 temp.VERIFICATIONS[user_id] = grp_id
+                
                 if message.command[1].startswith('allfiles'):
                     verify = await get_shortlink(f"https://telegram.me/{temp.U_NAME}?start=sendall_{user_id}_{verify_id}_{file_id}", grp_id, is_second_shortener, is_third_shortener)
                 else:
                     verify = await get_shortlink(f"https://telegram.me/{temp.U_NAME}?start=notcopy_{user_id}_{verify_id}_{file_id}", grp_id, is_second_shortener, is_third_shortener)
+                
                 if is_third_shortener:
                     howtodownload = settings.get('tutorial_3', TUTORIAL_3)
                 else:
