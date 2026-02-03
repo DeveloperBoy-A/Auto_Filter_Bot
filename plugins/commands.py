@@ -280,7 +280,7 @@ async def start(client, message):
             settings = await get_settings(grp_id)
             is_second_shortener = await db.use_second_shortener(user_id, settings.get('verify_time', TWO_VERIFY_GAP)) 
             is_third_shortener = await db.use_third_shortener(user_id, settings.get('third_verify_time', THREE_VERIFY_GAP))
-            if (data.startswith("allfiles")) or (settings.get("is_verify", IS_VERIFY) and (not user_verified or is_second_shortener or is_third_shortener)):
+            if (data.startswith("allfiles") and not user_verified) or (settings.get("is_verify", IS_VERIFY) and (not user_verified or is_second_shortener or is_third_shortener)):
                 verify_id = ''.join(random.choices(string.ascii_uppercase + string.digits, k=7))
                 await db.create_verify_id(user_id, verify_id)
                 temp.VERIFICATIONS[user_id] = grp_id
