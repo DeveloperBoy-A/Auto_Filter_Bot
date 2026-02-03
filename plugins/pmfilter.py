@@ -1992,22 +1992,31 @@ async def auto_filter(client, msg, spoll=False):
 
 async def imdb_suggestions(query, limit=5):
     try:
-        # Working logic: .titles use karna zaruri ho sakta hai aapke setup mein
+        # IMDb search
         search_results = await asyncio.to_thread(imdb.search_movie, query)
         
-        # Check if titles attribute exists (Aapke working code ke hisaab se)
+        # Check if results are in .titles or direct list
         results = search_results.titles if hasattr(search_results, 'titles') else search_results
         
         suggestions = []
         for m in results:
-            title = getattr(m, "title", None)
-            year = getattr(m, "year", None)
-            imdb_id = getattr(m, "movieID", None)
+            # Accuracy ke liye check karein ki object se data kaise nikal raha hai
+            title = m.get('title') if hasattr(m, 'get') else getattr(m, 'title', None)
+            year = m.get('year') if hasattr(m, 'get') else getattr(m, 'year', None)
+            
+            # IMDb ID nikalne ke 2 tarike
+            imdb_id = getattr(m, 'movieID', None)
+            if not imdb_id and hasattr(m, 'getID'):
+                imdb_id = m.getID()
+
             if title and imdb_id:
                 suggestions.append((title, year, imdb_id))
+        
         return suggestions[:limit]
-    except Exception:
+    except Exception as e:
+        print(f"Suggestion Error: {e}")
         return []
+
 
 async def ai_spell_check(chat_id, wrong_name):
     async def search_movie(name):
