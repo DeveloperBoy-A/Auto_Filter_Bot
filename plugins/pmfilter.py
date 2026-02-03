@@ -1989,30 +1989,33 @@ async def auto_filter(client, msg, spoll=False):
 
 
 #_______________________________________________________ai_spell_check________________________________________________________
+
 async def imdb_suggestions(query, limit=5):
     try:
-        results = await asyncio.to_thread(imdb.search_movie, query)
+        # Working logic: .titles use karna zaruri ho sakta hai aapke setup mein
+        search_results = await asyncio.to_thread(imdb.search_movie, query)
+        
+        # Check if titles attribute exists (Aapke working code ke hisaab se)
+        results = search_results.titles if hasattr(search_results, 'titles') else search_results
+        
+        suggestions = []
+        for m in results:
+            title = getattr(m, "title", None)
+            year = getattr(m, "year", None)
+            imdb_id = getattr(m, "movieID", None)
+            if title and imdb_id:
+                suggestions.append((title, year, imdb_id))
+        return suggestions[:limit]
     except Exception:
         return []
-
-    suggestions = []
-    for m in results:
-        title = getattr(m, "title", None)
-        year = getattr(m, "year", None)
-        imdb_id = getattr(m, "movieID", None)
-
-        if title and imdb_id:
-            suggestions.append((title, year, imdb_id))
-
-    return suggestions[:limit]
-
 
 async def ai_spell_check(chat_id, wrong_name):
     async def search_movie(name):
         search_results = await asyncio.to_thread(imdb.search_movie, name)
-        # ❌ search_results.titles (bug)
-        # ✅ imdbkit compatible
-        return [m.title for m in search_results if getattr(m, "title", None)]
+        # Fix: Dono cases handle kiye hain (titles attribute or list)
+        if hasattr(search_results, 'titles'):
+            return [movie.title for movie in search_results.titles]
+        return [movie.title for movie in search_results if hasattr(movie, 'title')]
 
     movie_list = await search_movie(wrong_name)
     if not movie_list:
@@ -2020,6 +2023,7 @@ async def ai_spell_check(chat_id, wrong_name):
 
     for _ in range(3):
         closest_match = process.extractOne(wrong_name, movie_list)
+        # Score 70 rakha hai, agar bilkul exact chahiye toh 80 kar dena
         if not closest_match or closest_match[1] < 70:
             return None
 
@@ -2030,120 +2034,78 @@ async def ai_spell_check(chat_id, wrong_name):
 
         if movie in movie_list:
             movie_list.remove(movie)
-
     return None
-
 
 async def advantage_spell_chok(client, message):
     search = message.text
     chat_id = message.chat.id
     user = message.from_user.id if message.from_user else 0
 
+    # 1. Clean Query
     query = re.sub(
-        r"\b(pl(i|e)*?(s|z+|ease|se|ese|(e+)s(e)?)|((send|snd|giv(e)?|gib)(\sme)?)|"
-        r"movie(s)?|new|latest|br((o|u)h?)*|^h(e|a)?(l)*(o)*|mal(ayalam)?|"
-        r"t(h)?amil|file|that|find|und(o)*|kit(t(i|y)?)?o(w)?|thar(u)?(o)*w?|"
-        r"kittum(o)*|aya(k)*(um(o)*)?|full\smovie|any(one)|with\ssubtitle(s)?)",
+        r"\b(pl(i|e)*?(s|z+|ease|se|ese|(e+)s(e)?)|((send|snd|giv(e)?|gib)(\sme)?)|movie(s)?|new|latest|br((o|u)h?)*|^h(e|a)?(l)*(o)*|mal(ayalam)?|t(h)?amil|file|that|find|und(o)*|kit(t(i|y)?)?o(w)?|thar(u)?(o)*w?|kittum(o)*|aya(k)*(um(o)*)?|full\smovie|any(one)|with\ssubtitle(s)?)",
         "", search, flags=re.IGNORECASE
-    )
+    ).strip()
 
-    query = query.strip()
-    if not query:
-        return
-
-    query += " movie"
-
+    if not query: return
+    
+    # 2. Search with cleaned query
+    search_query = query + " movie"
     try:
-        movies = await get_poster(query, bulk=True)
-    except Exception:
+        movies = await get_poster(search_query, bulk=True)
+    except:
         movies = []
 
-    # ---------- WHEN NOTHING FOUND ---------- #
+    # 3. IF NO MOVIES FOUND
     if not movies:
-        # 🔹 STEP 1: OLD auto spell-fix logic
-        fixed = await ai_spell_check(chat_id, search)
+        # STEP 1: Auto-fix (Agar file DB mein hai toh)
+        fixed = await ai_spell_check(chat_id, query)
         if fixed:
             message.text = fixed
             return await advantage_spell_chok(client, message)
 
-        # 🔹 STEP 2: NEW user-visible suggestions
-        suggestions = await imdb_suggestions(search)
+        # STEP 2: Suggestions (Agar file nahi hai tab bhi dikhayega)
+        suggestions = await imdb_suggestions(query)
         if suggestions:
             buttons = []
-
             for title, year, imdb_id in suggestions:
-                text = f"{title} ({year})" if year else title
-                buttons.append([
-                    InlineKeyboardButton(
-                        text=text,
-                        callback_data=f"spol#{imdb_id}#{user}"
-                    )
-                ])
-
-            buttons.append([
-                InlineKeyboardButton("🚫 ᴄʟᴏsᴇ 🚫", callback_data="close_data")
-            ])
-
+                btn_text = f"{title} ({year})" if year else title
+                buttons.append([InlineKeyboardButton(text=btn_text, callback_data=f"spol#{imdb_id}#{user}")])
+            
+            buttons.append([InlineKeyboardButton("🚫 ᴄʟᴏsᴇ 🚫", callback_data="close_data")])
+            
             k = await message.reply_text(
-                text="❓ **Did you mean one of these?**",
-                reply_markup=InlineKeyboardMarkup(buttons),
-                reply_to_message_id=message.id
+                text=f"❓ **Did you mean one of these?**",
+                reply_markup=InlineKeyboardMarkup(buttons)
             )
-
             await asyncio.sleep(60)
-            try:
-                await k.delete()
-                await message.delete()
-            except:
-                pass
+            try: await k.delete(); await message.delete()
+            except: pass
             return
 
-        # 🔹 FINAL fallback (same as before)
+        # STEP 3: Fallback Google
         google = quote_plus(search)
         k = await message.reply_text(
             text=script.I_CUDNT.format(search),
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton(
-                    "🔍 ᴄʜᴇᴄᴋ sᴘᴇʟʟɪɴɢ ᴏɴ ɢᴏᴏɢʟᴇ 🔍",
-                    url=f"https://www.google.com/search?q={google}"
-                )
-            ]])
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔍 ᴄʜᴇᴄᴋ sᴘᴇʟʟɪɴɢ ᴏɴ ɢᴏᴏɢʟᴇ 🔍", url=f"https://www.google.com/search?q={google}")]])
         )
-
         await asyncio.sleep(60)
-        try:
-            await k.delete()
-            await message.delete()
-        except:
-            pass
+        try: await k.delete(); await message.delete()
+        except: pass
         return
 
-    # ---------- NORMAL FLOW (unchanged) ---------- #
+    # 4. NORMAL FLOW (Agar movies mil gayi)
     buttons = []
     for movie in movies:
         year = getattr(movie, "year", None)
         text = f"{movie.title} ({year})" if year else movie.title
+        buttons.append([InlineKeyboardButton(text=text, callback_data=f"spol#{movie.imdb_id}#{user}")])
 
-        buttons.append([
-            InlineKeyboardButton(
-                text=text,
-                callback_data=f"spol#{movie.imdb_id}#{user}"
-            )
-        ])
-
-    buttons.append([
-        InlineKeyboardButton("🚫 ᴄʟᴏsᴇ 🚫", callback_data="close_data")
-    ])
-
+    buttons.append([InlineKeyboardButton("🚫 ᴄʟᴏsᴇ 🚫", callback_data="close_data")])
     d = await message.reply_text(
         text=script.CUDNT_FND.format(message.from_user.mention),
-        reply_markup=InlineKeyboardMarkup(buttons),
-        reply_to_message_id=message.id
+        reply_markup=InlineKeyboardMarkup(buttons)
     )
-
     await asyncio.sleep(60)
-    try:
-        await d.delete()
-        await message.delete()
-    except:
-        pass
+    try: await d.delete(); await message.delete()
+    except: pass
