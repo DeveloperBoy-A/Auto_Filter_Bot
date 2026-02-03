@@ -262,9 +262,7 @@ Mᴇꜱꜱᴀɢᴇ : <b>{}</b>"""
 🖼️ 𝑷𝒊𝒙𝒆𝒍𝒔 : <b>{quality}</b>
 🎧 𝑨𝒖𝒅𝒊𝒐 : <b>{language}</b>
 🔥 𝑹𝒂𝒕𝒊𝒏𝒈 : <b>{rating}</b>
-
 {episodes}
-
 <blockquote>🌿 𝑷𝒐𝒘𝒆𝒓𝒆𝒅 𝒃𝒚 : [🔰𝑵𝒆𝒘 𝒎𝒐𝒗𝒊𝒆 & 𝒘𝒆𝒃 𝒔𝒆𝒓𝒊𝒆𝒔🔰]</blockquote>
 """
 
