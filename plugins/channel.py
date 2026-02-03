@@ -506,49 +506,37 @@ def generate_movie_message(movie_doc, base_name):
             episodes_by_season[season].add(episode)
 
     primary_tag = "#SERIES" if "#SERIES" in all_tags else "#MOVIE"
+    
+    # -------------------------
+    # NEW SEASON & EPISODE STYLE
+    # -------------------------
     epi_block = ""
     if episodes_by_season:
         episode_lines = []
         for season, episodes in sorted(episodes_by_season.items(), key=lambda x: int(x[0])):
-            singles = []
-            ranges = []
-
-            for ep in episodes:
-                if "-" in ep:
-                    ranges.append(ep)
-                else:
-                    try:
-                        singles.append(int(ep))
-                    except ValueError:
-                        ranges.append(ep)
-
-            singles.sort()
-            collapsed = []
-            start = end = None
-            for num in singles:
-                if start is None:
-                    start = end = num
-                elif num == end + 1:
-                    end = num
-                else:
-                    collapsed.append(str(start) if start == end else f"{start}-{end}")
-                    start = end = num
-            if start is not None:
-                collapsed.append(str(start) if start == end else f"{start}-{end}")
-
-            all_ep_parts = collapsed + sorted(ranges, key=lambda s: int(s.split("-")[0]))
-            episode_lines.append(f"S{int(season)}: {', '.join(all_ep_parts)}")
+            # एपिसोड्स को सॉर्ट करना (Handling ranges and single numbers)
+            sorted_eps = sorted(list(episodes), key=lambda x: int(x.split('-')[0]) if '-' in x else int(x))
+            ep_list = ", ".join(sorted_eps)
+            
+            # Premium Sidebar Style
+            line = (
+                f"<b>┇ 💠 Season {int(season):02}</b>\n"
+                f"<b>┇</b> ╰┈ ᴇᴘs: <code>{ep_list}</code>"
+            )
+            episode_lines.append(line)
 
         epi_str = "\n".join(episode_lines)
         if epi_str:
-            epi_block = f"📺 ᴇᴘɪsᴏᴅᴇs : <b>\n{epi_str}</b>"
+            # Boundary boxes
+            epi_block = f"<b>┍━━━━━━━━━━━━━━━</b>\n{epi_str}\n<b>┕━━━━━━━━━━━━━━━</b>"
 
     genres = movie_doc.get("genres", "N/A")
     quality_str = ", ".join(sorted(all_qualities)) if all_qualities else "N/A"
     language_str = ", ".join(sorted(all_languages)) if all_languages else "N/A"
     ott_str = ", ".join(sorted(all_ott_platforms)) if all_ott_platforms else "N/A"
 
-    return script.MOVIE_UPDATE_NOTIFY_TXT.format(
+    # Formatting the final message
+    return MOVIE_UPDATE_NOTIFY_TXT.format(
         poster_url=movie_doc.get("poster_url", ""),
         imdb_url=movie_doc.get("imdb_url", ""),
         filename=base_name,
@@ -557,7 +545,7 @@ def generate_movie_message(movie_doc, base_name):
         ott=ott_str,
         quality=quality_str,
         language=language_str,
-        episodes=epi_block,
+        episodes=epi_block, # This now contains the stylish box
         rating=movie_doc.get("rating", "N/A"),
         search_link=temp.B_LINK
     )
