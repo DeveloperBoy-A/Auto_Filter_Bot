@@ -323,64 +323,65 @@ async def start(client, message):
             files = temp.GETALL.get(file_id)
             if not files:
                 return await message.reply('<b><i>ɴᴏ ꜱᴜᴄʜ ꜰɪʟᴇ ᴇxɪꜱᴛꜱ !</b></i>')
+            
             filesarr = []
             for file in files:
-                file_id = file.file_id
-                files_ = await get_file_details(file_id)
+                f_id = file.file_id  # Conflict से बचने के लिए नाम बदला
+                files_ = await get_file_details(f_id)
                 files1 = files_[0]
                 title = clean_filename(files1.file_name)
                 size = get_size(files1.file_size)
                 f_caption = files1.caption
                 settings = await get_settings(int(grp_id))
                 DREAMX_CAPTION = settings.get('caption', CUSTOM_FILE_CAPTION)
+                
                 if DREAMX_CAPTION:
                     try:
-                        f_caption=DREAMX_CAPTION.format(file_name= '' if title is None else title, file_size='' if size is None else size, file_caption='' if f_caption is None else f_caption)
+                        f_caption = DREAMX_CAPTION.format(file_name='' if title is None else title, file_size='' if size is None else size, file_caption='' if f_caption is None else f_caption)
                     except Exception as e:
                         logger.exception(e)
-                        f_caption = f_caption
+                
                 if f_caption is None:
                     f_caption = f"{clean_filename(files1.file_name)}"
 
+                # बटन का हिस्सा (Indented inside for loop)
                 if STREAM_MODE and not PREMIUM_STREAM_MODE:
-
-                    btn = [
-                        [InlineKeyboardButton('🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️', callback_data=f'generate_stream_link:{file_id}')],
-                        [InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]  # Keep this line unchanged  
-                    ]
+                    btn = [[InlineKeyboardButton('🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️', callback_data=f'generate_stream_link:{f_id}')],
+                           [InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]]
                 elif STREAM_MODE and PREMIUM_STREAM_MODE:
-
                     if not await db.has_premium_access(message.from_user.id):
-
-                        btn = [
-                            [InlineKeyboardButton('🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️', callback_data=f'prestream')],
-                            [InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]  # Keep this line unchanged  
-                        ]
+                        btn = [[InlineKeyboardButton('🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️', callback_data=f'prestream')],
+                               [InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]]
                     else:
-
-                        btn = [
-                            [InlineKeyboardButton('🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️', callback_data=f'generate_stream_link:{file_id}')],
-                            [InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]  # Keep this line unchanged  
-                        ]
+                        btn = [[InlineKeyboardButton('🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️', callback_data=f'generate_stream_link:{f_id}')],
+                               [InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]]
                 else:
                     btn = [[InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]]
+
                 msg = await client.send_cached_media(
                     chat_id=message.from_user.id,
-                    file_id=file_id,
+                    file_id=f_id,
                     caption=f_caption,
                     protect_content=settings.get('file_secure', PROTECT_CONTENT),
                     reply_markup=InlineKeyboardMarkup(btn)
                 )
                 filesarr.append(msg)
+                await asyncio.sleep(1) # यहाँ लूप खत्म हो रहा है
+
+            # --- अब ये लाइनें FOR LOOP के बाहर हैं (4 स्पेस पीछे) ---
+            if filesarr:
                 k = await client.send_message(chat_id=message.from_user.id, text=script.DEL_MSG.format(get_time(DELETE_TIME)), parse_mode=enums.ParseMode.HTML)
                 await asyncio.sleep(DELETE_TIME)
                 for x in filesarr:
-                    await x.delete()
+                    try: await x.delete()
+                    except: pass
                 await k.edit_text("<b>ʏᴏᴜʀ ᴀʟʟ ᴠɪᴅᴇᴏꜱ/ꜰɪʟᴇꜱ ᴀʀᴇ ᴅᴇʟᴇᴛᴇᴅ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ !\nᴋɪɴᴅʟʏ ꜱᴇᴀʀᴄʜ ᴀɢᴀɪɴ</b>")
-                return
+            
+            return # फंक्शन यहाँ खत्म होगा
+
         except Exception as e:
-                logger.exception(e)
-                return
+            logger.exception(e)
+            return
 
 
     user = message.from_user.id
