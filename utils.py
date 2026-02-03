@@ -3,7 +3,7 @@ import os
 import logging
 from info import  *
 from imdbkit import IMDBKit
-#from fuzzywuzzy import process 
+from fuzzywuzzy import process 
 #from urllib.parse import quote_plus
 import asyncio
 from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
