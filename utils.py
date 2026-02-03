@@ -2,7 +2,9 @@ import re
 import os
 import logging
 from info import  *
-from imdbkit import IMDBKit  
+from imdbkit import IMDBKit
+#from fuzzywuzzy import process 
+#from urllib.parse import quote_plus
 import asyncio
 from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
 from pyrogram.errors import InputUserDeactivated, UserNotParticipant, FloodWait, UserIsBlocked, PeerIdInvalid, ChatAdminRequired, MessageNotModified
@@ -76,7 +78,7 @@ async def is_req_subscribed(bot, user_id, rqfsub_channels):
             logger.warning(f"Bot not admin in {ch_id}")
         except Exception as e:
             logger.warning(f"Invite link error for {ch_id}: {e}")
-            
+
     return btn
 
 
@@ -103,7 +105,7 @@ async def is_check_admin(bot, chat_id, user_id):
         return member.status in [enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.OWNER]
     except:
         return False
-    
+
 from pyrogram import Client
 
 # Users broadcast
@@ -158,7 +160,7 @@ async def junk_group(chat_id, message):
         await db.delete_chat(int(chat_id))       
         logging.info(f"{chat_id} - PeerIdInvalid")
         return False, "deleted", f'{e}\n\n'
-    
+
 
 async def clear_junk(user_id, message):
     try:
@@ -181,13 +183,24 @@ async def clear_junk(user_id, message):
         return False, "Error"
     except Exception as e:
         return False, "Error"
-     
+
 async def get_status(bot_id):
     try:
         return await db.movie_update_status(bot_id) or False  
     except Exception as e:
         LOGGER.error(f"Error in get_movie_update_status: {e}")
         return False  
+
+
+
+async def add_name_to_db(filename):
+    """
+    Helper function to add a filename to the database.
+    """
+
+    return await db.add_name(filename) 
+
+
 
 def listx_to_str(k):
     if k is None or k == "":
@@ -206,14 +219,6 @@ def listx_to_str(k):
         result = result[:int(MAX_LIST_ELM)]
 
     return ', '.join(result) if result else "N/A"
-
-
-async def add_name_to_db(filename):
-    """
-    Helper function to add a filename to the database.
-    """
-    
-    return await db.add_name(filename) 
 
 
 async def get_poster(query, bulk=False, id=False, file=None):
@@ -235,9 +240,8 @@ async def get_poster(query, bulk=False, id=False, file=None):
         if not search_result or not search_result.titles:
             return None
 
-        movie_list = search_result.titles
+        movie_list = search_result.titles[:MAX_LIST_ELM]
 
-        # 🎯 Year filter
         if year_val:
             filtered = [m for m in movie_list if m.year and str(m.year) == str(year_val)]
             if not filtered:
@@ -245,28 +249,18 @@ async def get_poster(query, bulk=False, id=False, file=None):
         else:
             filtered = movie_list
 
-        # 🎬 Kind filter
         kind_filter = ['movie', 'tv series', 'tvSeries', 'tvMiniSeries', 'tvMovie']
         filtered_kind = [m for m in filtered if m.kind and m.kind in kind_filter]
 
         if not filtered_kind:
             filtered_kind = filtered
 
-        # 🔥 SORT BY VOTES (DESC) + YEAR (DESC)
-        filtered_kind.sort(
-            key=lambda m: (
-                -(getattr(m, "votes", 0) or 0),
-                -(m.year or 0)
-            )
-        )
-
-        # 🔒 TOP 10 SUGGESTIONS ONLY
         if bulk:
-            return filtered_kind[:10]
-
+            return filtered_kind[:MAX_LIST_ELM]
+        if not filtered_kind:
+            return None   
         movie_brief = filtered_kind[0]
-        movieid_str = movie_brief.imdb_id
-
+        movieid_str = movie_brief.imdb_id 
     else:
         movieid_str = query
 
@@ -274,7 +268,6 @@ async def get_poster(query, bulk=False, id=False, file=None):
     if not movie:
         return None
 
-    # 📅 Release date
     if movie.release_date:
         date = movie.release_date
     elif movie.year:
@@ -282,11 +275,12 @@ async def get_poster(query, bulk=False, id=False, file=None):
     else:
         date = "N/A"
 
-    # 📝 Plot limit
-    plot = movie.plot or ""
-    if plot and len(plot) > 800:
+    plot = movie.plot[0] if isinstance(movie.plot, list) else movie.plot or ""
+    if len(plot) > 800:
         plot = plot[:800] + "..."
-
+    imdb_id = movie.imdb_id
+    if not imdb_id.startswith("tt"):
+        imdb_id = f"tt{imdb_id}"
     return {
         'title': movie.title,
         'votes': movie.votes,
@@ -300,7 +294,7 @@ async def get_poster(query, bulk=False, id=False, file=None):
         "box_office": movie.worldwide_gross,
         'localized_title': movie.title_localized,
         'kind': movie.kind,
-        "imdb_id": f"tt{movie.imdb_id}",
+        "imdb_id": imdb_id,
         "cast": listx_to_str(movie.stars),
         "runtime": listx_to_str(movie.duration),
         "countries": listx_to_str(movie.countries),
@@ -311,15 +305,169 @@ async def get_poster(query, bulk=False, id=False, file=None):
         "producer": listx_to_str([p.name for p in movie.producers]),
         "composer": listx_to_str([p.name for p in movie.composers]),
         "cinematographer": listx_to_str([p.name for p in movie.cinematographers]),
-        "music_team": listx_to_str(movie.music_team),
-        "distributors": listx_to_str([c.name for c in movie.distributors]),
+        "music_team": listx_to_str([p.name for p in movie.music_team]),
+        "distributors": listx_to_str([c.name for c in movie.distributors]),        
         'release_date': date,
         'year': movie.year,
         'genres': listx_to_str(movie.genres),
         'poster': movie.cover_url,
         'plot': plot,
         'rating': str(movie.rating),
-        'url': movie.url or f'https://www.imdb.com/title/tt{movie.imdb_id}'
+        "url": movie.url or f"https://www.imdb.com/title/{imdb_id}"
+    }
+#Remove Nahi Kiya Hu.....Agar Tujha Remove Karna Hai To Kar Dena
+async def old_get_poster(query, bulk=False, id=False, file=None):
+    if not id:
+        query = (query.strip()).lower()
+        title = query
+        year = re.findall(r'[1-2]\d{3}$', query, re.IGNORECASE)
+        imdb
+        if year:
+            year = list_to_str(year[:1])
+            title = (query.replace(year, "")).strip()
+        elif file is not None:
+            year = re.findall(r'[1-2]\d{3}', file, re.IGNORECASE)
+            if year:
+                year = list_to_str(year[:1]) 
+        else:
+            year = None
+        movieid = imdb.search_movie(title.lower(), results=10)
+        if not movieid:
+            return None
+        if year:
+            filtered=list(filter(lambda k: str(k.get('year')) == str(year), movieid))
+            if not filtered:
+                filtered = movieid
+        else:
+            filtered = movieid
+        movieid=list(filter(lambda k: k.get('kind') in ['movie', 'tv series'], filtered))
+        if not movieid:
+            movieid = filtered
+        if bulk:
+            return movieid
+        movieid = movieid[0].movieID
+    else:
+        movieid = query
+    movie = imdb.get_movie(movieid)
+    imdb.update(movie, info=['main', 'vote details'])
+    if movie.get("original air date"):
+        date = movie["original air date"]
+    elif movie.get("year"):
+        date = movie.get("year")
+    else:
+        date = "N/A"
+    plot = ""
+    if not LONG_IMDB_DESCRIPTION:
+        plot = movie.get('plot')
+        if plot and len(plot) > 0:
+            plot = plot[0]
+    else:
+        plot = movie.get('plot outline')
+    if plot and len(plot) > 800:
+        plot = plot[0:800] + "..."
+    STANDARD_GENRES = {
+        'Action', 'Adventure', 'Animation', 'Biography', 'Comedy', 'Crime', 'Documentary',
+        'Drama', 'Family', 'Fantasy', 'Film-Noir', 'History', 'Horror', 'Music',
+        'Musical', 'Mystery', 'Romance', 'Sci-Fi', 'Sport', 'Thriller', 'War', 'Western'
+    }
+    raw_genres = movie.get("genres", "N/A")
+    if isinstance(raw_genres, str):
+        genre_list = [g.strip() for g in raw_genres.split(",")]
+        genres = ", ".join(g for g in genre_list if g in STANDARD_GENRES) or "N/A"
+    else:
+        genres = ", ".join(g for g in raw_genres if g in STANDARD_GENRES) or "N/A"
+
+    return {
+        'title': movie.get('title'),
+        'votes': movie.get('votes'),
+        "aka": list_to_str(movie.get("akas")),
+        "seasons": movie.get("number of seasons"),
+        "box_office": movie.get('box office'),
+        'localized_title': movie.get('localized title'),
+        'kind': movie.get("kind"),
+        "imdb_id": f"tt{movie.get('imdbID')}",
+        "cast": list_to_str(movie.get("cast")),
+        "runtime": list_to_str(movie.get("runtimes")),
+        "countries": list_to_str(movie.get("countries")),
+        "certificates": list_to_str(movie.get("certificates")),
+        "languages": list_to_str(movie.get("languages")),
+        "director": list_to_str(movie.get("director")),
+        "writer":list_to_str(movie.get("writer")),
+        "producer":list_to_str(movie.get("producer")),
+        "composer":list_to_str(movie.get("composer")) ,
+        "cinematographer":list_to_str(movie.get("cinematographer")),
+        "music_team": list_to_str(movie.get("music department")),
+        "distributors": list_to_str(movie.get("distributors")),
+        'release_date': date,
+        'year': movie.get('year'),
+        'genres': genres,
+        'poster': movie.get('full-size cover url'),
+        'plot': plot,
+        'rating': str(movie.get("rating")),
+        'url':f'https://www.imdb.com/title/tt{movieid}'
+    }
+
+async def get_posterx(query, bulk=False, id=False, file=None):
+    """
+    Fetches movie details from TMDB using the get_movie_detailsx helper
+    and formats the output to be compatible with the original get_poster function.
+    """
+    if not id:
+        # The get_movie_detailsx function handles searching by query string.
+        details = await get_movie_detailsx(query, file=file)
+    else:
+        # Assumes the 'id' is a TMDB ID or IMDb ID that get_movie_detailsx can handle.
+        details = await get_movie_detailsx(query, id=True)
+
+    if not details or details.get("error"):
+        return None
+
+    plot = ""
+    if not LONG_IMDB_DESCRIPTION:
+        plot = details.get('plot')
+        if plot and len(plot) > 0:
+            plot = plot[0]
+    else:
+        plot = details.get('plot outline')
+    if plot and len(plot) > 800:
+        plot = plot[0:800] + "..."
+
+    # --- Mapping TMDB keys to the original IMDb key format ---
+
+    def list_to_str(val):
+        if isinstance(val, list):
+            return ", ".join(str(x) for x in val if x)
+        return str(val) if val else ""
+
+    return {
+        'title': details.get('title'),
+        'votes': details.get('votes'),
+        "aka": None,  # Not typically provided by TMDB in this format
+        "seasons": details.get('seasons'),
+        "box_office": details.get('box_office'),
+        'localized_title': details.get('localized_title'),
+        'kind': 'movie' if 'movie' in details.get('tmdb_url', '') else 'tv series',
+        "imdb_id": details.get('imdb_id'),
+        "cast": list_to_str(details.get("cast")),
+        "runtime": list_to_str(details.get("runtime")),
+        "countries": list_to_str(details.get("countries")),
+        "certificates": list_to_str(details.get("certificates")),
+        "languages": list_to_str(details.get("languages")),
+        "director": list_to_str(details.get("director")),
+        "writer": list_to_str(details.get("writer")),
+        "producer": list_to_str(details.get("producer")),
+        "composer": list_to_str(details.get("composer")),
+        "cinematographer": list_to_str(details.get("cinematographer")),
+        "music_team": None, # Not provided by the TMDB API wrapper
+        "distributors": list_to_str(details.get("distributors")),
+        'release_date': details.get('release_date'),
+        'year': details.get('year'),
+        'genres': list_to_str(details.get("genres")),
+        'poster': details.get('poster_url'),
+        'backdrop' : details.get('backdrop_url'),
+        'plot': plot,
+        'rating': str(details.get("rating", "N/A")),
+        'url': details.get('tmdb_url')
     }
 
 async def fetch_tmdb_data(title: str, year: str = None) -> Optional[Dict[str, Any]]:
@@ -391,7 +539,7 @@ async def get_best_visual(tmdb_data: Dict) -> Optional[str]:
     if backdrops.get("all") and backdrops["all"]:
         return backdrops["all"][0]["url"]
     return None
-    
+
 async def search_gagala(text):
     usr_agent = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
@@ -427,7 +575,7 @@ async def get_settings(group_id):
         settings = await db.get_settings(group_id)
         temp.SETTINGS.update({group_id: settings})
     return settings
-    
+
 async def save_group_settings(group_id, key, value):
     current = await get_settings(group_id)
     current.update({key: value})
@@ -437,7 +585,7 @@ async def save_group_settings(group_id, key, value):
 def clean_filename(file_name):
     prefixes = ('[', '@', 'www.', 'ClipmateZone', 'NewMoviesOnTG', 'moviehub4uupdate', 'moviehub4u', 'update', 'New', 'Movies', 'OnTG')
     unwanted = {word.lower() for word in BAD_WORDS}
-    
+
     file_name = ' '.join(
         word for word in file_name.split()
         if not (word.startswith(prefixes) or word.lower() in unwanted)
@@ -455,7 +603,7 @@ def remove_prefix_garbage(file_name):
     """
     prefixes = (
         '[', '@', 'www.', 't.me/', 'telegram.me/',
-        '#', 'ClipmateZone', 'New', 'Movies', 'OnTG', 'moviehub4uupdate', 'moviehub4u', 'update', 'New', 'Movies', 'OnTG'
+        '#', 'ClipmateZone', 'New', 'Movies', 'OnTG', 'moviehub4uupdate', 'moviehub4u', 'update', 'New', 'Movies', 'OnTG', '@TGCinemaworld -'
     )
 
     unwanted = {word.lower() for word in BAD_WORDS}
@@ -593,7 +741,7 @@ def extract_user(message: Message) -> Union[int, str]:
             len(message.entities) > 1 and
             message.entities[1].type == enums.MessageEntityType.TEXT_MENTION
         ):
-           
+
             required_entity = message.entities[1]
             user_id = required_entity.user.id
             user_first_name = required_entity.user.first_name
@@ -793,7 +941,7 @@ def get_time(seconds):
             period_value, seconds = divmod(seconds, period_seconds)
             result += f'{int(period_value)}{period_name}'
     return result
-    
+
 def humanbytes(size):
     if not size:
         return ""
@@ -850,7 +998,7 @@ async def get_seconds(time_string):
         return value * 86400 * 365
     else:
         return 0
-    
+
 
 def clean_search_text(search_raw: str) -> str:
     search_lower = search_raw.lower()
@@ -988,4 +1136,3 @@ async def get_cap(settings, remaining_seconds, files, query, total_results, sear
         logging.error(f"Error in get_cap: {e}")
         pass
 
-       
