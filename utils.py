@@ -222,7 +222,7 @@ def listx_to_str(k):
     return ', '.join(result) if result else "N/A"
 
 
-async def get_poster(query, bulk=False, id=False, file=None):
+async def old_get_poster(query, bulk=False, id=False, file=None):
     if not id:
         query = (query.strip()).lower()
         title = query
@@ -317,7 +317,7 @@ async def get_poster(query, bulk=False, id=False, file=None):
         "url": movie.url or f"https://www.imdb.com/title/{imdb_id}"
     }
 #Remove Nahi Kiya Hu.....Agar Tujha Remove Karna Hai To Kar Dena
-async def old_get_poster(query, bulk=False, id=False, file=None):
+async def get_poster(query, bulk=False, id=False, file=None):
     if not id:
         query = (query.strip()).lower()
         title = query
