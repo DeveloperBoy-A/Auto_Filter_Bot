@@ -222,7 +222,7 @@ def listx_to_str(k):
     return ', '.join(result) if result else "N/A"
 
 
-async def old_get_poster(query, bulk=False, id=False, file=None):
+async def get_poster(query, bulk=False, id=False, file=None):
     if not id:
         query = (query.strip()).lower()
         title = query
@@ -319,97 +319,59 @@ async def old_get_poster(query, bulk=False, id=False, file=None):
 
 #Remove Nahi Kiya Hu.....Agar Tujha Remove Karna Hai To Kar Dena
 
-async def get_poster(query, bulk=False, id=False, file=None):
     if not id:
         query = (query.strip()).lower()
         title = query
-
-        # ---- Year extract logic (same as before) ----
         year = re.findall(r'[1-2]\d{3}$', query, re.IGNORECASE)
-
+        imdb
         if year:
             year = list_to_str(year[:1])
             title = (query.replace(year, "")).strip()
         elif file is not None:
             year = re.findall(r'[1-2]\d{3}', file, re.IGNORECASE)
             if year:
-                year = list_to_str(year[:1])
+                year = list_to_str(year[:1]) 
         else:
             year = None
-
-        # ---- IMDb search (20 results) ----
-        search_results = imdb.search_movie(title.lower(), results=20)
-        if not search_results:
+        movieid = imdb.search_movie(title.lower(), results=10)
+        if not movieid:
             return None
-
-        # ---- Year filter ----
         if year:
-            filtered = list(filter(lambda k: str(k.get('year')) == str(year), search_results))
+            filtered=list(filter(lambda k: str(k.get('year')) == str(year), movieid))
             if not filtered:
-                filtered = search_results
+                filtered = movieid
         else:
-            filtered = search_results
-
-        # ---- Kind filter ----
-        filtered = list(filter(lambda k: k.get('kind') in ['movie', 'tv series'], filtered))
-        if not filtered:
-            filtered = search_results
-
-        # ---- FUZZY SCORING (FIXED) ----
-        scored_results = []
-        for m in filtered:
-            m_title = m.get('title', "").lower()
-
-            # 🔥 REAL fuzzy comparison (important fix)
-            score = process.ratio(title, m_title)
-
-            if score >= 60:
-                setattr(m, "score", score)  # safe attribute set
-                scored_results.append(m)
-
-        # ---- Sort by accuracy ----
-        scored_results.sort(key=lambda x: x.score, reverse=True)
-
-        if not scored_results:
-            return None
-
+            filtered = movieid
+        movieid=list(filter(lambda k: k.get('kind') in ['movie', 'tv series'], filtered))
+        if not movieid:
+            movieid = filtered
         if bulk:
-            # Buttons ke liye top 8 suggestions
-            return scored_results[:8]
-
-        movieid = scored_results[0].movieID
-
+            return movieid
+        movieid = movieid[0].movieID
     else:
         movieid = query
-
-    # ---- Full movie details ----
     movie = imdb.get_movie(movieid)
     imdb.update(movie, info=['main', 'vote details'])
-
     if movie.get("original air date"):
         date = movie["original air date"]
     elif movie.get("year"):
         date = movie.get("year")
     else:
         date = "N/A"
-
     plot = ""
     if not LONG_IMDB_DESCRIPTION:
         plot = movie.get('plot')
-        if plot:
+        if plot and len(plot) > 0:
             plot = plot[0]
     else:
         plot = movie.get('plot outline')
-
     if plot and len(plot) > 800:
-        plot = plot[:800] + "..."
-
+        plot = plot[0:800] + "..."
     STANDARD_GENRES = {
-        'Action','Adventure','Animation','Biography','Comedy','Crime','Documentary',
-        'Drama','Family','Fantasy','Film-Noir','History','Horror','Music','Musical',
-        'Mystery','Romance','Sci-Fi','Sport','Thriller','War','Western'
+        'Action', 'Adventure', 'Animation', 'Biography', 'Comedy', 'Crime', 'Documentary',
+        'Drama', 'Family', 'Fantasy', 'Film-Noir', 'History', 'Horror', 'Music',
+        'Musical', 'Mystery', 'Romance', 'Sci-Fi', 'Sport', 'Thriller', 'War', 'Western'
     }
-
     raw_genres = movie.get("genres", "N/A")
     if isinstance(raw_genres, str):
         genre_list = [g.strip() for g in raw_genres.split(",")]
@@ -432,10 +394,10 @@ async def get_poster(query, bulk=False, id=False, file=None):
         "certificates": list_to_str(movie.get("certificates")),
         "languages": list_to_str(movie.get("languages")),
         "director": list_to_str(movie.get("director")),
-        "writer": list_to_str(movie.get("writer")),
-        "producer": list_to_str(movie.get("producer")),
-        "composer": list_to_str(movie.get("composer")),
-        "cinematographer": list_to_str(movie.get("cinematographer")),
+        "writer":list_to_str(movie.get("writer")),
+        "producer":list_to_str(movie.get("producer")),
+        "composer":list_to_str(movie.get("composer")) ,
+        "cinematographer":list_to_str(movie.get("cinematographer")),
         "music_team": list_to_str(movie.get("music department")),
         "distributors": list_to_str(movie.get("distributors")),
         'release_date': date,
@@ -444,9 +406,11 @@ async def get_poster(query, bulk=False, id=False, file=None):
         'poster': movie.get('full-size cover url'),
         'plot': plot,
         'rating': str(movie.get("rating")),
-        'url': f'https://www.imdb.com/title/tt{movieid}',
-        'movieID': movieid
+        'url':f'https://www.imdb.com/title/tt{movieid}'
     }
+
+
+
 async def get_posterx(query, bulk=False, id=False, file=None):
     """
     Fetches movie details from TMDB using the get_movie_detailsx helper
