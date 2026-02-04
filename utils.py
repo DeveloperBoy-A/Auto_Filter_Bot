@@ -318,14 +318,32 @@ async def old_get_poster(query, bulk=False, id=False, file=None):
     }
 
 
-#Remove Nahi Kiya Hu.....Agar Tujha Remove Karna Hai To Kar Dena
+
+ALLOWED_KINDS = [
+    'movie',
+    'tv series',
+    'tv mini series',
+    'anime',
+    'anime series',
+    'web series'
+]
+
+BLOCKED_WORDS = [
+    'podcast',
+    'news',
+    'daily',
+    'talk',
+    'radio',
+    'interview'
+]
 
 async def get_poster(query, bulk=False, id=False, file=None):
     if not id:
         query = (query.strip()).lower()
         title = query
         year = re.findall(r'[1-2]\d{3}$', query, re.IGNORECASE)
-        imdb
+        
+        # Note: 'imdb' object yahan define ya global hona chahiye
         if year:
             year = list_to_str(year[:1])
             title = (query.replace(year, "")).strip()
@@ -335,31 +353,45 @@ async def get_poster(query, bulk=False, id=False, file=None):
                 year = list_to_str(year[:1]) 
         else:
             year = None
-        movieid = imdb.search_movie(title.lower(), results=10)
+            
+        movieid = imdb.search_movie(title.lower(), results=20)
         if not movieid:
             return None
+            
         if year:
-            filtered=list(filter(lambda k: str(k.get('year')) == str(year), movieid))
+            filtered = list(filter(lambda k: str(k.get('year')) == str(year), movieid))
             if not filtered:
                 filtered = movieid
         else:
             filtered = movieid
-        movieid=list(filter(lambda k: k.get('kind') in ['movie', 'tv series'], filtered))
+            
+        movieid = list(filter(
+            lambda k: k.get('kind')
+            and any(a in k.get('kind').lower() for a in ALLOWED_KINDS)
+            and not any(b in k.get('kind').lower() for b in BLOCKED_WORDS),
+            filtered
+        ))
+        movieid = movieid[:7]   # sirf top 6–7 accurate results
+        
         if not movieid:
-            movieid = filtered
+            movieid = filtered[:7]   # fallback bhi limited rahe
+            
         if bulk:
             return movieid
         movieid = movieid[0].movieID
     else:
         movieid = query
+        
     movie = imdb.get_movie(movieid)
     imdb.update(movie, info=['main', 'vote details'])
+    
     if movie.get("original air date"):
         date = movie["original air date"]
     elif movie.get("year"):
         date = movie.get("year")
     else:
         date = "N/A"
+        
     plot = ""
     if not LONG_IMDB_DESCRIPTION:
         plot = movie.get('plot')
@@ -367,13 +399,16 @@ async def get_poster(query, bulk=False, id=False, file=None):
             plot = plot[0]
     else:
         plot = movie.get('plot outline')
+        
     if plot and len(plot) > 800:
         plot = plot[0:800] + "..."
+        
     STANDARD_GENRES = {
         'Action', 'Adventure', 'Animation', 'Biography', 'Comedy', 'Crime', 'Documentary',
         'Drama', 'Family', 'Fantasy', 'Film-Noir', 'History', 'Horror', 'Music',
         'Musical', 'Mystery', 'Romance', 'Sci-Fi', 'Sport', 'Thriller', 'War', 'Western'
     }
+    
     raw_genres = movie.get("genres", "N/A")
     if isinstance(raw_genres, str):
         genre_list = [g.strip() for g in raw_genres.split(",")]
@@ -410,6 +445,8 @@ async def get_poster(query, bulk=False, id=False, file=None):
         'rating': str(movie.get("rating")),
         'url':f'https://www.imdb.com/title/tt{movieid}'
     }
+
+
 
 
 async def get_posterx(query, bulk=False, id=False, file=None):
