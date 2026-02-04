@@ -2010,7 +2010,7 @@ async def ai_spell_check(chat_id, wrong_name):
         movie_list.remove(movie)
 
 
-async def advantage_spell_chok(client, message):
+async def old_advantage_spell_chok(client, message):
     mv_id = message.id
     search = message.text
     chat_id = message.chat.id
@@ -2062,7 +2062,7 @@ async def advantage_spell_chok(client, message):
 # --- ADVANTAGE SPELL CHECK FUNCTION ---
 
 
-#async def advantage_spell_chok(client, message):
+async def advantage_spell_chok(client, message):
     mv_id = message.id
     search = message.text
     chat_id = message.chat.id
