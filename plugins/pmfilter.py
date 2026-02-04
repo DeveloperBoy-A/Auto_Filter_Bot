@@ -1990,164 +1990,68 @@ async def auto_filter(client, msg, spoll=False):
 
 #_______________________________________________________ai_spell_check________________________________________________________
 
-async def imdb_suggestions(query, limit=5):
-    try:
-        # Cinemagoer search results direct list hote hain
-        results = await asyncio.to_thread(imdb.search_movie, query)
-        if not results:
-            return []
-
-        suggestions = []
-        for m in results:
-            # Cinemagoer objects me data .get() se nikalna best hai
-            title = m.get('title')
-            year = m.get('year')
-            imdb_id = m.movieID # Cinemagoer ID hamesha .movieID hoti hai
-
-            if title and imdb_id:
-                suggestions.append((title, year, imdb_id))
-        
-        return suggestions[:limit]
-    except Exception as e:
-        logger.error(f"IMDb Suggestions Error: {e}")
-        return []
-
-
 async def ai_spell_check(chat_id, wrong_name):
-    async def search_movie(name):
-        try:
-            # Cinemagoer compatible search
-            search_results = await asyncio.to_thread(imdb.search_movie, name)
-            # Yahan results.titles nahi, direct search_results use hoga
-            return [m.get('title') for m in search_results if m.get('title')]
-        except Exception as e:
-            logger.error(f"AI Spell Check Search Error: {e}")
-            return []
-
+    async def search_movie(wrong_name):
+        search_results = imdb.search_movie(wrong_name)
+        movie_list = [movie['title'] for movie in search_results]
+        return movie_list
     movie_list = await search_movie(wrong_name)
     if not movie_list:
-        return None
-
-    # Top 3 matching loop
-    for _ in range(3):
-        # fuzzy matching user query aur imdb list ke beech
+        return
+    for _ in range(4):
         closest_match = process.extractOne(wrong_name, movie_list)
-        
-        # Score 70 se kam matlab match kharab hai
-        if not closest_match or closest_match[1] < 70:
-            return None
-
+        if not closest_match or closest_match[1] <= 70:
+            return
         movie = closest_match[0]
-        # Database verification logic
         files, _, _ = await get_search_results(chat_id=chat_id, query=movie)
         if files:
             return movie
-
-        # Agar is movie ki file nahi hai, toh ise list se hata kar agla check karein
-        if movie in movie_list:
-            movie_list.remove(movie)
-
-    return None
+        movie_list.remove(movie)
 
 
 async def advantage_spell_chok(client, message):
+    mv_id = message.id
     search = message.text
     chat_id = message.chat.id
-    user = message.from_user.id if message.from_user else 0
-
-    # 1. Regex Cleaning (Faltu words hatana)
+    settings = await get_settings(chat_id)
     query = re.sub(
-        r"\b(pl(i|e)*?(s|z+|ease|se|ese|(e+)s(e)?)|((send|snd|giv(e)?|gib)(\sme)?)|"
-        r"movie(s)?|new|latest|br((o|u)h?)*|^h(e|a)?(l)*(o)*|mal(ayalam)?|"
-        r"t(h)?amil|file|that|find|und(o)*|kit(t(i|y)?)?o(w)?|thar(u)?(o)*w?|"
-        r"kittum(o)*|aya(k)*(um(o)*)?|full\smovie|any(one)|with\ssubtitle(s)?)",
-        "", search, flags=re.IGNORECASE
-    ).strip()
-
-    if not query:
-        return
-
-    # 2. Database Search (First Attempt)
+        r"\b(pl(i|e)*?(s|z+|ease|se|ese|(e+)s(e)?)|((send|snd|giv(e)?|gib)(\sme)?)|movie(s)?|new|latest|br((o|u)h?)*|^h(e|a)?(l)*(o)*|mal(ayalam)?|t(h)?amil|file|that|find|und(o)*|kit(t(i|y)?)?o(w)?|thar(u)?(o)*w?|kittum(o)*|aya(k)*(um(o)*)?|full\smovie|any(one)|with\ssubtitle(s)?)",
+        "", message.text, flags=re.IGNORECASE)
+    query = query.strip() + " movie"
     try:
-        movies = await get_poster(query + " movie", bulk=True)
-    except Exception:
-        movies = []
-
-    # 3. Agar Database me kuch nahi mila
-    if not movies:
-        # Step A: Auto-fix check (Database me corrected name hai?)
-        fixed = await ai_spell_check(chat_id, query)
-        if fixed:
-            message.text = fixed
-            return await advantage_spell_chok(client, message)
-
-        # Step B: Cinemagoer Suggestions (UI buttons for user)
-        # Yahan original 'search' ki jagah cleaned 'query' use karein
-        suggestions = await imdb_suggestions(query)
-        if suggestions:
-            buttons = []
-            for title, year, imdb_id in suggestions:
-                btn_text = f"{title} ({year})" if year else title
-                buttons.append([
-                    InlineKeyboardButton(
-                        text=btn_text,
-                        callback_data=f"spol#{imdb_id}#{user}"
-                    )
-                ])
-
-            buttons.append([InlineKeyboardButton("🚫 ᴄʟᴏsᴇ 🚫", callback_data="close_data")])
-
-            k = await message.reply_text(
-                text="❓ **Did you mean one of these?**",
-                reply_markup=InlineKeyboardMarkup(buttons),
-                reply_to_message_id=message.id
-            )
-
-            await asyncio.sleep(60)
-            try:
-                await k.delete()
-                await message.delete()
-            except: pass
-            return
-
-        # Step C: Fallback Google Button
-        google = quote_plus(search)
-        k = await message.reply_text(
-            text=script.I_CUDNT.format(search),
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("🔍 ᴄʜᴇᴄᴋ sᴘᴇʟʟɪɴɢ ᴏɴ ɢᴏᴏɢʟᴇ 🔍", url=f"https://www.google.com/search?q={google}")
-            ]])
-        )
+        movies = await get_poster(search, bulk=True)
+    except:
+        k = await message.reply(script.I_CUDNT.format(message.from_user.mention))
         await asyncio.sleep(60)
+        await k.delete()
         try:
-            await k.delete()
             await message.delete()
-        except: pass
+        except:
+            pass
         return
+    if not movies:
+        google = search.replace(" ", "+")
+        button = [[InlineKeyboardButton(
+            "🔍 ᴄʜᴇᴄᴋ sᴘᴇʟʟɪɴɢ ᴏɴ ɢᴏᴏɢʟᴇ 🔍", url=f"https://www.google.com/search?q={google}")]]
+        k = await message.reply_text(text=script.I_CUDNT.format(search), reply_markup=InlineKeyboardMarkup(button))
+        await asyncio.sleep(60)
+        await k.delete()
+        try:
+            await message.delete()
+        except:
+            pass
+        return
+    user = message.from_user.id if message.from_user else 0
+    buttons = [
+        [InlineKeyboardButton(text=movie.get('title'), callback_data=f"spol#{movie.movieID}#{user}")
+         ] for movie in movies]
 
-    # 4. Normal Flow (Agar Database me files mil gayi)
-    buttons = []
-    for movie in movies:
-        # get_poster se aayi movie list (not Cinemagoer objects)
-        m_title = getattr(movie, "title", "Unknown")
-        m_year = getattr(movie, "year", None)
-        m_imdb = getattr(movie, "imdb_id", "None")
-        
-        text = f"{m_title} ({m_year})" if m_year else m_title
-        buttons.append([
-            InlineKeyboardButton(text=text, callback_data=f"spol#{m_imdb}#{user}")
-        ])
-
-    buttons.append([InlineKeyboardButton("🚫 ᴄʟᴏsᴇ 🚫", callback_data="close_data")])
-
-    d = await message.reply_text(
-        text=script.CUDNT_FND.format(message.from_user.mention),
-        reply_markup=InlineKeyboardMarkup(buttons),
-        reply_to_message_id=message.id
-    )
-
+    buttons.append([InlineKeyboardButton(
+        text="🚫 ᴄʟᴏsᴇ 🚫", callback_data='close_data')])
+    d = await message.reply_text(text=script.CUDNT_FND.format(message.from_user.mention), reply_markup=InlineKeyboardMarkup(buttons), reply_to_message_id=message.id)
     await asyncio.sleep(60)
+    await d.delete()
     try:
-        await d.delete()
         await message.delete()
-    except: pass
+    except:
+        pass
