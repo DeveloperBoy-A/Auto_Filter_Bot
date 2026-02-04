@@ -2010,29 +2010,80 @@ async def ai_spell_check(chat_id, wrong_name):
         movie_list.remove(movie)
 
 
+#async def advantage_spell_chok(client, message):
+    mv_id = message.id
+    search = message.text
+    chat_id = message.chat.id
+    settings = await get_settings(chat_id)
+    query = re.sub(
+        r"\b(pl(i|e)*?(s|z+|ease|se|ese|(e+)s(e)?)|((send|snd|giv(e)?|gib)(\sme)?)|movie(s)?|new|latest|br((o|u)h?)*|^h(e|a)?(l)*(o)*|mal(ayalam)?|t(h)?amil|file|that|find|und(o)*|kit(t(i|y)?)?o(w)?|thar(u)?(o)*w?|kittum(o)*|aya(k)*(um(o)*)?|full\smovie|any(one)|with\ssubtitle(s)?)",
+        "", message.text, flags=re.IGNORECASE)
+    query = query.strip() + " movie"
+    try:
+        movies = await get_poster(search, bulk=True)
+    except:
+        k = await message.reply(script.I_CUDNT.format(message.from_user.mention))
+        await asyncio.sleep(60)
+        await k.delete()
+        try:
+            await message.delete()
+        except:
+            pass
+        return
+    if not movies:
+        google = search.replace(" ", "+")
+        button = [[InlineKeyboardButton(
+            "🔍 ᴄʜᴇᴄᴋ sᴘᴇʟʟɪɴɢ ᴏɴ ɢᴏᴏɢʟᴇ 🔍", url=f"https://www.google.com/search?q={google}")]]
+        k = await message.reply_text(text=script.I_CUDNT.format(search), reply_markup=InlineKeyboardMarkup(button))
+        await asyncio.sleep(60)
+        await k.delete()
+        try:
+            await message.delete()
+        except:
+            pass
+        return
+    user = message.from_user.id if message.from_user else 0
+    buttons = [
+        [InlineKeyboardButton(text=movie.get('title'), callback_data=f"spol#{movie.movieID}#{user}")
+         ] for movie in movies]
+
+    buttons.append([InlineKeyboardButton(
+        text="🚫 ᴄʟᴏsᴇ 🚫", callback_data='close_data')])
+    d = await message.reply_text(text=script.CUDNT_FND.format(message.from_user.mention), reply_markup=InlineKeyboardMarkup(buttons), reply_to_message_id=message.id)
+    await asyncio.sleep(60)
+    await d.delete()
+    try:
+        await message.delete()
+    except:
+        pass
+
 
 
 # --- ADVANTAGE SPELL CHECK FUNCTION ---
+
+
 async def advantage_spell_chok(client, message):
     mv_id = message.id
     search = message.text
     chat_id = message.chat.id
+    settings = await get_settings(chat_id)
     
-    # 1. Cleaning the query (Aapka original regex logic)
+    # Cleaning the query
     query = re.sub(
         r"\b(pl(i|e)*?(s|z+|ease|se|ese|(e+)s(e)?)|((send|snd|giv(e)?|gib)(\sme)?)|movie(s)?|new|latest|br((o|u)h?)*|^h(e|a)?(l)*(o)*|mal(ayalam)?|t(h)?amil|file|that|find|und(o)*|kit(t(i|y)?)?o(w)?|thar(u)?(o)*w?|kittum(o)*|aya(k)*(um(o)*)?|full\smovie|any(one)|with\ssubtitle(s)?)",
-        "", search, flags=re.IGNORECASE)
-    
-    query = query.strip()
+        "", message.text, flags=re.IGNORECASE)
+    query = query.strip() + " movie"
 
     try:
-        # bulk=True se multiple suggestions milenge
-        movies = await get_poster(query, bulk=True)
-    except Exception as e:
-        print(f"Error: {e}")
+        movies = await get_poster(search, bulk=True)
+    except:
         k = await message.reply(script.I_CUDNT.format(message.from_user.mention))
         await asyncio.sleep(60)
         await k.delete()
+        try:
+            await message.delete()
+        except:
+            pass
         return
 
     if not movies:
@@ -2042,40 +2093,48 @@ async def advantage_spell_chok(client, message):
         k = await message.reply_text(text=script.I_CUDNT.format(search), reply_markup=InlineKeyboardMarkup(button))
         await asyncio.sleep(60)
         await k.delete()
+        try:
+            await message.delete()
+        except:
+            pass
         return
 
     user = message.from_user.id if message.from_user else 0
-    current_year = datetime.now().year
+    current_year = datetime.date.today().year
     buttons = []
 
-    # 2. Advanced Button Logic (Coming Soon + Year)
+    # ---- Yahan naya button logic add kiya gaya hai ----
     for movie in movies:
         m_title = movie.get('title')
         m_year = movie.get('year')
-        m_id = movie.get('movieID')
+        m_id = movie.movieID  # IMDb object se ID nikalne ke liye
 
+        # Button text logic
         if m_year and int(m_year) > current_year:
-            text = f"•✅ {m_title} 🕒 Coming Soon"
+            btn_text = f"•✅ {m_title} 🕒 Coming Soon"
         elif m_year:
-            text = f"•✅ {m_title} ({m_year})"
+            btn_text = f"•✅ {m_title} ({m_year})"
         else:
-            text = f"•✅ {m_title}"
+            btn_text = f"•✅ {m_title}"
 
-        buttons.append([InlineKeyboardButton(text=text, callback_data=f"spol#{m_id}#{user}")])
+        buttons.append([InlineKeyboardButton(text=btn_text, callback_data=f"spol#{m_id}#{user}")])
 
+    # Close button
     buttons.append([InlineKeyboardButton(text="🚫 ᴄʟᴏsᴇ 🚫", callback_data='close_data')])
 
+    d = await message.reply_text(
+        text=script.CUDNT_FND.format(message.from_user.mention), 
+        reply_markup=InlineKeyboardMarkup(buttons), 
+        reply_to_message_id=message.id
+    )
+    
+    await asyncio.sleep(60)
+    await d.delete()
     try:
-        d = await message.reply_text(
-            text=script.CUDNT_FND.format(message.from_user.mention), 
-            reply_markup=InlineKeyboardMarkup(buttons), 
-            reply_to_message_id=mv_id
-        )
-        await asyncio.sleep(60)
-        await d.delete()
         await message.delete()
     except:
         pass
+
 
 
 
