@@ -1,6 +1,7 @@
 from pyrogram.errors import MessageNotModified
 from utils import get_size, is_subscribed, is_req_subscribed, group_setting_buttons, get_poster, temp, get_settings, get_time, save_group_settings, get_cap, imdb, is_check_admin, extract_request_content, log_error, clean_filename, generate_season_variations, clean_search_text
 import tracemalloc
+from datetime import datetime
 from fuzzywuzzy import process
 from dreamxbotz.util.file_properties import get_name, get_hash
 from urllib.parse import quote_plus
@@ -2009,26 +2010,31 @@ async def ai_spell_check(chat_id, wrong_name):
         movie_list.remove(movie)
 
 
+
+
+# --- ADVANTAGE SPELL CHECK FUNCTION ---
 async def advantage_spell_chok(client, message):
     mv_id = message.id
     search = message.text
     chat_id = message.chat.id
-    settings = await get_settings(chat_id)
+    
+    # 1. Cleaning the query (Aapka original regex logic)
     query = re.sub(
         r"\b(pl(i|e)*?(s|z+|ease|se|ese|(e+)s(e)?)|((send|snd|giv(e)?|gib)(\sme)?)|movie(s)?|new|latest|br((o|u)h?)*|^h(e|a)?(l)*(o)*|mal(ayalam)?|t(h)?amil|file|that|find|und(o)*|kit(t(i|y)?)?o(w)?|thar(u)?(o)*w?|kittum(o)*|aya(k)*(um(o)*)?|full\smovie|any(one)|with\ssubtitle(s)?)",
-        "", message.text, flags=re.IGNORECASE)
-    query = query.strip() + " movie"
+        "", search, flags=re.IGNORECASE)
+    
+    query = query.strip()
+
     try:
-        movies = await get_poster(search, bulk=True)
-    except:
+        # bulk=True se multiple suggestions milenge
+        movies = await get_poster(query, bulk=True)
+    except Exception as e:
+        print(f"Error: {e}")
         k = await message.reply(script.I_CUDNT.format(message.from_user.mention))
         await asyncio.sleep(60)
         await k.delete()
-        try:
-            await message.delete()
-        except:
-            pass
         return
+
     if not movies:
         google = search.replace(" ", "+")
         button = [[InlineKeyboardButton(
@@ -2036,25 +2042,40 @@ async def advantage_spell_chok(client, message):
         k = await message.reply_text(text=script.I_CUDNT.format(search), reply_markup=InlineKeyboardMarkup(button))
         await asyncio.sleep(60)
         await k.delete()
-        try:
-            await message.delete()
-        except:
-            pass
         return
-    user = message.from_user.id if message.from_user else 0
-    buttons = [
-        [InlineKeyboardButton(
-            text=f"✅ {movie.get('title')}", 
-            callback_data=f"spol#{movie.movieID}#{user}"
-        )] for movie in movies
-    ]
 
-    buttons.append([InlineKeyboardButton(
-        text="🚫 ᴄʟᴏsᴇ 🚫", callback_data='close_data')])
-    d = await message.reply_text(text=script.CUDNT_FND.format(message.from_user.mention), reply_markup=InlineKeyboardMarkup(buttons), reply_to_message_id=message.id)
-    await asyncio.sleep(60)
-    await d.delete()
+    user = message.from_user.id if message.from_user else 0
+    current_year = datetime.now().year
+    buttons = []
+
+    # 2. Advanced Button Logic (Coming Soon + Year)
+    for movie in movies:
+        m_title = movie.get('title')
+        m_year = movie.get('year')
+        m_id = movie.get('movieID')
+
+        if m_year and int(m_year) > current_year:
+            text = f"•✅ {m_title} 🕒 Coming Soon"
+        elif m_year:
+            text = f"•✅ {m_title} ({m_year})"
+        else:
+            text = f"•✅ {m_title}"
+
+        buttons.append([InlineKeyboardButton(text=text, callback_data=f"spol#{m_id}#{user}")])
+
+    buttons.append([InlineKeyboardButton(text="🚫 ᴄʟᴏsᴇ 🚫", callback_data='close_data')])
+
     try:
+        d = await message.reply_text(
+            text=script.CUDNT_FND.format(message.from_user.mention), 
+            reply_markup=InlineKeyboardMarkup(buttons), 
+            reply_to_message_id=mv_id
+        )
+        await asyncio.sleep(60)
+        await d.delete()
         await message.delete()
     except:
         pass
+
+
+
