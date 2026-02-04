@@ -2061,31 +2061,34 @@ async def old_advantage_spell_chok(client, message):
 
 # --- ADVANTAGE SPELL CHECK FUNCTION ---
 
-
 async def advantage_spell_chok(client, message):
     mv_id = message.id
     search = message.text
     chat_id = message.chat.id
-    settings = await get_settings(chat_id)
     
-    # Cleaning the query
+    # Settings handle karne ke liye (agar get_settings fail ho jaye toh error na aaye)
+    try:
+        settings = await get_settings(chat_id)
+    except:
+        settings = {}
+
+    # Cleaning the query (Faltu words nikalne ke liye)
     query = re.sub(
         r"\b(pl(i|e)*?(s|z+|ease|se|ese|(e+)s(e)?)|((send|snd|giv(e)?|gib)(\sme)?)|movie(s)?|new|latest|br((o|u)h?)*|^h(e|a)?(l)*(o)*|mal(ayalam)?|t(h)?amil|file|that|find|und(o)*|kit(t(i|y)?)?o(w)?|thar(u)?(o)*w?|kittum(o)*|aya(k)*(um(o)*)?|full\smovie|any(one)|with\ssubtitle(s)?)",
         "", message.text, flags=re.IGNORECASE)
-    query = query.strip() + " movie"
+    query = query.strip()
 
     try:
-        movies = await get_poster(search, bulk=True)
-    except:
+        # Search ke liye cleaned 'query' use karna behtar hai
+        movies = await get_poster(query, bulk=True)
+    except Exception as e:
+        print(f"Error fetching posters: {e}")
         k = await message.reply(script.I_CUDNT.format(message.from_user.mention))
         await asyncio.sleep(60)
         await k.delete()
-        try:
-            await message.delete()
-        except:
-            pass
         return
 
+    # Agar koi result na mile
     if not movies:
         google = search.replace(" ", "+")
         button = [[InlineKeyboardButton(
@@ -2093,27 +2096,32 @@ async def advantage_spell_chok(client, message):
         k = await message.reply_text(text=script.I_CUDNT.format(search), reply_markup=InlineKeyboardMarkup(button))
         await asyncio.sleep(60)
         await k.delete()
-        try:
-            await message.delete()
-        except:
-            pass
         return
 
     user = message.from_user.id if message.from_user else 0
-    current_year = datetime.date.today().year
+    
+    # SAHI LOGIC: datetime.now().year use karein kyunki aapka import 'from datetime import datetime' hai
+    current_year = datetime.now().year 
     buttons = []
 
-    # ---- Yahan naya button logic add kiya gaya hai ----
     for movie in movies:
         m_title = movie.get('title')
         m_year = movie.get('year')
-        m_id = movie.movieID  # IMDb object se ID nikalne ke liye
+        
+        # ID nikalne ke liye extra safety
+        m_id = getattr(movie, 'movieID', None) or movie.get('id')
+
+        # Year conversion aur comparison (String vs Int error fix)
+        try:
+            year_val = int(m_year) if m_year else None
+        except:
+            year_val = None
 
         # Button text logic
-        if m_year and int(m_year) > current_year:
+        if year_val and year_val > current_year:
             btn_text = f"•✅ {m_title} 🕒 Coming Soon"
-        elif m_year:
-            btn_text = f"•✅ {m_title} ({m_year})"
+        elif year_val:
+            btn_text = f"•✅ {m_title} ({year_val})"
         else:
             btn_text = f"•✅ {m_title}"
 
@@ -2122,18 +2130,22 @@ async def advantage_spell_chok(client, message):
     # Close button
     buttons.append([InlineKeyboardButton(text="🚫 ᴄʟᴏsᴇ 🚫", callback_data='close_data')])
 
-    d = await message.reply_text(
-        text=script.CUDNT_FND.format(message.from_user.mention), 
-        reply_markup=InlineKeyboardMarkup(buttons), 
-        reply_to_message_id=message.id
-    )
-    
-    await asyncio.sleep(60)
-    await d.delete()
     try:
-        await message.delete()
-    except:
-        pass
+        d = await message.reply_text(
+            text=script.CUDNT_FND.format(message.from_user.mention), 
+            reply_markup=InlineKeyboardMarkup(buttons), 
+            reply_to_message_id=message.id
+        )
+        
+        # 60 seconds baad delete karne ka logic
+        await asyncio.sleep(60)
+        await d.delete()
+        try:
+            await message.delete()
+        except:
+            pass
+    except Exception as e:
+        print(f"Error sending buttons: {e}")
 
 
 
