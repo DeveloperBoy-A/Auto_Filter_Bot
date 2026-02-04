@@ -2105,23 +2105,32 @@ async def advantage_spell_chok(client, message):
     buttons = []
 
     for movie in movies:
-        m_title = movie.get('title')
-        m_year = movie.get('year')
+        # Movie ka type check karein
+        # IMDb aksar ye types bhejta hai: 'movie', 'tv series', 'tv mini series', 'video game', 'podcast'
+        m_kind = getattr(movie, 'kind', movie.get('kind', 'movie')).lower()
         
-        # ID nikalne ke liye extra safety
+        # --- FILTER LOGIC ---
+        # Sirf movie aur series ko allow karein, baki sab skip (ignore) karein
+        allowed_kinds = ['movie', 'tv series', 'tv mini series', 'series', 'web series']
+        if m_kind not in allowed_kinds:
+            continue  # Agar podcast ya news hai to loop agli movie par chala jayega
+
+        m_title = movie.get('title')
+        m_year_raw = str(movie.get('year', '')).strip()
         m_id = getattr(movie, 'movieID', None) or movie.get('id')
 
-        # Year conversion aur comparison (String vs Int error fix)
-        try:
-            year_val = int(m_year) if m_year else None
-        except:
-            year_val = None
+        # Year nikalne ka logic (Regex se)
+        year_int = None
+        clean_year = re.sub(r"\D", "", m_year_raw)[:4]
+        if clean_year:
+            year_int = int(clean_year)
 
-        # Button text logic
-        if year_val and year_val > current_year:
-            btn_text = f"•✅ {m_title} 🕒 Coming Soon"
-        elif year_val:
-            btn_text = f"•✅ {m_title} ({year_val})"
+        # 'Expected' aur 'Coming Soon' logic
+        # 2026 current year hai, isliye >= current_year use kiya hai
+        if "expected" in m_year_raw.lower() or (year_int and year_int >= current_year):
+            btn_text = f"•✅ {m_title} 🕒 Coming Soon ({year_int if year_int else 'TBA'})"
+        elif year_int:
+            btn_text = f"•✅ {m_title} ({year_int})"
         else:
             btn_text = f"•✅ {m_title}"
 
