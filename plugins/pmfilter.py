@@ -2043,8 +2043,11 @@ async def advantage_spell_chok(client, message):
         return
     user = message.from_user.id if message.from_user else 0
     buttons = [
-        [InlineKeyboardButton(text=movie.get('title'), callback_data=f"spol#{movie.movieID}#{user}")
-         ] for movie in movies]
+        [InlineKeyboardButton(
+            text=f"✅ {movie.get('title')}", 
+            callback_data=f"spol#{movie.movieID}#{user}"
+        )] for movie in movies
+    ]
 
     buttons.append([InlineKeyboardButton(
         text="🚫 ᴄʟᴏsᴇ 🚫", callback_data='close_data')])
