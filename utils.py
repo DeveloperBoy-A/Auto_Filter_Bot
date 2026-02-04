@@ -320,7 +320,7 @@ async def old_get_poster(query, bulk=False, id=False, file=None):
 
 #Remove Nahi Kiya Hu.....Agar Tujha Remove Karna Hai To Kar Dena
 
-async def old_get_poster(query, bulk=False, id=False, file=None):
+async def get_poster(query, bulk=False, id=False, file=None):
     if not id:
         query = (query.strip()).lower()
         title = query
