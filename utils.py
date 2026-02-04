@@ -2,6 +2,7 @@ import re
 import os
 import logging
 from info import  *
+from imdb import Cinemagoer 
 from imdbkit import IMDBKit
 from fuzzywuzzy import process 
 #from urllib.parse import quote_plus
@@ -26,7 +27,7 @@ BTN_URL_REGEX = re.compile(
 )
 
 
-imdb = IMDBKit() 
+imdb = Cinemagoer() 
 BANNED = {}
 SMART_OPEN = '“'
 SMART_CLOSE = '”'
