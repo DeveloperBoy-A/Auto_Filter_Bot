@@ -100,8 +100,6 @@ TEMPLATES = {
 🌿 ᴘᴏᴡᴇʀᴇᴅ ʙʏ : [🔰ɴᴇᴡ ᴍᴏᴠɪᴇ & ᴡᴇʙ sᴇʀɪᴇs🔰]"""
 }
 
-**𝑷𝒍𝒐𝒕 𝑺𝒖𝒎𝒎𝒂𝒓𝒚**:
-{plot}""",
     "divider_list": """🎬 <b>{title} {year}</b>
 ━━━━━━━━━━━━━━━━━━
 ➥ <b>𝑹𝒂𝒕𝒊𝒏𝒈 :</b> <code>★ {rating}/10</code>
@@ -118,6 +116,7 @@ TEMPLATES = {
 
 <b><u>𝑺𝒚𝒏𝒐𝒑𝒔𝒊𝒔</u></b>
 <i>{plot}</i>""",
+
     "chevron_details": """<b>{title}</b>
 
 » <b>𝒀𝒆𝒂𝒓 ➣</b> {year}
@@ -126,6 +125,7 @@ TEMPLATES = {
 
 <b>∥ 𝑷𝑳𝑶𝑻 ∥</b>
 └─ <i>{plot}</i>""",
+
     "bullet_points": """✨ <b><u>{title} ({year})</u></b> ✨
 
 ● <b>𝑹𝒂𝒕𝒊𝒏𝒈 :</b> {rating}/10
@@ -133,7 +133,8 @@ TEMPLATES = {
 
 <b>💬 𝑷𝒍𝒐𝒕 𝑺𝒖𝒎𝒎𝒂𝒓𝒚 ➥</b>
 <i>{plot}</i>""",
-    "clean_grid": """🎬 {title} ({year})
+
+    "clean_grid": """🎬 <b>{title} ({year})</b>
 
 🗓️ <b>𝒀𝒆𝒂𝒓 ∥</b> {year}
 ⭐️ <b>𝑹𝒂𝒕𝒊𝒏𝒈 ∥</b> {rating}/10
@@ -141,6 +142,7 @@ TEMPLATES = {
 
 ➣ <i>{plot}</i>"""
 }
+
 
 LANGUAGES = [
 
