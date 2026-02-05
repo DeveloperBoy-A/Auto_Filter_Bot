@@ -178,7 +178,7 @@ async def start_post_session(client: Client, message: Message, user_id: int, mov
         "movie_details": movie_details
     }
 
-        if USE_GETFILE_BUTTON_BY_DEFAULT:
+    if USE_GETFILE_BUTTON_BY_DEFAULT:
         title = movie_details.get("title", "movie")
         year = movie_details.get("year", "")
         movie_year = f"{title} {year}".strip()
@@ -321,7 +321,6 @@ async def post_callbacks(client: Client, query: CallbackQuery):
         elif action == "resolutions":
             await show_selection_menu(query, session_id, "resolutions")
         elif action == "otts":
-
             await show_selection_menu(query, session_id, "otts")
         elif action == "templates":
             await handle_templates_menu(query, session)
@@ -355,7 +354,6 @@ async def post_callbacks(client: Client, query: CallbackQuery):
         return
 
     else:
-
         if action == "edit_buttons":
             await handle_edit_buttons(client, query, session)
         elif action == "add_get_files":
@@ -382,7 +380,6 @@ async def post_callbacks(client: Client, query: CallbackQuery):
         elif action == "format_res":
             await handle_format_res(client, query, session)
         elif action == "format_ott":
-
             await handle_format_ott(client, query, session)
         elif action == "finalize":
             return await finalize_and_post(client, query, session_id)
@@ -394,7 +391,6 @@ async def post_callbacks(client: Client, query: CallbackQuery):
 #code is created by @bharath_boy for public use so atleast don't remove credits
 async def show_selection_menu(query: CallbackQuery, session_id: int, menu_type: str):
     session = post_sessions[session_id]
-
 
     if menu_type == "languages":
         items, selected, action_prefix, format_action = (
@@ -408,7 +404,7 @@ async def show_selection_menu(query: CallbackQuery, session_id: int, menu_type: 
     else:
         return
 
-        buttons = [InlineKeyboardButton(
+    buttons = [InlineKeyboardButton(
         f"✅ {i}" if i in selected else i, callback_data=f"post:{action_prefix}:{session_id}:{i}") for i in items]
     keyboard = [buttons[i:i+3]
                 for i in range(0, len(buttons), 3)]  
@@ -466,7 +462,7 @@ async def handle_add_get_files(session):
         title = movie_details.get("title", "movie")
         year = movie_details.get("year", "")
         movie_year = f"{title} {year}".strip()
-        url = f"https://t.me/{BOT_NAME}?start=getfile-{movie_year.replace(' ', '-')}"
+        url = f"https://t.me/{temp.U_NAME}?start=getfile-{movie_year.replace(' ', '-')}"
         session["buttons"].append(
             [InlineKeyboardButton("🗃️✦𝑮𝒆𝒕 𝑭𝒊𝒍𝒆𝒔✦🗃️", url=url)])
 
@@ -643,7 +639,3 @@ async def finalize_and_post(client: Client, query: CallbackQuery, session_id: in
         await status_msg.edit(error_text)
         logger.error(
             f"ᴀɴ ᴜɴᴇxᴘᴇᴄᴛᴇᴅ ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ ᴡʜɪʟᴇ ᴘᴏsᴛɪɴɢ '{session['movie_name']}':", exc_info=True)
-
-
-
-#code is created by @bharath_boy for public use so atleast don't remove credits
