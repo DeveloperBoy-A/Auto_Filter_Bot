@@ -143,27 +143,21 @@ TEMPLATES = {
 ➣ <i>{plot}</i>"""
 }
 
-
 LANGUAGES = [
-
     "Bengali", "English", "Gujarati", "Hindi", "Kannada", "Malayalam",
     "Marathi", "Punjabi", "Tamil", "Telugu", "Urdu",
-
     "Arabic", "French", "German", "Italian", "Japanese", "Korean",
     "Mandarin", "Portuguese", "Russian", "Spanish"
 ]
+
 RESOLUTIONS = [
-
     "144p", "240p", "480p", "720p", "1080p", "1440p", "2160p", "4320p",
-
     "BluRay", "BDRip", "WEB-DL", "VOD", "WEBRip", "HDTV",
     "DVDRip", "DVDScr", "TS", "CAM",
-
     "AV1", "HEVC", "x264"
 ]
 
 OTT_PLATFORMS = [
-
     "Aha",
     "ALTBalaji",
     "JioHotstar",
@@ -175,8 +169,6 @@ OTT_PLATFORMS = [
     "Sun NXT",
     "Voot",
     "Zee5",
-
-
     "Amazon Prime Video",  
     "Apple TV+",
     "Crunchyroll",
