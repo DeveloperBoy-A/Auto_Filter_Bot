@@ -17,7 +17,7 @@ from utils import temp
 logger = logging.getLogger(__name__)
 post_sessions = {}
 
-BOT_NAME = temp.U_NAME
+
 USE_GETFILE_BUTTON_BY_DEFAULT = True
 DEFAULT_WATERMARK = "ᴊᴏɪɴ『 𝑻𝒐𝒌𝒚𝒐 𝑼𝒑𝒅𝒂𝒕𝒆𝒔 』𓆩ꨄ︎𓆪(https://t.me/Tokyo_Updates)"
 LANGUAGES_FORMAT = "➥ <b>𝑳𝒂𝒏𝒈𝒖𝒂𝒈𝒆𝒔 :</b> <code>{langs}</code>"
@@ -232,7 +232,7 @@ async def start_post_session(client: Client, message: Message, user_id: int, mov
         year = movie_details.get("year", "")
         movie_year = f"{title} {year}".strip()
         movie_year = re.sub(r"[ *:\.]", "-", movie_year)
-        url = f"https://t.me/{BOT_NAME}?start=getfile-{movie_year}"
+        url = f"https://t.me/{temp.U_NAME}?start=getfile-{movie_year}"
         post_sessions[user_id]["buttons"] = [  
             [InlineKeyboardButton('🗃️ ✦ 𝗚𝗘𝗧 𝗙𝗜𝗟𝗘 ✦ 🗃️', url=url)],  
             [InlineKeyboardButton('♻️ ʜᴏᴡ ᴛᴏ ᴅᴏᴡɴʟᴏᴀᴅ ♻️', url="https://t.me/newmovieswebseries_group/56553?single")],  
