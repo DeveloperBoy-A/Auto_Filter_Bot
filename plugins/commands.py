@@ -325,11 +325,13 @@ async def start(client, message):
                 return await message.reply('<b><i>ɴᴏ ꜱᴜᴄʜ ꜰɪʟᴇ ᴇxɪꜱᴛꜱ !</b></i>')
             
             filesarr = []
+            cover = None
             for file in files:
                 f_id = file.file_id  # Conflict से बचने के लिए नाम बदला
                 files_ = await get_file_details(f_id)
                 files1 = files_[0]
                 title = clean_filename(files1.file_name)
+                cover = files1.cover
                 size = get_size(files1.file_size)
                 f_caption = files1.caption
                 settings = await get_settings(int(grp_id))
@@ -360,6 +362,7 @@ async def start(client, message):
 
                 msg = await client.send_cached_media(
                     chat_id=message.from_user.id,
+                    cover=cover,
                     file_id=f_id,
                     caption=f_caption,
                     protect_content=settings.get('file_secure', PROTECT_CONTENT),
@@ -390,6 +393,10 @@ async def start(client, message):
     if not files_:
         pre, file_id = ((base64.urlsafe_b64decode(data + "=" * (-len(data) % 4))).decode("utf-8")).split("_", 1)
         try:
+            cover = None
+            if COVERX:
+                details= await get_file_details(file_id)
+                cover = details.get('cover', None)
             if STREAM_MODE and not PREMIUM_STREAM_MODE:
                 btn = [
                     [InlineKeyboardButton('🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️', callback_data=f'generate_stream_link:{file_id}')],
@@ -411,6 +418,7 @@ async def start(client, message):
                 btn = [[InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]] 
             msg = await client.send_cached_media(
                 chat_id=message.from_user.id,
+                cover=cover,
                 file_id=file_id,
                 protect_content=settings.get('file_secure', PROTECT_CONTENT),
                 reply_markup=InlineKeyboardMarkup(btn))
@@ -446,6 +454,7 @@ async def start(client, message):
     files = files_[0]
     title = clean_filename(files.file_name)
     size = get_size(files.file_size)
+    cover = files.cover if files.cover else None
     f_caption = files.caption
     settings = await get_settings(int(grp_id))            
     DREAMX_CAPTION = settings.get('caption', CUSTOM_FILE_CAPTION)
@@ -480,6 +489,7 @@ async def start(client, message):
     msg = await client.send_cached_media(
         chat_id=message.from_user.id,
         file_id=file_id,
+        cover=cover,
         caption=f_caption,
         protect_content=settings.get('file_secure', PROTECT_CONTENT),
         reply_markup=InlineKeyboardMarkup(btn)
