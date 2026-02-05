@@ -21,9 +21,9 @@ post_sessions = {}
 USE_GETFILE_BUTTON_BY_DEFAULT = True
 DEFAULT_WATERMARK = "🌿 ᴘᴏᴡᴇʀᴇᴅ ʙʏ : <a href='https://t.me/Tokyo_Updates'>『 𝑻𝒐𝒌𝒚𝒐 𝑼𝒑𝒅𝒂𝒕𝒆𝒔 』</a>𓆩ꨄ︎𓆪"
 
-LANGUAGES_FORMAT = "➥ <b>𝑳𝒂𝒏𝒈𝒖𝒂𝒈𝒆𝒔 :</b> <code>{langs}</code>"
-RESOLUTIONS_FORMAT = "\n➥ <b>𝑸𝒖𝒂𝒍𝒊𝒕𝒊𝒆𝒔 :</b> <code>{resolutions}</code>"
-OTT_FORMAT = "\n➥ <b>ᴀᴠᴀɪʟᴀʙʟᴇ ᴏɴ :</b> <code>{otts}</code>"
+LANGUAGES_FORMAT = "\n🗣️ <b>𝑳𝒂𝒏𝒈𝒖𝒂𝒈𝒆𝒔 :</b> <code>{langs}</code>"
+RESOLUTIONS_FORMAT = "\n🎞️ <b>𝑸𝒖𝒂𝒍𝒊𝒕𝒊𝒆𝒔 :</b> <code>{resolutions}</code>"
+OTT_FORMAT = "\n📲 <b>ᴀᴠᴀɪʟᴀʙʟᴇ ᴏɴ :</b> <code>{otts}</code>"
 
 TEMPLATES = {
     "classic_emoji": """<b>{title} ({year})</b>
