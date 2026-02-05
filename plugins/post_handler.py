@@ -19,7 +19,8 @@ post_sessions = {}
 
 
 USE_GETFILE_BUTTON_BY_DEFAULT = True
-DEFAULT_WATERMARK = "ᴊᴏɪɴ『 𝑻𝒐𝒌𝒚𝒐 𝑼𝒑𝒅𝒂𝒕𝒆𝒔 』𓆩ꨄ︎𓆪(https://t.me/Tokyo_Updates)"
+DEFAULT_WATERMARK = "🌿 ᴘᴏᴡᴇʀᴇᴅ ʙʏ : <a href='https://t.me/Tokyo_Updates'>『 𝑻𝒐𝒌𝒚𝒐 𝑼𝒑𝒅𝒂𝒕𝒆𝒔 』</a>𓆩ꨄ︎𓆪"
+
 LANGUAGES_FORMAT = "➥ <b>𝑳𝒂𝒏𝒈𝒖𝒂𝒈𝒆𝒔 :</b> <code>{langs}</code>"
 RESOLUTIONS_FORMAT = "\n➥ <b>𝑸𝒖𝒂𝒍𝒊𝒕𝒊𝒆𝒔 :</b> <code>{resolutions}</code>"
 OTT_FORMAT = "\n➥ <b>ᴀᴠᴀɪʟᴀʙʟᴇ ᴏɴ :</b> <code>{otts}</code>"
@@ -28,21 +29,18 @@ TEMPLATES = {
     "classic_emoji": """<b>{title} ({year})</b>
 ⭐️ <b>𝑹𝒂𝒕𝒊𝒏𝒈:</b> {rating}/10
 🎭 <b>𝑮𝒆𝒏𝒓𝒆:</b> {genres}
-💬 <b>𝑷𝒍𝒐𝒕:</b> {plot}
-🌿 ᴘᴏᴡᴇʀᴇᴅ ʙʏ : [🔰ɴᴇᴡ ᴍᴏᴠɪᴇ & ᴡᴇʙ sᴇʀɪᴇs🔰]""",
+💬 <b>𝑷𝒍𝒐𝒕:</b> {plot}""",
 
     "minimalist": """🎬 <b>{title}</b>
 🗓 <b>𝒀𝒆𝒂𝒓:</b> {year}
-🌟 <b>𝑹𝒂𝒕𝒊𝒏𝒈:</b> {rating}
-🌿 ᴘᴏᴡᴇʀᴇᴅ ʙʏ : [🔰ɴᴇᴡ ᴍᴏᴠɪᴇ & ᴡᴇʙ sᴇʀɪᴇs🔰]""",
+🌟 <b>𝑹𝒂𝒕𝒊𝒏𝒈:</b> {rating}""",
 
     "sparkle_header": """✨ <b>{title}</b> ✨
 
 <b>🗓 𝒀𝒆𝒂𝒓:</b> {year} | <b>⭐️ 𝑹𝒂𝒕𝒊𝒏𝒈:</b> {rating}/10
 <b>🎭 𝑮𝒆𝒏𝒓𝒆𝒔:</b> {genres}
 
-<i>{plot}</i>
-🌿 ᴘᴏᴡᴇʀᴇᴅ ʙʏ : [🔰ɴᴇᴡ ᴍᴏᴠɪᴇ & ᴡᴇʙ sᴇʀɪᴇs🔰]""",
+<i>{plot}</i>""",
 
     "markdown_style": """🎥 **{title}** ({year})
 
@@ -50,14 +48,12 @@ TEMPLATES = {
 - **𝑮𝒆𝒏𝒓𝒆𝒔**: {genres}
 
 **𝑷𝒍𝒐𝒕 𝑺𝒖𝒎𝒎𝒂𝒓𝒚**:
-{plot}
-🌿 ᴘᴏᴡᴇʀᴇᴅ ʙʏ : [🔰ɴᴇᴡ ᴍᴏᴠɪᴇ & ᴡᴇʙ sᴇʀɪᴇs🔰]""",
+{plot}""",
 
     "divider_list": """🎬 <b>{title} {year}</b>
 ━━━━━━━━━━━━━━━━━━
 ➥ <b>𝑹𝒂𝒕𝒊𝒏𝒈 :</b> <code>★ {rating}/10</code>
-➥ <b>𝑮𝒆𝒏𝒓𝒆𝒔 :</b> <code>{genres}</code>
-🌿 ᴘᴏᴡᴇʀᴇᴅ ʙʏ : [🔰ɴᴇᴡ ᴍᴏᴠɪᴇ & ᴡᴇʙ sᴇʀɪᴇs🔰]""",
+➥ <b>𝑮𝒆𝒏𝒓𝒆𝒔 :</b> <code>{genres}</code>""",
 
     "dashed_box": """- - - - - - - - - - - - - - - - - -
 🎥 <b>{title}</b>
@@ -68,8 +64,7 @@ TEMPLATES = {
 ➛ <b>𝑮𝒆𝒏𝒓𝒆𝒔 ∥</b> {genres}
 
 <b><u>𝑺𝒚𝒏𝒐𝒑𝒔𝒊𝒔</u></b>
-<i>{plot}</i>
-🌿 ᴘᴏᴡᴇʀᴇᴅ ʙʏ : [🔰ɴᴇᴡ ᴍᴏᴠɪᴇ & ᴡᴇʙ sᴇʀɪᴇs🔰]""",
+<i>{plot}</i>""",
 
     "chevron_details": """<b>{title}</b>
 
@@ -78,8 +73,7 @@ TEMPLATES = {
 » <b>𝑮𝒆𝒏𝒓𝒆𝒔 ➣</b> {genres}
 
 <b>∥ 𝑷𝑳𝑶𝑻 ∥</b>
-└─ <i>{plot}</i>
-🌿 ᴘᴏᴡᴇʀᴇᴅ ʙʏ : [🔰ɴᴇᴡ ᴍᴏᴠɪᴇ & ᴡᴇʙ sᴇʀɪᴇs🔰]""",
+└─ <i>{plot}</i>""",
 
     "bullet_points": """✨ <b><u>{title} ({year})</u></b> ✨
 
@@ -87,8 +81,7 @@ TEMPLATES = {
 ● <b>𝑮𝒆𝒏𝒓𝒆𝒔 :</b> {genres}
 
 <b>💬 𝑷𝒍𝒐𝒕 𝑺𝒖𝒎𝒎𝒂𝒓𝒚 ➥</b>
-<i>{plot}</i>
-🌿 ᴘᴏᴡᴇʀᴇᴅ ʙʏ : [🔰ɴᴇᴡ ᴍᴏᴠɪᴇ & ᴡᴇʙ sᴇʀɪᴇs🔰]""",
+<i>{plot}</i>""",
 
     "clean_grid": """🎬 <b>{title} ({year})</b>
 
@@ -96,8 +89,7 @@ TEMPLATES = {
 ⭐️ <b>𝑹𝒂𝒕𝒊𝒏𝒈 ∥</b> {rating}/10
 🎭 <b>𝑮𝒆𝒏𝒓𝒆𝒔 ∥</b> {genres}
 
-➣ <i>{plot}</i>
-🌿 ᴘᴏᴡᴇʀᴇᴅ ʙʏ : [🔰ɴᴇᴡ ᴍᴏᴠɪᴇ & ᴡᴇʙ sᴇʀɪᴇs🔰]"""
+➣ <i>{plot}</i>"""
 }
 
 LANGUAGES = [
