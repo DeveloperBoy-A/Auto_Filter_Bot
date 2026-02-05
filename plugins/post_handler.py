@@ -56,7 +56,7 @@ TEMPLATES = {
     "divider_list": """🎬 <b>{title} {year}</b>
 ━━━━━━━━━━━━━━━━━━
 ➥ <b>𝑹𝒂𝒕𝒊𝒏𝒈 :</b> <code>★ {rating}/10</code>
-➥ <b>𝑮𝒆𝒏𝒓ᴇ𝒔 :</b> <code>{genres}</code>
+➥ <b>𝑮𝒆𝒏𝒓𝒆𝒔 :</b> <code>{genres}</code>
 🌿 ᴘᴏᴡᴇʀᴇᴅ ʙʏ : [🔰ɴᴇᴡ ᴍᴏᴠɪᴇ & ᴡᴇʙ sᴇʀɪᴇs🔰]""",
 
     "dashed_box": """- - - - - - - - - - - - - - - - - -
@@ -90,7 +90,7 @@ TEMPLATES = {
 <i>{plot}</i>
 🌿 ᴘᴏᴡᴇʀᴇᴅ ʙʏ : [🔰ɴᴇᴡ ᴍᴏᴠɪᴇ & ᴡᴇʙ sᴇʀɪᴇs🔰]""",
 
-    "clean_grid": """🎬 {title} ({year})
+    "clean_grid": """🎬 <b>{title} ({year})</b>
 
 🗓️ <b>𝒀𝒆𝒂𝒓 ∥</b> {year}
 ⭐️ <b>𝑹𝒂𝒕𝒊𝒏𝒈 ∥</b> {rating}/10
@@ -98,49 +98,6 @@ TEMPLATES = {
 
 ➣ <i>{plot}</i>
 🌿 ᴘᴏᴡᴇʀᴇᴅ ʙʏ : [🔰ɴᴇᴡ ᴍᴏᴠɪᴇ & ᴡᴇʙ sᴇʀɪᴇs🔰]"""
-}
-
-    "divider_list": """🎬 <b>{title} {year}</b>
-━━━━━━━━━━━━━━━━━━
-➥ <b>𝑹𝒂𝒕𝒊𝒏𝒈 :</b> <code>★ {rating}/10</code>
-➥ <b>𝑮𝒆𝒏𝒓𝒆𝒔 :</b> <code>{genres}</code>
-""",
-
-    "dashed_box": """- - - - - - - - - - - - - - - - - -
-🎥 <b>{title}</b>
-- - - - - - - - - - - - - - - - - -
-
-➛ <b>𝒀𝒆𝒂𝒓 ∥</b> {year}
-➛ <b>𝑹𝒂𝒕𝒊𝒏𝒈 ∥</b> {rating}/10
-➛ <b>𝑮𝒆𝒏𝒓𝒆𝒔 ∥</b> {genres}
-
-<b><u>𝑺𝒚𝒏𝒐𝒑𝒔𝒊𝒔</u></b>
-<i>{plot}</i>""",
-
-    "chevron_details": """<b>{title}</b>
-
-» <b>𝒀𝒆𝒂𝒓 ➣</b> {year}
-» <b>𝑹𝒂𝒕𝒊𝒏𝒈 ➣</b> ★ {rating}/10
-» <b>𝑮𝒆𝒏𝒓𝒆𝒔 ➣</b> {genres}
-
-<b>∥ 𝑷𝑳𝑶𝑻 ∥</b>
-└─ <i>{plot}</i>""",
-
-    "bullet_points": """✨ <b><u>{title} ({year})</u></b> ✨
-
-● <b>𝑹𝒂𝒕𝒊𝒏𝒈 :</b> {rating}/10
-● <b>𝑮𝒆𝒏𝒓𝒆𝒔 :</b> {genres}
-
-<b>💬 𝑷𝒍𝒐𝒕 𝑺𝒖𝒎𝒎𝒂𝒓𝒚 ➥</b>
-<i>{plot}</i>""",
-
-    "clean_grid": """🎬 <b>{title} ({year})</b>
-
-🗓️ <b>𝒀𝒆𝒂𝒓 ∥</b> {year}
-⭐️ <b>𝑹𝒂𝒕𝒊𝒏𝒈 ∥</b> {rating}/10
-🎭 <b>𝑮𝒆𝒏𝒓𝒆𝒔 ∥</b> {genres}
-
-➣ <i>{plot}</i>"""
 }
 
 LANGUAGES = [
@@ -169,7 +126,7 @@ OTT_PLATFORMS = [
     "Sun NXT",
     "Voot",
     "Zee5",
-    "Amazon Prime Video",
+    "Amazon Prime Video",  
     "Apple TV+",
     "Crunchyroll",
     "Discovery+",
@@ -180,7 +137,6 @@ OTT_PLATFORMS = [
     "Peacock",
     "YouTube Premium"
 ]
-
 
 
 @Client.on_message(filters.command("post") & filters.user(ADMINS), group=-4)
