@@ -20,7 +20,7 @@ post_sessions = {}
 
 BOT_NAME = temp.U_NAME
 USE_GETFILE_BUTTON_BY_DEFAULT = True
-DEFAULT_WATERMARK = "Join [Filmztube](https://t.me/Filmztube)"
+DEFAULT_WATERMARK = "Join 『 𝑻𝒐𝒌𝒚𝒐 𝑼𝒑𝒅𝒂𝒕𝒆𝒔 』𓆩ꨄ︎𓆪(https://t.me/Tokyo_Updates)"
 LANGUAGES_FORMAT = "➥ <b>Languages :</b> <code>{langs}</code>"
 RESOLUTIONS_FORMAT = "\n➥ <b>Qualities :</b> <code>{resolutions}</code>"
 OTT_FORMAT = "\n➥ <b>Available on :</b> <code>{otts}</code>"
