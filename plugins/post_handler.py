@@ -169,7 +169,7 @@ OTT_PLATFORMS = [
     "Sun NXT",
     "Voot",
     "Zee5",
-    "Amazon Prime Video",  
+    "Amazon Prime Video",
     "Apple TV+",
     "Crunchyroll",
     "Discovery+",
@@ -180,6 +180,7 @@ OTT_PLATFORMS = [
     "Peacock",
     "YouTube Premium"
 ]
+
 
 
 @Client.on_message(filters.command("post") & filters.user(ADMINS), group=-4)
