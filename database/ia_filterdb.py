@@ -41,6 +41,7 @@ class Media(Document):
     file_type = fields.StrField(allow_none=True)
     mime_type = fields.StrField(allow_none=True)
     caption = fields.StrField(allow_none=True)
+    cover = fields.StrField(allow_none=True)
 
     class Meta:
         indexes = ("$file_name",)
@@ -56,6 +57,7 @@ class Media2(Document):
     file_type = fields.StrField(allow_none=True)
     mime_type = fields.StrField(allow_none=True)
     caption = fields.StrField(allow_none=True)
+    cover = fields.StrField(allow_none=True)
 
     class Meta:
         indexes = ("$file_name",)
@@ -182,7 +184,8 @@ def extract_languages_quality(caption: str):
 # ---------------- Save File ----------------
 async def save_file(media):
     """
-    Save file in database with FORCED language + quality from caption
+    Save file in database with FORCED language + quality from caption 
+    and CUSTOM COVER/POSTER logic.
     """
 
     try:
@@ -221,19 +224,12 @@ async def save_file(media):
             added_langs.add(l)
 
         # 🔹 Optional: resolution duplicate avoid
-        added_res = set()
         if resolution_caption:
-            r_upper = resolution_caption.upper()
-            if r_upper not in added_res:
-                parts.append(r_upper)
-                added_res.add(r_upper)
+            parts.append(resolution_caption.upper())
 
         # 🔹 Optional: source duplicate avoid
-        added_src = set()
         if source_caption:
-            if source_caption not in added_src:
-                parts.append(source_caption)
-                added_src.add(source_caption)
+            parts.append(source_caption)
 
         file_name = " ".join(parts) + ext
 
@@ -261,6 +257,10 @@ async def save_file(media):
             except Exception as e:
                 logger.error("DB check failed, using Primary DB", exc_info=e)
 
+        # ---------------- COVER/POSTER LOGIC (ADDED) ----------------
+        # Media object se cover ki file_id nikaalna
+        cover_to_use = getattr(getattr(media, "cover", None), "file_id", None)
+
         # ---------------- SAVE ----------------
         caption_html = (
             getattr(media.caption, "html", None)
@@ -276,6 +276,7 @@ async def save_file(media):
             file_type=media.file_type,
             mime_type=media.mime_type,
             caption=caption_html,
+            cover=cover_to_use if COVERX else None, # Yahan cover add ho gaya
         )
 
         await record.commit()
@@ -290,6 +291,7 @@ async def save_file(media):
     except Exception as e:
         logger.exception(f"[ERROR] Save failed → {file_name}", exc_info=e)
         return False, 3
+
 
 
 
