@@ -1745,24 +1745,24 @@ async def auto_filter(client, msg, spoll=False):
             search = message.text
             search = search.lower()
             search = re.sub(
-    "["
-    "\U0001F600-\U0001F64F"  # emoticons
-    "\U0001F300-\U0001F5FF"  # symbols & pictographs
-    "\U0001F680-\U0001F6FF"  # transport & map
-    "\U0001F1E0-\U0001F1FF"  # flags
-    "\U00002700-\U000027BF"  # dingbats
-    "\U000024C2-\U0001F251"
-    "]+",
-    "",
-    search
-)
+                "["
+                "\U0001F600-\U0001F64F"  # emoticons
+                "\U0001F300-\U0001F5FF"  # symbols & pictographs
+                "\U0001F680-\U0001F6FF"  # transport & map
+                "\U0001F1E0-\U0001F1FF"  # flags
+                "\U00002700-\U000027BF"  # dingbats
+                "\U000024C2-\U0001F251"
+                "]+",
+                "",
+                search
+            )
             m = await message.reply_text(f'**•『 🔍 ɪ ᴀᴍ ꜱᴇᴀʀᴄʜɪɴɢ 』•** `{search}`', reply_to_message_id=message.id)
             find = search.split(" ")
             search = ""
             removes = ["in", "upload", "series", "full",
                        "horror", "thriller", "mystery", "print", "file", "pls", "please", "send", "give", "movie", "movies", "new", "latest", "bro", "bruh",
-     "link", "dubbed", "with", "subtitle", "subtitles", "anyone", "any",
-     "venum", "iruka", "pannunga", "anuppunga", "film", "undo", "kitti", "kitty", "tharu"]
+                       "link", "dubbed", "with", "subtitle", "subtitles", "anyone", "any",
+                       "venum", "iruka", "pannunga", "anuppunga", "film", "undo", "kitti", "kitty", "tharu"]
             for x in find:
                 if x in removes:
                     continue
@@ -1798,10 +1798,12 @@ async def auto_filter(client, msg, spoll=False):
         m = await message.reply_text(f'**•『 🔍 ɪ ᴀᴍ ꜱᴇᴀʀᴄʜɪɴɢ 』•** `{search}`', reply_to_message_id=message.id)
         settings = await get_settings(message.chat.id)
         await msg.message.delete()
+
     key = f"{message.chat.id}-{message.id}"
     FRESH[key] = search
     temp.GETALL[key] = files
     temp.SHORT[message.from_user.id] = message.chat.id
+    
     if settings.get('button'):
         btn = [
             [
@@ -1812,40 +1814,29 @@ async def auto_filter(client, msg, spoll=False):
         ]
         btn.insert(0,
                    [
-                       InlineKeyboardButton(
-                           f'Qᴜᴀʟɪᴛʏ', callback_data=f"qualities#{key}"),
-                       InlineKeyboardButton(
-                           "Lᴀɴɢᴜᴀɢᴇ", callback_data=f"languages#{key}"),
-                       InlineKeyboardButton(
-                           "Sᴇᴀsᴏɴ",  callback_data=f"seasons#{key}")
+                       InlineKeyboardButton(f'Qᴜᴀʟɪᴛʏ', callback_data=f"qualities#{key}"),
+                       InlineKeyboardButton("Lᴀɴɢᴜᴀɢᴇ", callback_data=f"languages#{key}"),
+                       InlineKeyboardButton("Sᴇᴀsᴏɴ",  callback_data=f"seasons#{key}")
                    ]
                    )
         btn.insert(0,
                    [
-                       InlineKeyboardButton(
-                           "⚜️ 𝐑𝐞𝐦𝐨𝐯𝐞 𝐚𝐝𝐬 ⚜️", url=f"https://t.me/{temp.U_NAME}?start=premium"),
-                       InlineKeyboardButton(
-                           "Sᴇɴᴅ Aʟʟ", callback_data=f"sendfiles#{key}")
-
+                       InlineKeyboardButton("⚜️ 𝐑𝐞𝐦𝐨𝐯𝐞 𝐚𝐝𝐬 ⚜️", url=f"https://t.me/{temp.U_NAME}?start=premium"),
+                       InlineKeyboardButton("Sᴇɴᴅ Aʟʟ", callback_data=f"sendfiles#{key}")
                    ])
     else:
         btn = []
         btn.insert(0,
                    [
-                       InlineKeyboardButton(
-                           f'Qᴜᴀʟɪᴛʏ', callback_data=f"qualities#{key}"),
-                       InlineKeyboardButton(
-                           "Lᴀɴɢᴜᴀɢᴇ", callback_data=f"languages#{key}"),
-                       InlineKeyboardButton(
-                           "Sᴇᴀsᴏɴ",  callback_data=f"seasons#{key}")
+                       InlineKeyboardButton(f'Qᴜᴀʟɪᴛʏ', callback_data=f"qualities#{key}"),
+                       InlineKeyboardButton("Lᴀɴɢᴜᴀɢᴇ", callback_data=f"languages#{key}"),
+                       InlineKeyboardButton("Sᴇᴀsᴏɴ",  callback_data=f"seasons#{key}")
                    ]
                    )
         btn.insert(0,
                    [
-                       InlineKeyboardButton(
-                           "⚜️ 𝐑𝐞𝐦𝐨𝐯𝐞 𝐚𝐝𝐬 ⚜️", url=f"https://t.me/{temp.U_NAME}?start=premium"),
-                       InlineKeyboardButton(
-                           "Sᴇɴᴅ Aʟʟ", callback_data=f"sendfiles#{key}")
+                       InlineKeyboardButton("⚜️ 𝐑𝐞𝐦𝐨𝐯𝐞 𝐚𝐝𝐬 ⚜️", url=f"https://t.me/{temp.U_NAME}?start=premium"),
+                       InlineKeyboardButton("Sᴇɴᴅ Aʟʟ", callback_data=f"sendfiles#{key}")
                    ])
 
     if offset != "":
@@ -1868,8 +1859,7 @@ async def auto_filter(client, msg, spoll=False):
                     text=f"1/{math.ceil(int(total_results)/10)}", callback_data="pages"), InlineKeyboardButton(text="ɴᴇxᴛ ⋟", callback_data=f"next_{req}_{key}_{offset}")]
             )
     else:
-        btn.append([InlineKeyboardButton(
-            text="↭ ɴᴏ ᴍᴏʀᴇ ᴘᴀɢᴇꜱ ᴀᴠᴀɪʟᴀʙʟᴇ ↭", callback_data="pages")])
+        btn.append([InlineKeyboardButton(text="↭ ɴᴏ ᴍᴏʀᴇ ᴘᴀɢᴇꜱ ᴀᴠᴀɪʟᴀʙʟᴇ ↭", callback_data="pages")])
 
     imdb = await get_poster(search, file=(files[0]).file_name) if settings["imdb"] else None
 
@@ -1878,8 +1868,8 @@ async def auto_filter(client, msg, spoll=False):
         timedelta(hours=curr_time.hour, minutes=curr_time.minute,
                   seconds=(curr_time.second+(curr_time.microsecond/1000000)))
     remaining_seconds = "{:.2f}".format(time_difference.total_seconds())
+    
     TEMPLATE = script.IMDB_TEMPLATE_TXT
-    settings = await get_settings(message.chat.id)
     if settings['template']:
         TEMPLATE = settings['template']
 
@@ -1915,13 +1905,12 @@ async def auto_filter(client, msg, spoll=False):
             url=imdb['url'],
             **locals()
         )
-                Temp.IMDB_CAP[message.from_user.id] = cap
+        Temp.IMDB_CAP[message.from_user.id] = cap
         if not settings.get('button'):
             cap += "\n📂 <b><u>𝒀𝒐𝒖𝒓 𝑭𝒊𝒍𝒆𝒔 𝑨𝒓𝒆 𝑹𝒆𝒂𝒅𝒚</u></b> 👇\n\n"
             for idx, file in enumerate(files, start=1):
                 cap += f"<b>{idx}. <a href='https://telegram.me/{temp.U_NAME}?start=file_{message.chat.id}_{file.file_id}'>[{get_size(file.file_size)}] {clean_filename(file.file_name)}</a></b>\n\n"
             
-            # Perfect Gap and Divider Logic
             cap = cap.strip()
             cap += f"\n\n───────────────────────\n<b>{script.DEL_MSG_2.format(get_time(DELETE_TIME))}</b>"    
     else:
@@ -1933,7 +1922,6 @@ async def auto_filter(client, msg, spoll=False):
             for idx, file in enumerate(files, start=1):
                 cap += f"<b>{idx}. <a href='https://telegram.me/{temp.U_NAME}?start=file_{message.chat.id}_{file.file_id}'>[{get_size(file.file_size)}] {clean_filename(file.file_name)}</a></b>\n\n"
             
-            # Perfect Gap and Divider Logic
             cap = cap.strip()
             cap += f"\n\n───────────────────────\n<b>{script.DEL_MSG_2.format(get_time(DELETE_TIME))}</b>"   
 
@@ -1991,6 +1979,7 @@ async def auto_filter(client, msg, spoll=False):
             await asyncio.sleep(DELETE_TIME)
             await dxb.delete()
             await message.delete()
+
 
 
 
