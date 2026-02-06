@@ -1074,14 +1074,16 @@ async def get_cap(settings, remaining_seconds, files, query, total_results, sear
                 cap = IMDB_CAP
                 cap += "\n📂 <b><u>𝒀𝒐𝒖𝒓 𝑭𝒊𝒍𝒆𝒔 𝑨𝒓𝒆 𝑹𝒆𝒂𝒅𝒚</u></b> 👇\n\n"
                 for idx, file in enumerate(files, start=offset + 1):
-                        cap += (
-                            f"<b>{idx}. "
-                            f"<a href='https://telegram.me/{temp.U_NAME}"
-                            f"?start=file_{query.message.chat.id}_{file.file_id}'>"
-                            f"[{get_size(file.file_size)}] "
-                            f"{clean_filename(file.file_name)}</a></b>\n\n"
-                        )
-                cap += f"<b>{script.DEL_MSG_2.format(get_time(DELETE_TIME))}</b>"   
+                    cap += (
+                        f"<b>{idx}. "
+                        f"<a href='https://telegram.me/{temp.U_NAME}"
+                        f"?start=file_{query.message.chat.id}_{file.file_id}'>"
+                        f"[{get_size(file.file_size)}] "
+                        f"{clean_filename(file.file_name)}</a></b>\n\n"
+                    )
+                # strip() se extra space hataya aur bina extra \n ke line aur msg jod diya
+                cap = cap.strip() + f"\n──────────────────\n<b>{script.DEL_MSG_2.format(get_time(DELETE_TIME))}</b>"   
+            
             else:
                 imdb = await get_poster(search, file=(files[0]).file_name) if settings["imdb"] else None
                 if imdb:
@@ -1117,6 +1119,7 @@ async def get_cap(settings, remaining_seconds, files, query, total_results, sear
                         url=imdb['url'],
                         **locals()
                     )
+                    cap += "\n📂 <b><u>𝒀𝒐𝒖𝒓 𝑭𝒊𝒍𝒆𝒔 𝑨𝒓𝒆 𝑹𝒆𝒂𝒅𝒚</u></b> 👇\n\n"
                     for idx, file in enumerate(files, start=offset+1):
                         cap += (
                             f"<b>{idx}. "
@@ -1125,7 +1128,8 @@ async def get_cap(settings, remaining_seconds, files, query, total_results, sear
                             f"[{get_size(file.file_size)}] "
                             f"{clean_filename(file.file_name)}</a></b>\n\n"
                         )
-                    cap += f"<b>{script.DEL_MSG_2.format(get_time(DELETE_TIME))}</b>"   
+                    cap = cap.strip() + f"\n──────────────────\n<b>{script.DEL_MSG_2.format(get_time(DELETE_TIME))}</b>"   
+                
                 else:
                     cap = (
                         f"<b>🏷 ᴛɪᴛʟᴇ : <code>{search}</code>\n"
@@ -1143,7 +1147,8 @@ async def get_cap(settings, remaining_seconds, files, query, total_results, sear
                             f"[{get_size(file.file_size)}] "
                             f"{clean_filename(file.file_name)}</a></b>\n\n"
                         )
-                    cap += f"<b>{script.DEL_MSG_2.format(get_time(DELETE_TIME))}</b>"   
+                    cap = cap.strip() + f"\n──────────────────\n<b>{script.DEL_MSG_2.format(get_time(DELETE_TIME))}</b>"   
+        
         else:
             cap = (
                 f"<b>🏷 ᴛɪᴛʟᴇ : <code>{search}</code>\n"
@@ -1153,20 +1158,18 @@ async def get_cap(settings, remaining_seconds, files, query, total_results, sear
             )
             cap += "\n📂 <b><u>𝒀𝒐𝒖𝒓 𝑭𝒊𝒍𝒆𝒔 𝑨𝒓ᴇ 𝑹𝒆𝒂𝒅𝒚</u></b> 👇\n\n"
             for idx, file in enumerate(files, start=offset):
-                        cap += (
-                            f"<b>{idx}. "
-                            f"<a href='https://telegram.me/{temp.U_NAME}"
-                            f"?start=file_{query.message.chat.id}_{file.file_id}'>"
-                            f"[{get_size(file.file_size)}] "
-                            f"{clean_filename(file.file_name)}</a></b>\n\n"
-                        )
-            cap += f"<b>{script.DEL_MSG_2.format(get_time(DELETE_TIME))}</b>"      
+                cap += (
+                    f"<b>{idx}. "
+                    f"<a href='https://telegram.me/{temp.U_NAME}"
+                    f"?start=file_{query.message.chat.id}_{file.file_id}'>"
+                    f"[{get_size(file.file_size)}] "
+                    f"{clean_filename(file.file_name)}</a></b>\n\n"
+                )
+            cap = cap.strip() + f"\n──────────────────\n<b>{script.DEL_MSG_2.format(get_time(DELETE_TIME))}</b>"      
 
         return cap
     except Exception as e:
         logging.error(f"Error in get_cap: {e}")
         pass
-
-
 
 
