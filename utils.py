@@ -625,29 +625,26 @@ async def save_group_settings(group_id, key, value):
     await db.update_settings(group_id, current)
 
 def clean_filename(file_name):
-    prefixes = ('[', '@', 'www.', 'ClipmateZone', 'NewMoviesOnTG', 'moviehub4uupdate', 'moviehub4u', 'update', 'New', 'Movies', 'OnTG', 'FILMSCLUB04', )
+    # Standard prefixes to remove
+    prefixes = ('[', '@', 'www.', 'ClipmateZone', 'NewMoviesOnTG', 'moviehub4uupdate', 'moviehub4u', 'update', 'New', 'Movies', 'OnTG', 'FILMSCLUB04')
     unwanted = {word.lower() for word in BAD_WORDS}
 
-    file_name = ' '.join(
-        word for word in file_name.split()
+    # Split and Clean
+    words = file_name.split()
+    cleaned_words = [
+        word for word in words 
         if not (word.startswith(prefixes) or word.lower() in unwanted)
-    )
-    return file_name
+    ]
+    
+    # .strip() lagane se extra spaces hat jayenge jo italic font trigger kar sakte hain
+    return ' '.join(cleaned_words).strip()
 
-# ---------------- Prefix Cleaner ----------------
 def remove_prefix_garbage(file_name):
-    """
-    Title से पहले जो भी unwanted prefix/spam words हैं, वो remove करता है.
-    Logic:
-    - prefixes: @, www., #, specific spam words
-    - file_name.split() करके check
-    - पहला valid word मिलने के बाद बाकी words untouched
-    """
     prefixes = (
         '[', '@', 'www.', 't.me/', 'telegram.me/',
-        '#', 'ClipmateZone', 'New', 'Movies', 'OnTG', 'moviehub4uupdate', 'moviehub4u', 'update', 'New', 'Movies', 'OnTG', '@TGCinemaworld -'
+        '#', 'ClipmateZone', 'New', 'Movies', 'OnTG', 'moviehub4uupdate', 
+        'moviehub4u', 'update', '@TGCinemaworld -'
     )
-
     unwanted = {word.lower() for word in BAD_WORDS}
 
     words = file_name.split()
@@ -656,12 +653,13 @@ def remove_prefix_garbage(file_name):
 
     for word in words:
         if not start:
-            if word.startswith(prefixes) or word.lower() in unwanted:
+            # Check if current word is a prefix or bad word
+            if any(word.startswith(p) for p in prefixes) or word.lower() in unwanted:
                 continue
-            start = True  # title start
+            start = True  # Pehla valid title word mil gaya
         cleaned.append(word)
 
-    return ' '.join(cleaned)
+    return ' '.join(cleaned).strip()
 
 
 def get_size(size):
@@ -1068,7 +1066,6 @@ def clean_search_text(search_raw: str) -> str:
         return ""
 
 
-
 async def get_cap(settings, remaining_seconds, files, query, total_results, search, offset=0):
     try:
         if settings["imdb"]:
@@ -1082,8 +1079,7 @@ async def get_cap(settings, remaining_seconds, files, query, total_results, sear
                             f"<a href='https://telegram.me/{temp.U_NAME}"
                             f"?start=file_{query.message.chat.id}_{file.file_id}'>"
                             f"[{get_size(file.file_size)}] "
-                            f"{clean_filename(file.file_name)}\n\n"
-                            f"</a></b>"
+                            f"{clean_filename(file.file_name)}</a></b>\n\n"
                         )
                 cap += f"<b>{script.DEL_MSG_2.format(get_time(DELETE_TIME))}</b>"   
             else:
@@ -1127,8 +1123,7 @@ async def get_cap(settings, remaining_seconds, files, query, total_results, sear
                             f"<a href='https://telegram.me/{temp.U_NAME}"
                             f"?start=file_{query.message.chat.id}_{file.file_id}'>"
                             f"[{get_size(file.file_size)}] "
-                            f"{clean_filename(file.file_name)}\n\n"
-                            f"</a></b>"
+                            f"{clean_filename(file.file_name)}</a></b>\n\n"
                         )
                     cap += f"<b>{script.DEL_MSG_2.format(get_time(DELETE_TIME))}</b>"   
                 else:
@@ -1146,8 +1141,7 @@ async def get_cap(settings, remaining_seconds, files, query, total_results, sear
                             f"<a href='https://telegram.me/{temp.U_NAME}"
                             f"?start=file_{query.message.chat.id}_{file.file_id}'>"
                             f"[{get_size(file.file_size)}] "
-                            f"{clean_filename(file.file_name)}\n\n"
-                            f"</a></b>"
+                            f"{clean_filename(file.file_name)}</a></b>\n\n"
                         )
                     cap += f"<b>{script.DEL_MSG_2.format(get_time(DELETE_TIME))}</b>"   
         else:
@@ -1157,15 +1151,14 @@ async def get_cap(settings, remaining_seconds, files, query, total_results, sear
                 f"📝 ʀᴇǫᴜᴇsᴛᴇᴅ ʙʏ : {query.from_user.mention}\n"
                 f"<blockquote>🌿 ᴍᴀɪɴᴛᴀɪɴᴇᴅ ʙʏ : ᴅᴇᴠᴇʟᴏᴘᴇʀ_ʙᴏʏ™(𝓐𝓷𝓴𝓲𝓽_𝓜𝓮𝓮𝓷𝓪😝)</blockquote>\n</b>"
             )
-            cap += "\n📂 <b><u>𝒀𝒐𝒖𝒓 𝑭𝒊𝒍𝒆𝒔 𝑨𝒓𝒆 𝑹𝒆𝒂𝒅𝒚</u></b> 👇\n\n"
+            cap += "\n📂 <b><u>𝒀𝒐𝒖𝒓 𝑭𝒊𝒍𝒆𝒔 𝑨𝒓ᴇ 𝑹𝒆𝒂𝒅𝒚</u></b> 👇\n\n"
             for idx, file in enumerate(files, start=offset):
                         cap += (
                             f"<b>{idx}. "
                             f"<a href='https://telegram.me/{temp.U_NAME}"
                             f"?start=file_{query.message.chat.id}_{file.file_id}'>"
                             f"[{get_size(file.file_size)}] "
-                            f"{clean_filename(file.file_name)}\n\n"
-                            f"</a></b>"
+                            f"{clean_filename(file.file_name)}</a></b>\n\n"
                         )
             cap += f"<b>{script.DEL_MSG_2.format(get_time(DELETE_TIME))}</b>"      
 
@@ -1173,5 +1166,7 @@ async def get_cap(settings, remaining_seconds, files, query, total_results, sear
     except Exception as e:
         logging.error(f"Error in get_cap: {e}")
         pass
+
+
 
 
