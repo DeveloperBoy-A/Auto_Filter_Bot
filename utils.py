@@ -1075,17 +1075,16 @@ async def get_cap(settings, remaining_seconds, files, query, total_results, sear
             IMDB_CAP = temp.IMDB_CAP.get(query.from_user.id)
             if IMDB_CAP:
                 cap = IMDB_CAP
-                cap += "\n🧾 <u>Your Requested Files Are Here</u> 👇\n\n</b>"
+                cap += "\n📂 <b><u>𝒀𝒐𝒖𝒓 𝑭𝒊𝒍𝒆𝒔 𝑨𝒓𝒆 𝑹𝒆𝒂𝒅𝒚</u></b> 👇\n\n"
                 for idx, file in enumerate(files, start=offset + 1):
                         cap += (
                             f"<b>{idx}. "
                             f"<a href='https://telegram.me/{temp.U_NAME}"
                             f"?start=file_{query.message.chat.id}_{file.file_id}'>"
                             f"[{get_size(file.file_size)}] "
-                            f"{clean_filename(file.file_name)}\n"
+                            f"{clean_filename(file.file_name)}\n\n"
                             f"</a></b>"
                         )
-                            # Loop ke bahar, last me DEL_MSG add karo 
                 cap += f"<b>{script.DEL_MSG_2.format(get_time(DELETE_TIME))}</b>"   
             else:
                 imdb = await get_poster(search, file=(files[0]).file_name) if settings["imdb"] else None
@@ -1128,53 +1127,51 @@ async def get_cap(settings, remaining_seconds, files, query, total_results, sear
                             f"<a href='https://telegram.me/{temp.U_NAME}"
                             f"?start=file_{query.message.chat.id}_{file.file_id}'>"
                             f"[{get_size(file.file_size)}] "
-                            f"{clean_filename(file.file_name)}\n"
+                            f"{clean_filename(file.file_name)}\n\n"
                             f"</a></b>"
                         )
-                                 # Loop ke bahar, last me DEL_MSG add karo 
                     cap += f"<b>{script.DEL_MSG_2.format(get_time(DELETE_TIME))}</b>"   
                 else:
                     cap = (
                         f"<b>🏷 ᴛɪᴛʟᴇ : <code>{search}</code>\n"
                         f"🧱 ᴛᴏᴛᴀʟ ꜰɪʟᴇꜱ : <code>{total_results}</code>\n"
-                        f"⏰ ʀᴇsᴜʟᴛ ɪɴ : <code>{remaining_seconds} Sᴇᴄᴏɴᴅs</code>\n\n"
+                        f"⏰ ʀᴇsᴜʟᴛ ɪɴ : <code>{remaining_seconds} sᴇᴄᴏɴᴅs</code>\n\n"
                         f"📝 ʀᴇǫᴜᴇsᴛᴇᴅ ʙʏ : {query.from_user.mention}\n"
-                        f"<blockquote>🌿 ᴍᴀɪɴᴛᴀɪɴᴇᴅ ʙʏ : 𝐃𝐞𝐯𝐞𝐥𝐨𝐩𝐞𝐫_𝐁𝐨𝐲™(𝓐𝓷𝓴𝓲𝓽_𝓜𝓮𝓮𝓷𝓪😝)</blockquote>\n</b>"
+                        f"<blockquote>🌿 ᴍᴀɪɴᴛᴀɪɴᴇᴅ ʙʏ : ᴅᴇᴠᴇʟᴏᴘᴇʀ_ʙᴏʏ™(𝓐𝓷𝓴𝓲𝓽_𝓜𝓮𝓮𝓷𝓪😝)</blockquote>\n</b>"
                     )
-                    cap += "\n🧾 <u>Your Requested Files Are Here</u> 👇 👇\n</b>"
+                    cap += "\n📂 <b><u>𝒀𝒐𝒖𝒓 𝑭𝒊𝒍𝒆𝒔 𝑨𝒓𝒆 𝑹𝒆𝒂𝒅𝒚</u></b> 👇\n\n"
                     for idx, file in enumerate(files, start=offset + 1):
                         cap += (
                             f"<b>{idx}. "
                             f"<a href='https://telegram.me/{temp.U_NAME}"
                             f"?start=file_{query.message.chat.id}_{file.file_id}'>"
                             f"[{get_size(file.file_size)}] "
-                            f"{clean_filename(file.file_name)}\n"
+                            f"{clean_filename(file.file_name)}\n\n"
                             f"</a></b>"
                         )
-                                 # Loop ke bahar, last me DEL_MSG add karo 
                     cap += f"<b>{script.DEL_MSG_2.format(get_time(DELETE_TIME))}</b>"   
         else:
             cap = (
                 f"<b>🏷 ᴛɪᴛʟᴇ : <code>{search}</code>\n"
                 f"🧱 ᴛᴏᴛᴀʟ ꜰɪʟᴇꜱ : <code>{total_results}</code>\n\n"
                 f"📝 ʀᴇǫᴜᴇsᴛᴇᴅ ʙʏ : {query.from_user.mention}\n"
-                f"<blockquote>🌿 ᴍᴀɪɴᴛᴀɪɴᴇᴅ ʙʏ : 𝐃𝐞𝐯𝐞𝐥𝐨𝐩𝐞𝐫_𝐁𝐨𝐲™(𝓐𝓷𝓴𝓲𝓽_𝓜𝓮𝓮𝓷𝓪😝)</blockquote>\n</b>"
+                f"<blockquote>🌿 ᴍᴀɪɴᴛᴀɪɴᴇᴅ ʙʏ : ᴅᴇᴠᴇʟᴏᴘᴇʀ_ʙᴏʏ™(𝓐𝓷𝓴𝓲𝓽_𝓜𝓮𝓮𝓷𝓪😝)</blockquote>\n</b>"
             )
-            cap += "\n🧾 <u>Your Requested Files Are Here</u> 👇\n\n</b>"
+            cap += "\n📂 <b><u>𝒀𝒐𝒖𝒓 𝑭𝒊𝒍𝒆𝒔 𝑨𝒓𝒆 𝑹𝒆𝒂𝒅𝒚</u></b> 👇\n\n"
             for idx, file in enumerate(files, start=offset):
                         cap += (
                             f"<b>{idx}. "
                             f"<a href='https://telegram.me/{temp.U_NAME}"
                             f"?start=file_{query.message.chat.id}_{file.file_id}'>"
                             f"[{get_size(file.file_size)}] "
-                            f"{clean_filename(file.file_name)}\n"
+                            f"{clean_filename(file.file_name)}\n\n"
                             f"</a></b>"
                         )
-                          # Loop ke bahar, last me DEL_MSG add karo 
             cap += f"<b>{script.DEL_MSG_2.format(get_time(DELETE_TIME))}</b>"      
 
         return cap
     except Exception as e:
         logging.error(f"Error in get_cap: {e}")
         pass
+
 
