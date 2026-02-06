@@ -1915,13 +1915,15 @@ async def auto_filter(client, msg, spoll=False):
             url=imdb['url'],
             **locals()
         )
-        temp.IMDB_CAP[message.from_user.id] = cap
+                Temp.IMDB_CAP[message.from_user.id] = cap
         if not settings.get('button'):
             cap += "\n📂 <b><u>𝒀𝒐𝒖𝒓 𝑭𝒊𝒍𝒆𝒔 𝑨𝒓𝒆 𝑹𝒆𝒂𝒅𝒚</u></b> 👇\n\n"
             for idx, file in enumerate(files, start=1):
                 cap += f"<b>{idx}. <a href='https://telegram.me/{temp.U_NAME}?start=file_{message.chat.id}_{file.file_id}'>[{get_size(file.file_size)}] {clean_filename(file.file_name)}</a></b>\n\n"
-            # Loop ke bahar, last me DEL_MSG add karo 
-            cap += f"<b>{script.DEL_MSG_2.format(get_time(DELETE_TIME))}</b>"    
+            
+            # Perfect Gap and Divider Logic
+            cap = cap.strip()
+            cap += f"\n\n───────────────────────\n<b>{script.DEL_MSG_2.format(get_time(DELETE_TIME))}</b>"    
     else:
         if settings.get('button'):
             cap = f"<b>🏷 ᴛɪᴛʟᴇ : <code>{search}</code>\n🧱 ᴛᴏᴛᴀʟ ꜰɪʟᴇꜱ : <code>{total_results}</code>\n⏰ ʀᴇsᴜʟᴛ ɪɴ : <code>{remaining_seconds} sᴇᴄᴏɴᴅs</code>\n<blockquote>🌿 ᴍᴀɪɴᴛᴀɪɴᴇᴅ ʙʏ : ᴅᴇᴠᴇʟᴏᴘᴇʀ_ʙᴏʏ™(𝓐𝓷𝓴𝓲𝓽_𝓜𝓮𝓮𝓷𝓪😝)</blockquote>\n📝 ʀᴇǫᴜᴇsᴛᴇᴅ ʙʏ : {message.from_user.mention}\n⚜️ ᴘᴏᴡᴇʀᴇᴅ ʙʏ : ⚡ {message.chat.title or temp.B_LINK or 'ᴅʀᴇᴀᴍxʙᴏᴛᴢ'} \n\n📂 <b><u>𝒀𝒐𝒖𝒓 𝑭𝒊𝒍𝒆𝒔 𝑨𝒓𝒆 𝑹𝒆𝒂𝒅𝒚</u></b> 👇 \n\n</b>"
@@ -1930,8 +1932,11 @@ async def auto_filter(client, msg, spoll=False):
 
             for idx, file in enumerate(files, start=1):
                 cap += f"<b>{idx}. <a href='https://telegram.me/{temp.U_NAME}?start=file_{message.chat.id}_{file.file_id}'>[{get_size(file.file_size)}] {clean_filename(file.file_name)}</a></b>\n\n"
-             # Loop ke bahar, last me DEL_MSG add karo 
-            cap += f"<b>{script.DEL_MSG_2.format(get_time(DELETE_TIME))}</b>"   
+            
+            # Perfect Gap and Divider Logic
+            cap = cap.strip()
+            cap += f"\n\n───────────────────────\n<b>{script.DEL_MSG_2.format(get_time(DELETE_TIME))}</b>"   
+
     if imdb and imdb.get('poster'):
         try:
             hehe = await message.reply_photo(photo=imdb.get('poster'), caption=cap, reply_markup=InlineKeyboardMarkup(btn), parse_mode=enums.ParseMode.HTML)
@@ -1986,6 +1991,7 @@ async def auto_filter(client, msg, spoll=False):
             await asyncio.sleep(DELETE_TIME)
             await dxb.delete()
             await message.delete()
+
 
 
 
