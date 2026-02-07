@@ -624,9 +624,12 @@ async def save_group_settings(group_id, key, value):
     temp.SETTINGS.update({group_id: current})
     await db.update_settings(group_id, current)
 
+
+#CLEAN_FILENAME____🅰️NKIT_Ⓜ️EENA______
+
 def clean_filename(file_name):
     # Standard prefixes to remove
-    prefixes = ('[', '@', 'www.', 'ClipmateZone', 'NewMoviesOnTG', 'moviehub4uupdate', 'moviehub4u', 'update', 'New', 'Movies', 'OnTG', 'FILMSCLUB04')
+    prefixes = ('[', '@', 'www.', 'ClipmateZone', 'NewMoviesOnTG', 'moviehub4uupdate', 'moviehub4u', 'update', 'New', 'Movies', 'OnTG', 'FILMSCLUB04', 'PremiumHub')
     unwanted = {word.lower() for word in BAD_WORDS}
 
     # Split and Clean
