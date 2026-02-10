@@ -15,7 +15,7 @@ from database.config_db import mdb
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, ReplyKeyboardMarkup
 from pyrogram import Client, filters, enums
 from pyrogram.errors import FloodWait, ChatAdminRequired, UserNotParticipant
-from database.ia_filterdb import Media, Media2, get_file_details, unpack_new_file_id, get_bad_files
+from database.ia_filterdb import Media, Media2, get_file_details, unpack_new_file_id, get_bad_files, MULTIPLE_DB
 from database.users_chats_db import db
 from info import *
 from utils import get_settings, save_group_settings, is_subscribed, is_req_subscribed, get_size, get_shortlink, is_check_admin, temp, get_readable_time, get_time, generate_settings_text, log_error, clean_filename
@@ -1428,3 +1428,41 @@ async def clean_db_command(client, message):
 
     except Exception as e:
         await message.reply_text(f"❌ <b>Error while cleaning DB:</b>\n<code>{e}</code>")
+
+
+
+
+
+@Client.on_message(filters.command("rename_db") & filters.user(ADMINS))
+async def rename_database_files(bot, message):
+    msg = await message.reply_text("🔄 Database renaming process start ho raha hai...")
+    
+    count = 0
+    # Dono DBs ko process karne ke liye list
+    databases = [Media]
+    if MULTIPLE_DB: databases.append(Media2)
+    
+    for db_model in databases:
+        async for file in db_model.find():
+            old_name = file.file_name
+            
+            # Dummy object taaki wahi naming logic use ho sake
+            class DummyMedia:
+                def __init__(self, f):
+                    self.file_name = f.file_name
+                    self.caption = f.caption or ""
+            
+            # Yahan hum logic call karenge (ye logic database.py me alag function me hona chahiye ideally)
+            # Lekin quick fix ke liye hum manual cleaning yahan kar rahe hain:
+            new_name = old_name # Yahan naming logic apply karein jo upar save_file me hai
+            
+            if old_name != new_name:
+                await db_model.collection.update_one(
+                    {"_id": file.file_id},
+                    {"$set": {"file_name": new_name}}
+                )
+                count += 1
+                if count % 100 == 0:
+                    await msg.edit(f"🔄 Processing... {count} files renamed.")
+
+    await msg.edit(f"✅ Task Completed! Total {count} files renamed to new pattern.")
