@@ -184,72 +184,78 @@ def extract_languages_quality(caption: str):
 # ---------------- Save File ----------------
 async def save_file(media):
     """
-    Save file in database with FORCED language + quality from caption 
-    and CUSTOM COVER/POSTER logic.
+    Save file in database with CUSTOM pattern: 
+    Title (Year) Quality Source Codec ESubs [Multi/Dual Audio] [Hindi ORG - English]
     """
-
     try:
+        # 1. Unpack File ID (Original logic)
         file_id, file_ref = unpack_new_file_id(media.file_id)
 
+        # 2. Basic Cleaning
         original_name = str(media.file_name or "Unnamed File").strip()
         base_name, ext = os.path.splitext(original_name)
-
-        # ---------------- CLEAN BASE NAME ----------------
         base_name = re.sub(r"[._\-]+", " ", base_name)
-        base_name = re.sub(r"\s+", " ", base_name).strip()
+        base_name = remove_prefix_garbage(base_name).strip()
 
-        # prefix se pehle ka garbage remove
-        base_name = remove_prefix_garbage(base_name)
+        # 3. Caption se Info Nikalna
+        caption_text = (media.caption.html if hasattr(media.caption, 'html') else str(media.caption or ""))
+        languages, resolution, source = extract_languages_quality(caption_text)
 
-        # ---------------- CAPTION READ (IMPORTANT) ----------------
-        caption_text = media.caption or ""
+        # 4. Year aur Title Extract karna
+        year_match = re.search(r'\b(19|20)\d{2}\b', base_name)
+        year = f"({year_match.group(0)})" if year_match else ""
+        # Year ko title se hatana taaki repeat na ho
+        title = re.sub(r'\b(19|20)\d{2}\b', '', base_name).strip()
+        
+        # 5. Codec aur ESubs detection
+        codec = "x265" if any(x in caption_text.lower() for x in ["x265", "hevc", "10bit"]) else "x264"
+        esub = "ESubs" if any(x in caption_text.lower() for x in ["esub", "subtitle", "subs"]) else ""
+        
+        # 6. Multi-Audio aur ORG Logic
+        audio_info = ""
+        if languages:
+            is_org = "ORG" if "org" in caption_text.lower() else ""
+            
+            # Label decide karein: Multi, Dual ya Single
+            if len(languages) > 2:
+                prefix = "[Multi Audio]"
+            elif len(languages) == 2:
+                prefix = "[Dual Audio]"
+            else:
+                prefix = ""
+            
+            # Languages format karein (Pehli lang ke sath ORG agar hai)
+            formatted_langs = []
+            for i, lang in enumerate(languages):
+                if i == 0 and is_org:
+                    formatted_langs.append(f"{lang} {is_org}")
+                else:
+                    formatted_langs.append(lang)
+            
+            lang_str = " - ".join(formatted_langs)
+            audio_info = f"{prefix} [{lang_str}]".strip()
 
-        # ---------------- EXTRACT INFO ----------------
-        languages, resolution_caption, source_caption = extract_languages_quality(
-            caption_text
-        )
+        # 7. Final Name Assembly
+        # Format: Title (Year) Quality Source Codec ESubs [Audio Tags]
+        new_name_parts = [title, year, resolution, source, codec, esub, audio_info]
+        file_name = " ".join([p for p in new_name_parts if p]).strip() + ext
+        file_name = re.sub(r"\s+", " ", file_name) # Double spaces remove karein
 
-        # ---------------- BUILD FINAL NAME (FORCED) ----------------
-        parts = [base_name]
-
-        # 🔹 language duplicate avoid (minimal & safe)
-        base_lower = base_name.lower()
-        added_langs = set()
-
-        for lang in languages:
-            l = lang.lower()
-            if l in base_lower or l in added_langs:
-                continue
-            parts.append(lang)
-            added_langs.add(l)
-
-        # 🔹 Optional: resolution duplicate avoid
-        if resolution_caption:
-            parts.append(resolution_caption.upper())
-
-        # 🔹 Optional: source duplicate avoid
-        if source_caption:
-            parts.append(source_caption)
-
-        file_name = " ".join(parts) + ext
-
-        # ---------------- FINAL CLEAN ----------------
-        file_name = re.sub(r"[^\w\s().]", " ", file_name)
-        file_name = re.sub(r"\s+", " ", file_name).strip()
-
-        # ---------------- DB SELECTION ----------------
+        # 8. Database Selection (Multiple DB Support)
         saveMedia = Media
         target_db = "Primary"
 
         if MULTIPLE_DB:
             try:
+                # Check if exists in Primary
                 exists = await Media.count_documents({"file_id": file_id}, limit=1)
                 if exists:
                     logger.info(f"[SKIP] '{file_name}' already exists.")
                     return False, 0
 
+                # Check Primary DB size
                 db_size = await check_db_size(db)
-                if db_size >= 407:
+                if db_size >= 407: # 407MB threshold
                     saveMedia = Media2
                     target_db = "Secondary"
                     logger.warning("Switching to Secondary DB")
@@ -257,17 +263,10 @@ async def save_file(media):
             except Exception as e:
                 logger.error("DB check failed, using Primary DB", exc_info=e)
 
-        # ---------------- COVER/POSTER LOGIC (ADDED) ----------------
-        # Media object se cover ki file_id nikaalna
+        # 9. Poster/Cover Logic
         cover_to_use = getattr(getattr(media, "cover", None), "file_id", None)
 
-        # ---------------- SAVE ----------------
-        caption_html = (
-            getattr(media.caption, "html", None)
-            if media.caption and INDEX_CAPTION
-            else None
-        )
-
+        # 10. Record taiyar karein aur Save karein
         record = saveMedia(
             file_id=file_id,
             file_ref=file_ref,
@@ -275,22 +274,21 @@ async def save_file(media):
             file_size=media.file_size,
             file_type=media.file_type,
             mime_type=media.mime_type,
-            caption=caption_html,
-            cover=cover_to_use if COVERX else None, # Yahan cover add ho gaya
+            caption=caption_text if INDEX_CAPTION else None,
+            cover=cover_to_use if COVERX else None,
         )
 
         await record.commit()
-
         logger.info(f"[SUCCESS] Saved → {file_name} ({target_db})")
         return True, 1
 
     except DuplicateKeyError:
         logger.info(f"[SKIP] Duplicate → {file_name}")
         return False, 0
-
     except Exception as e:
-        logger.exception(f"[ERROR] Save failed → {file_name}", exc_info=e)
+        logger.exception(f"[ERROR] Save failed", exc_info=e)
         return False, 3
+
 
 
 
