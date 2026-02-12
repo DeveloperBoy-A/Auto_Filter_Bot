@@ -15,10 +15,10 @@ from database.config_db import mdb
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, ReplyKeyboardMarkup
 from pyrogram import Client, filters, enums
 from pyrogram.errors import FloodWait, ChatAdminRequired, UserNotParticipant
-from database.ia_filterdb import Media, Media2, get_file_details,extract_languages_quality, remove_prefix_garbage,  unpack_new_file_id, get_bad_files, MULTIPLE_DB
+from database.ia_filterdb import Media, Media2, get_file_details,extract_languages_quality, unpack_new_file_id, get_bad_files, MULTIPLE_DB
 from database.users_chats_db import db
 from info import *
-from utils import get_settings, save_group_settings, is_subscribed, is_req_subscribed, get_size, get_shortlink, is_check_admin, temp, get_readable_time, get_time, generate_settings_text, log_error, clean_filename
+from utils import get_settings, save_group_settings, is_subscribed, is_req_subscribed, get_size, get_shortlink, is_check_admin, temp, get_readable_time, get_time, generate_settings_text, log_error, clean_filename, remove_prefix_garbage
 
 
 
