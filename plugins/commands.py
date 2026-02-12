@@ -15,7 +15,7 @@ from database.config_db import mdb
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, ReplyKeyboardMarkup
 from pyrogram import Client, filters, enums
 from pyrogram.errors import FloodWait, ChatAdminRequired, UserNotParticipant
-from database.ia_filterdb import Media, Media2, get_file_details, unpack_new_file_id, get_bad_files, MULTIPLE_DB
+from database.ia_filterdb import Media, Media2, get_file_details,extract_languages_quality, remove_prefix_garbage,  unpack_new_file_id, get_bad_files, MULTIPLE_DB
 from database.users_chats_db import db
 from info import *
 from utils import get_settings, save_group_settings, is_subscribed, is_req_subscribed, get_size, get_shortlink, is_check_admin, temp, get_readable_time, get_time, generate_settings_text, log_error, clean_filename
@@ -1433,7 +1433,7 @@ async def clean_db_command(client, message):
 
 
 
-@Client.on_message(filters.command("rename_db") & filters.user(ADMINS))
+@Client.on_message(filters.command("old_rename_db") & filters.user(ADMINS))
 async def rename_database_files(bot, message):
     msg = await message.reply_text("🔄 Database renaming process start ho raha hai...")
     
@@ -1466,3 +1466,129 @@ async def rename_database_files(bot, message):
                     await msg.edit(f"🔄 Processing... {count} files renamed.")
 
     await msg.edit(f"✅ Task Completed! Total {count} files renamed to new pattern.")
+
+
+
+
+# Global list to track cancellation
+CANCELED_RENAME = []
+
+@Client.on_message(filters.command("rename_db") & filters.user(ADMINS))
+async def rename_old_files_with_progress(client, message):
+    user_id = message.from_user.id
+    
+    # Reset cancel status
+    if user_id in CANCELED_RENAME:
+        CANCELED_RENAME.remove(user_id)
+
+    sts = await message.reply("🔍 Database calculate ho raha hai...")
+    
+    # 1. Total Count
+    try:
+        total_files = await Media.count_documents({})
+        if MULTIPLE_DB:
+            total_files += await Media2.count_documents({})
+    except Exception as e:
+        return await sts.edit(f"❌ DB Count Error: {e}")
+    
+    if total_files == 0:
+        return await sts.edit("✖️ DB Khali hai!")
+
+    count = 0
+    renamed = 0
+    start_time = time.time()
+    
+    collections = [Media]
+    if MULTIPLE_DB:
+        collections.append(Media2)
+
+    for model in collections:
+        async for file in model.find():
+            # CANCEL CHECK
+            if user_id in CANCELED_RENAME:
+                await sts.edit(f"❌ **Process Cancelled!**\n\n- Processed: `{count}`\n- Renamed: `{renamed}`")
+                CANCELED_RENAME.remove(user_id)
+                return
+
+            old_name = file.file_name
+            caption_text = file.caption or ""
+
+            # --- TERA LOGIC ---
+            base_name, ext = os.path.splitext(old_name)
+            base_name = re.sub(r"[._\-]+", " ", base_name)
+            base_name = re.sub(r"\s+", " ", base_name).strip()
+            base_name = remove_prefix_garbage(base_name)
+
+            languages, resolution_caption, source_caption = extract_languages_quality(caption_text)
+
+            parts = [base_name]
+            base_lower = base_name.lower()
+            added_langs = set()
+
+            for lang in languages:
+                l = lang.lower()
+                if l not in base_lower and l not in added_langs:
+                    parts.append(lang)
+                    added_langs.add(l)
+
+            if resolution_caption and resolution_caption.upper() not in base_name.upper():
+                parts.append(resolution_caption.upper())
+
+            if source_caption and source_caption not in base_name.upper():
+                parts.append(source_caption)
+
+            new_file_name = " ".join(parts) + ext
+            new_file_name = re.sub(r"[^\w\s().]", " ", new_file_name)
+            new_file_name = re.sub(r"\s+", " ", new_file_name).strip()
+
+            # UPDATE
+            if new_file_name != old_name:
+                await model.collection.update_one({"_id": file.file_id}, {"$set": {"file_name": new_file_name}})
+                renamed += 1
+
+            count += 1
+            
+            # PROGRESS UPDATE (Every 30 files)
+            if count % 30 == 0 or count == total_files:
+                percent = (count / total_files) * 100
+                bar = "▰" * int(percent / 10) + "▱" * (10 - int(percent / 10))
+                
+                markup = InlineKeyboardMarkup([[
+                    InlineKeyboardButton("❌ Cancel", callback_data=f"cancel_rename_{user_id}")
+                ]])
+                
+                try:
+                    await sts.edit(
+                        text=f"⚙️ **Renaming DB...**\n\n`{bar}` {percent:.1f}%\n\n"
+                             f"📂 Total: `{total_files}`\n"
+                             f"🔄 Processed: `{count}`\n"
+                             f"✅ Updated: `{renamed}`",
+                        reply_markup=markup
+                    )
+                except:
+                    pass
+                await asyncio.sleep(0.3)
+
+    # --- FINAL SUCCESS MESSAGE ---
+    time_taken = time.strftime("%Hh %Mm %Ss", time.gmtime(time.time() - start_time))
+    
+    await sts.edit(
+        text=f"✅ **Database Renaming Successful!**\n\n"
+             f"🏁 **Status:** Completed\n"
+             f"📂 **Total Files:** `{total_files}`\n"
+             f"🔄 **Files Scanned:** `{count}`\n"
+             f"✅ **Names Updated:** `{renamed}`\n"
+             f"⏱️ **Time Taken:** `{time_taken}`\n\n"
+             f"Sab kuch update ho gaya hai bhai! 🔥",
+        reply_markup=None
+    )
+
+# --- CALLBACK ---
+@Client.on_callback_query(filters.regex(r"^cancel_rename_"))
+async def cancel_rename_callback(client, query):
+    u_id = int(query.data.split("_")[-1])
+    if query.from_user.id != u_id:
+        return await query.answer("Ye tere liye nahi hai!", show_alert=True)
+    CANCELED_RENAME.append(u_id)
+    await query.answer("Process roka ja raha hai...", show_alert=True)
+
