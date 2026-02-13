@@ -174,7 +174,7 @@ async def start_post_session(client: Client, message: Message, user_id: int, mov
         title = movie_details.get("title", "movie")
         year = movie_details.get("year", "")
         movie_year = f"{title} {year}".strip()
-        movie_year = re.sub(r"[ *:\.]", "-", movie_year)
+        movie_year = re.sub(r"-+", "-", re.sub(r"[^a-zA-Z0-9]", "-", movie_year)).strip("-")
         url = f"https://t.me/{temp.U_NAME}?start=getfile-{movie_year}"
         post_sessions[user_id]["buttons"] = [  
             [InlineKeyboardButton('🗃️ ✦ 𝗚𝗘𝗧 𝗙𝗜𝗟𝗘 ✦ 🗃️', url=url)],  
