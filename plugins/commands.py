@@ -749,7 +749,7 @@ async def requests(bot, message):
         ]]
 
         request_text = (
-            f"<b>🎬 ʀᴇǫᴜᴇꜱᴛ : <u>{content}</u>\n\n"
+            f"<b>🎬 ʀᴇǫᴜᴇꜱᴛ : <code>{content}</code>\n\n"
             f"👤 ʀᴇᴘᴏʀᴛᴇᴅ ʙʏ : {mention}\n"
             f"🆔 ʀᴇᴘᴏʀᴛᴇʀ ɪᴅ : <code>{reporter}</code>\n"
             f"👥 ɢʀᴏᴜᴘ ɴᴀᴍᴇ : <code>{group_name}</code>\n\n"
