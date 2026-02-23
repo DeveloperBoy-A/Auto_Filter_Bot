@@ -255,11 +255,13 @@ Mᴇꜱꜱᴀɢᴇ : <b>{}</b>"""
 
 
     MOVIE_UPDATE_NOTIFY_TXT = """
-<b><a href="{poster_url}">🖼️</a><a href="{imdb_url}">🆕</a></b> 📌𝑵𝒆𝒘 𝑭𝒊𝒍𝒆 𝑼𝒑𝒍𝒐𝒂𝒅✓
+<b>📌𝑵𝒆𝒘 𝑭𝒊𝒍𝒆 𝑼𝒑𝒍𝒐𝒂𝒅✓\n<code>【❗{filename}❗】</code></b> ✅
 
+🖼️ 𝑷𝒊𝒙𝒆𝒍𝒔 : <b>{quality}</b>
 🎧 𝑨𝒖𝒅𝒊𝒐 : <b>{language}</b>
+🔥 𝑹𝒂𝒕𝒊𝒏𝒈 : <b>{rating}</b>
 {episodes}
-<blockquote>🌿 𝑷𝒐𝒘𝒆𝒓𝒆𝒅 𝒃𝒚 : [🔰𝑵𝒆𝒘 𝒎𝒐𝒗𝒊𝒆 & 𝒘𝒆𝒃 𝒔𝒆𝒓𝒊𝒆𝒔🔰]</blockquote>
+<blockquote>🌿 𝑷𝒐𝒘𝒆𝒓𝒆𝒅 𝒃𝒚 : [🔰『 𝑻𝒐𝒌𝒚𝒐 𝑼𝒑𝒅𝒂𝒕𝒆𝒔 』🔰]</blockquote>
 """
 
 
