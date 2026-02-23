@@ -382,7 +382,7 @@ async def send_movie_update(bot, base_name):
             ]])
 
             if movie_doc.get("poster_url") and not LINK_PREVIEW:
-                resized_poster = await fetch_image(movie_doc["poster_url"], (600,900))
+                resized_poster = await fetch_image(movie_doc["poster_url"], (860,1200))
                 msg = await bot.send_photo(
                     chat_id=MOVIE_UPDATE_CHANNEL,
                     photo=resized_poster,
