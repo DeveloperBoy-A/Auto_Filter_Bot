@@ -206,6 +206,7 @@ BAD_WORDS = {
     "villa",
     "tg",
     "original"
+    "BackupByJaggii"
     "@", "www.", "ClipmateZone", "NewMoviesOnTG", "moviehub4u update",   "New", "Movies", "OnTG", "movie4u"
 } # Set of bad words to filter out
    
