@@ -255,7 +255,7 @@ Mᴇꜱꜱᴀɢᴇ : <b>{}</b>"""
 
 
     MOVIE_UPDATE_NOTIFY_TXT = """
-<b><a href="{poster_url}">🖼️</a><a href="{imdb_url}">🆕</a></b> ✅
+<b><a href="{poster_url}">🖼️</a><a href="{imdb_url}">🆕</a></b> 📌𝑵𝒆𝒘 𝑭𝒊𝒍𝒆 𝑼𝒑𝒍𝒐𝒂𝒅✓
 
 🎧 𝑨𝒖𝒅𝒊𝒐 : <b>{language}</b>
 {episodes}
