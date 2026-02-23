@@ -368,18 +368,19 @@ async def send_movie_update(bot, base_name):
                 return None
 
             text = generate_movie_message(movie_doc, base_name)
-            buttons = InlineKeyboardMarkup([[
-                InlineKeyboardButton(
-                    '🗃️ ✦ 𝗚𝗘𝗧 𝗙𝗜𝗟𝗘 ✦ 🗃️',
-                    url=f"https://t.me/{temp.U_NAME}?start=getfile-{base_name.replace(' ', '-')}"
-                )],
-            [
-                InlineKeyboardButton('♻️ Hᴏᴡ Tᴏ Dᴏᴡɴʟᴏᴀᴅ ♻️', url="https://t.me/newmovies_support/1236?single"
-                )],
-                                            [
-                InlineKeyboardButton('🔰MOVIE SEARCH GROUP🔰', url="https://t.me/newmovieswebseries_group"
-                )
-            ]])
+            
+            # Movie Search Group button hata diya gaya hai
+            buttons = InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton(
+                        '🗃️ ✦ 𝗚𝗘𝗧 𝗙𝗜𝗟𝗘 ✦ 🗃️',
+                        url=f"https://t.me/{temp.U_NAME}?start=getfile-{base_name.replace(' ', '-')}"
+                    )
+                ],
+                [
+                    InlineKeyboardButton('♻️ Hᴏᴡ Tᴏ Dᴏᴡɴʟᴏᴀᴅ ♻️', url="https://t.me/newmovies_support/1236?single")
+                ]
+            ])
 
             if movie_doc.get("poster_url") and not LINK_PREVIEW:
                 resized_poster = await fetch_image(movie_doc["poster_url"], (860,1200))
@@ -424,18 +425,20 @@ async def update_movie_message(bot, base_name):
             return
 
         text = generate_movie_message(movie_doc, base_name)
-        buttons = InlineKeyboardMarkup([[
+        
+        # Movie Search Group button hata diya gaya hai
+        buttons = InlineKeyboardMarkup([
+            [
                 InlineKeyboardButton(
                     '🗃️ ✦ 𝗚𝗘𝗧 𝗙𝗜𝗟𝗘 ✦ 🗃️',
                     url=f"https://t.me/{temp.U_NAME}?start=getfile-{base_name.replace(' ', '-')}"
-                )],
-            [
-                InlineKeyboardButton('♻️ Hᴏᴡ Tᴏ Dᴏᴡɴʟᴏᴀᴅ ♻️', url="https://t.me/newmovies_support/1236?single"
-                )],
-                                            [
-                InlineKeyboardButton('🔰 ᴍᴏᴠɪᴇ ꜱᴇᴀʀᴄʜ ɢʀᴏᴜᴘ 🔰', url="https://t.me/newmovieswebseries_group"
                 )
-            ]])
+            ],
+            [
+                InlineKeyboardButton('♻️ Hᴏᴡ Tᴏ Dᴏᴡɴʟᴏᴀᴅ ♻️', url="https://t.me/newmovies_support/1236?single")
+            ]
+        ])
+        
         message_id = movie_doc.get("message_id")
         is_photo = movie_doc.get("is_photo", False)
 
@@ -483,7 +486,6 @@ async def update_movie_message(bot, base_name):
             await send_movie_update(bot, base_name)
     except Exception as e:
         logger.error(f"Failed to update movie message for {base_name}: {e}")
-
 
 def generate_movie_message(movie_doc, base_name):
     all_qualities = set()
