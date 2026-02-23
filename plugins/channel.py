@@ -377,7 +377,7 @@ async def send_movie_update(bot, base_name):
                 InlineKeyboardButton('♻️ Hᴏᴡ Tᴏ Dᴏᴡɴʟᴏᴀᴅ ♻️', url="https://t.me/newmovies_support/1236?single"
                 )],
                                             [
-                InlineKeyboardButton('🔰MOVIE SEARCH GROUP🔰', url=""
+                InlineKeyboardButton('🔰MOVIE SEARCH GROUP🔰', url="https://t.me/newmovieswebseries_group"
                 )
             ]])
 
@@ -388,7 +388,8 @@ async def send_movie_update(bot, base_name):
                     photo=resized_poster,
                     caption=text,
                     reply_markup=buttons,
-                    parse_mode=enums.ParseMode.HTML
+                    parse_mode=enums.ParseMode.HTML,
+                    has_spoiler=True
                 )
                 is_photo = True
             else:
@@ -429,7 +430,7 @@ async def update_movie_message(bot, base_name):
                     url=f"https://t.me/{temp.U_NAME}?start=getfile-{base_name.replace(' ', '-')}"
                 )],
             [
-                InlineKeyboardButton('♻️ Hᴏᴡ Tᴏ Dᴏᴡɴʟᴏᴀᴅ ♻️', url="https://t.me/newmovieswebseries_group/56553?single"
+                InlineKeyboardButton('♻️ Hᴏᴡ Tᴏ Dᴏᴡɴʟᴏᴀᴅ ♻️', url="https://t.me/newmovies_support/1236?single"
                 )],
                                             [
                 InlineKeyboardButton('🔰 ᴍᴏᴠɪᴇ ꜱᴇᴀʀᴄʜ ɢʀᴏᴜᴘ 🔰', url="https://t.me/newmovieswebseries_group"
@@ -449,7 +450,8 @@ async def update_movie_message(bot, base_name):
                     message_id=message_id,
                     caption=text,
                     reply_markup=buttons,
-                    parse_mode=enums.ParseMode.HTML
+                    parse_mode=enums.ParseMode.HTML,
+                    has_spoiler=True
                 )
             else:
                 await bot.edit_message_text(
@@ -570,7 +572,7 @@ async def add_button(client, message):
                 [
                     InlineKeyboardButton(
                         "📢 ɴᴇᴡ ᴍᴏᴠɪᴇ ɴᴏᴛɪꜰɪᴄᴀᴛɪᴏɴ ᴄʜᴀɴɴᴇʟ 📢",
-                        url="https://t.me/+KZSznD7dPDIxNWY9"
+                        url="https://t.me/new_movie_update_2026"
                     )
                 ]
             ]
