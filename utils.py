@@ -646,7 +646,7 @@ def remove_prefix_garbage(file_name):
     prefixes = (
         '[', '@', 'www.', 't.me/', 'telegram.me/',
         '#', 'ClipmateZone', 'New', 'Movies', 'OnTG', 'moviehub4uupdate', 
-        'moviehub4u', 'update', '@TGCinemaworld -'
+        'moviehub4u', 'update', '@TGCinemaworld -', 'BackupByJaggii'
     )
     unwanted = {word.lower() for word in BAD_WORDS}
 
