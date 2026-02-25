@@ -255,13 +255,16 @@ Mᴇꜱꜱᴀɢᴇ : <b>{}</b>"""
 
 
     MOVIE_UPDATE_NOTIFY_TXT = """
-<b>📌𝑵𝒆𝒘 𝑭𝒊𝒍𝒆 𝑼𝒑𝒍𝒐𝒂𝒅✓\n<code>【❗{filename}❗】</code></b> ✅
+<b>📌𝑵𝒆𝒘 𝑭𝒊𝒍𝒆 𝑼𝒑𝒍𝒐𝒂𝒅✓\n<code>【{filename}】</code></b> ✅
 
+🎭 𝑮𝒆𝒏𝒓𝒆𝒔 : <b>{genres}</b>
+📺 𝑶𝑻𝑻 : <b>{ott}</b>
 🖼️ 𝑷𝒊𝒙𝒆𝒍𝒔 : <b>{quality}</b>
 🎧 𝑨𝒖𝒅𝒊𝒐 : <b>{language}</b>
 🔥 𝑹𝒂𝒕𝒊𝒏𝒈 : <b>{rating}</b>
 {episodes}
-<blockquote>🌿 𝑷𝒐𝒘𝒆𝒓𝒆𝒅 𝒃𝒚 : [🔰『 𝑻𝒐𝒌𝒚𝒐 𝑼𝒑𝒅𝒂𝒕𝒆𝒔 』🔰]</blockquote>
+⚠️ Dɪsᴄʟᴀɪᴍᴇʀ: ɴᴏ ғɪʟᴇs ʜᴏsᴛᴇᴅ ᴏɴ ᴏᴜʀ sᴇʀᴠᴇʀ. ᴡᴇ ᴏɴʟʏ sʜᴀʀᴇ ɪɴᴛᴇʀɴᴇᴛ-ʙᴀsᴇᴅ ʟɪɴᴋs. ᴀʟʟ ʀɪɢʜᴛs ʙᴇʟᴏɴɢ ᴛᴏ ᴛʜᴇɪʀ ʀᴇsᴘᴇᴄᴛɪᴠᴇ ᴏᴡɴᴇʀs.
+<blockquote>🌿 𝑷𝒐𝒘𝒆𝒓𝒆𝒅 𝒃𝒚 : 𓆩ꨄ︎𓆪『 𝑻𝒐𝒌𝒚𝒐 𝑼𝒑𝒅𝒂𝒕𝒆𝒔 』𓆩ꨄ︎𓆪</blockquote>
 """
 
 
