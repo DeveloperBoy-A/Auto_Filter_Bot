@@ -487,6 +487,43 @@ async def update_movie_message(bot, base_name):
     except Exception as e:
         logger.error(f"Failed to update movie message for {base_name}: {e}")
 
+def get_styled_text(text: str, style_type="bold_serif") -> str:
+    """
+    Title: 𝐏𝐮𝐬𝐡𝐩𝐚 𝟐 (bold_serif)
+    Details: ᴀᴄᴛɪᴏɴ, ʜɪɴᴅɪ, 𝟽𝟸𝟶ᴘ (small_caps)
+    """
+    if not text or text == "N/A":
+        return "N/A"
+
+    bold_serif = {
+        'A': '𝐀', 'B': '𝐁', 'C': '𝐂', 'D': '𝐃', 'E': '𝐄', 'F': '𝐅', 'G': '𝐆', 'H': '𝐇',
+        'I': '𝐈', 'J': '𝐉', 'K': '𝐊', 'L': '𝐋', 'M': '𝐌', 'N': '𝐍', 'O': '𝐎', 'P': '𝐏',
+        'Q': '', 'R': '𝐑', 'S': '𝐒', 'T': '𝐓', 'U': '𝐔', 'V': '𝐕', 'W': '𝐖', 'X': '𝐗',
+        'Y': '𝐘', 'Z': '𝙕',
+        'a': '𝐚', 'b': '𝐛', 'c': '𝐜', 'd': '𝐝', 'e': '𝐞', 'f': '𝐟', 'g': '𝐠', 'h': '𝐡',
+        'i': '𝐢', 'j': '𝐣', 'k': '𝐤', 'l': '𝐥', 'm': '𝐦', 'n': '𝐧', 'o': '𝐨', 'p': '𝐩',
+        'q': '𝐪', 'r': '𝐫', 's': '𝐬', 't': '𝐭', 'u': '𝐮', 'v': '𝐯', 'w': '𝐰', 'x': '𝐱',
+        'y': '𝐲', 'z': '𝐳',
+        '0': '𝟎', '1': '𝟏', '2': '𝟐', '3': '𝟑', '4': '𝟒', '5': '𝟓', '6': '𝟔', '7': '𝟕', '8': '𝟖', '9': '𝟗'
+    }
+    
+    small_caps = {
+        'A': 'ᴀ', 'B': 'ʙ', 'C': 'ᴄ', 'D': 'ᴅ', 'E': 'ᴇ', 'F': 'ꜰ', 'G': 'ɢ', 'H': 'ʜ',
+        'I': 'ɪ', 'J': 'ᴊ', 'K': 'ᴋ', 'L': 'ʟ', 'M': 'ᴍ', 'N': 'ɴ', 'O': 'ᴏ', 'P': 'ᴘ',
+        'Q': 'ǫ', 'R': 'ʀ', 'S': 's', 'T': 'ᴛ', 'U': 'ᴜ', 'V': 'ᴠ', 'W': 'ᴡ', 'X': 'x',
+        'Y': 'ʏ', 'Z': 'ᴢ',
+        '0': '𝟶', '1': '𝟷', '2': '𝟸', '3': '𝟹', '4': '𝟺', '5': '𝟻', '6': '𝟼', '7': '𝟽', '8': '𝟾', '9': '𝟿'
+    }
+
+    target_map = bold_serif if style_type == "bold_serif" else small_caps
+    styled = ""
+    for char in text:
+        if style_type == "bold_serif":
+            styled += target_map.get(char, char)
+        else:
+            styled += target_map.get(char.upper(), char)
+    return styled
+
 def generate_movie_message(movie_doc, base_name):
     all_qualities = set()
     all_languages = set()
@@ -512,48 +549,59 @@ def generate_movie_message(movie_doc, base_name):
     primary_tag = "#SERIES" if "#SERIES" in all_tags else "#MOVIE"
     
     # -------------------------
-    # NEW SEASON & EPISODE STYLE
+    # SEASON & EPISODE STYLE
     # -------------------------
     epi_block = ""
     if episodes_by_season:
         episode_lines = []
         for season, episodes in sorted(episodes_by_season.items(), key=lambda x: int(x[0])):
-            # एपिसोड्स को सॉर्ट करना (Handling ranges and single numbers)
             sorted_eps = sorted(list(episodes), key=lambda x: int(x.split('-')[0]) if '-' in x else int(x))
             ep_list = ", ".join(sorted_eps)
-            
-            # Premium Sidebar Style
             line = (
                 f"<b>┇ 💠 Season {int(season):02}</b>\n"
                 f"<b>┇</b> ╰┈ ᴇᴘs: <code>{ep_list}</code>"
             )
             episode_lines.append(line)
-
         epi_str = "\n".join(episode_lines)
         if epi_str:
-            # Boundary boxes
             epi_block = f"<b>┍━━━━━━━━━━━━━━━</b>\n{epi_str}\n<b>┕━━━━━━━━━━━━━━━</b>"
 
-    genres = movie_doc.get("genres", "N/A")
-    quality_str = ", ".join(sorted(all_qualities)) if all_qualities else "N/A"
-    language_str = ", ".join(sorted(all_languages)) if all_languages else "N/A"
-    ott_str = ", ".join(sorted(all_ott_platforms)) if all_ott_platforms else "N/A"
+    # -------------------------
+    # PREMIUM STYLING ENGINE
+    # -------------------------
+    # 1. Title -> 𝐏𝐮𝐬𝐡𝐩𝐚 𝟐 𝟐𝟎𝟐𝟒
+    styled_title = get_styled_text(base_name, style_type="bold_serif")
+    
+    # 2. Genres -> ᴀᴄᴛɪᴏɴ, ᴅʀᴀᴍᴀ
+    raw_genres = movie_doc.get("genres", "N/A")
+    styled_genres = get_styled_text(raw_genres, style_type="small_caps")
+    
+    # 3. Languages -> ʜɪɴᴅɪ, ᴛᴀᴍɪʟ
+    raw_languages = ", ".join(sorted(all_languages)) if all_languages else "N/A"
+    styled_languages = get_styled_text(raw_languages, style_type="small_caps")
 
-    # Formatting the final message
+    # 4. Quality -> 𝟽𝟸𝟶ᴘ, 𝟷𝟶𝟾𝟶ᴘ
+    raw_quality = ", ".join(sorted(all_qualities)) if all_qualities else "N/A"
+    styled_quality = get_styled_text(raw_quality, style_type="small_caps")
+
+    # 5. OTT Platform -> ɴᴇᴛꜰʟɪx, ᴀᴍᴀᴢᴏɴ (NEW ✨)
+    raw_ott = ", ".join(sorted(all_ott_platforms)) if all_ott_platforms else "N/A"
+    styled_ott = get_styled_text(raw_ott, style_type="small_caps")
+
+    # Final Formatting
     return script.MOVIE_UPDATE_NOTIFY_TXT.format(
         poster_url=movie_doc.get("poster_url", ""),
         imdb_url=movie_doc.get("imdb_url", ""),
-        filename=base_name,
+        filename=styled_title,
         tag=primary_tag,
-        genres=genres,
-        ott=ott_str,
-        quality=quality_str,
-        language=language_str,
-        episodes=epi_block, # This now contains the stylish box
+        genres=styled_genres,
+        ott=styled_ott,              # <--- Styled OTT
+        quality=styled_quality,
+        language=styled_languages,
+        episodes=epi_block,
         rating=movie_doc.get("rating", "N/A"),
         search_link=temp.B_LINK
     )
-
 
 
 
