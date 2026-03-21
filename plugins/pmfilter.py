@@ -1988,7 +1988,7 @@ async def auto_filter(client, msg, spoll=False):
 
 #_______________________________________________________ai_spell_check________________________________________________________
 
-async def ai_spell_check(chat_id, wrong_name):
+async def old_ai_spell_check(chat_id, wrong_name):
     async def search_movie(wrong_name):
         search_results = imdb.search_movie(wrong_name)
         movie_list = [movie['title'] for movie in search_results]
@@ -1999,6 +1999,26 @@ async def ai_spell_check(chat_id, wrong_name):
     for _ in range(4):
         closest_match = process.extractOne(wrong_name, movie_list)
         if not closest_match or closest_match[1] <= 70:
+            return
+        movie = closest_match[0]
+        files, _, _ = await get_search_results(chat_id=chat_id, query=movie)
+        if files:
+            return movie
+        movie_list.remove(movie)
+
+async def ai_spell_check(chat_id, wrong_name):
+    async def search_movie(wrong_name):
+        search_results = imdb.search_movie(wrong_name)
+        if not search_results or not hasattr(search_results, "titles"):
+            return []
+        movie_list = [movie.title for movie in search_results.titles]
+        return movie_list
+    movie_list = await search_movie(wrong_name)
+    if not movie_list:
+        return
+    for _ in range(5):
+        closest_match = process.extractOne(wrong_name, movie_list)
+        if not closest_match or closest_match[1] <= 80:
             return
         movie = closest_match[0]
         files, _, _ = await get_search_results(chat_id=chat_id, query=movie)
