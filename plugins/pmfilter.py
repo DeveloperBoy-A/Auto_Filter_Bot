@@ -2026,6 +2026,60 @@ async def ai_spell_check(chat_id, wrong_name):
             return movie
         movie_list.remove(movie)
 
+async def advantage_spell_chok(client, message):
+    mv_id = message.id
+    search = message.text
+    chat_id = message.chat.id
+    settings = await get_settings(chat_id)
+    query = re.sub(
+        r"\b(pl(i|e)*?(s|z+|ease|se|ese|(e+)s(e)?)|((send|snd|giv(e)?|gib)(\sme)?)|movie(s)?|new|latest|br((o|u)h?)*|^h(e|a)?(l)*(o)*|mal(ayalam)?|t(h)?amil|file|that|find|und(o)*|kit(t(i|y)?)?o(w)?|thar(u)?(o)*w?|kittum(o)*|aya(k)*(um(o)*)?|full\smovie|any(one)|with\ssubtitle(s)?)",
+        "", message.text, flags=re.IGNORECASE)
+    query = query.strip() + " movie"
+    try:
+        movies = await get_poster(search, bulk=True)
+    except Exception as e:
+        logger.exception("get_poster failed for query=%s: %s", query, e)
+        try:
+            k = await message.reply(script.I_CUDNT.format(message.from_user.mention))
+            await asyncio.sleep(60)
+            try:
+                await k.delete()
+            except Exception:
+                pass
+        except Exception:
+            pass
+        try:
+            await message.delete()
+        except Exception:
+            pass
+        return
+    if not movies:
+        google = quote_plus(search)
+        button = [[InlineKeyboardButton(
+            "🔍 ᴄʜᴇᴄᴋ sᴘᴇʟʟɪɴɢ ᴏɴ ɢᴏᴏɢʟᴇ 🔍", url=f"https://www.google.com/search?q={google}")]]
+        k = await message.reply_text(text=script.I_CUDNT.format(search), reply_markup=InlineKeyboardMarkup(button))
+        await asyncio.sleep(60)
+        await k.delete()
+        try:
+            await message.delete()
+        except:
+            pass
+        return
+    user = message.from_user.id if message.from_user else 0
+    buttons = [
+        [InlineKeyboardButton(text=movie.title, callback_data=f"spol#{movie.imdb_id}#{user}")
+         ] for movie in movies]
+
+    buttons.append([InlineKeyboardButton(
+        text="🚫 ᴄʟᴏsᴇ 🚫", callback_data='close_data')])
+    d = await message.reply_text(text=script.CUDNT_FND.format(message.from_user.mention), reply_markup=InlineKeyboardMarkup(buttons), reply_to_message_id=message.id)
+    await asyncio.sleep(60)
+    await d.delete()
+    try:
+        await message.delete()
+    except:
+        pass
+
 
 async def old_advantage_spell_chok(client, message):
     mv_id = message.id
@@ -2078,7 +2132,7 @@ async def old_advantage_spell_chok(client, message):
 
 # --- ADVANTAGE SPELL CHECK FUNCTION ---
 
-async def advantage_spell_chok(client, message):
+async def old_advantage_spell_chok(client, message):
     mv_id = message.id
     search = message.text
     chat_id = message.chat.id
