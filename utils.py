@@ -224,7 +224,7 @@ def listx_to_str(k):
 #________________________
  
 
-async def old_get_poster(query, bulk=False, id=False, file=None):
+async def get_poster(query, bulk=False, id=False, file=None):
     if not id:
         query = (query.strip()).lower()
         title = query
@@ -313,7 +313,7 @@ async def old_get_poster(query, bulk=False, id=False, file=None):
         'release_date': date,
         'year': movie.year,
         'genres': listx_to_str(movie.genres),
-        'poster': movie.cover_url,
+        'poster': movie.get('full-size cover url'),
         'plot': plot,
         'rating': str(movie.rating),
         "url": movie.url or f"https://www.imdb.com/title/{imdb_id}"
@@ -339,7 +339,7 @@ BLOCKED_WORDS = [
     'interview'
 ]
 
-async def get_poster(query, bulk=False, id=False, file=None):
+async def old_get_poster(query, bulk=False, id=False, file=None):
     if not id:
         query = (query.strip()).lower()
         title = query
