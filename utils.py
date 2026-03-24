@@ -223,125 +223,6 @@ def listx_to_str(k):
 
 #________________________
  
-async def get_poster(query, bulk=False, id=False, file=None):
-    if not id:
-        query = (query.strip()).lower()
-        title = query
-        year_val = None
-
-        # Year nikaalne ka logic (Old style)
-        year_list = re.findall(r'[1-2]\d{3}$', query, re.IGNORECASE)
-        if year_list:
-            year_val = year_list[0]
-            title = (query.replace(year_val, "")).strip()
-        elif file is not None:
-            year_list = re.findall(r'[1-2]\d{3}', file, re.IGNORECASE)
-            if year_list:
-                year_val = year_list[0]
-
-        # Search logic (Using asyncio for speed)
-        search_result = await asyncio.to_thread(imdb.search_movie, title.lower())
-        if not search_result:
-            return None
-
-        # Old style filtering: Kind aur Blocked words ke liye
-        movie_list = []
-        for m in search_result:
-            kind = m.get('kind', '').lower()
-            if any(a in kind for a in ALLOWED_KINDS) and not any(b in kind for b in BLOCKED_WORDS):
-                movie_list.append(m)
-        
-        if not movie_list:
-            movie_list = search_result[:MAX_LIST_ELM]
-
-        # Year filter
-        if year_val:
-            filtered = [m for m in movie_list if m.get('year') and str(m.get('year')) == str(year_val)]
-            if not filtered:
-                filtered = movie_list
-        else:
-            filtered = movie_list
-
-        if bulk:
-            return filtered[:MAX_LIST_ELM]
-        
-        if not filtered:
-            return None
-            
-        movieid_str = filtered[0].movieID
-    else:
-        movieid_str = query
-
-    # Movie details fetch karna
-    movie = await asyncio.to_thread(imdb.get_movie, movieid_str)
-    if not movie:
-        return None
-    
-    # Old logic: Update info for votes and main data
-    await asyncio.to_thread(imdb.update, movie, info=['main', 'vote details'])
-
-    # Date handling (Old style)
-    if movie.get("original air date"):
-        date = movie["original air date"]
-    elif movie.get("year"):
-        date = movie.get("year")
-    else:
-        date = "N/A"
-
-    # Plot logic (Old style integration)
-    if not LONG_IMDB_DESCRIPTION:
-        plot_data = movie.get('plot')
-        plot = plot_data[0] if plot_data and len(plot_data) > 0 else ""
-    else:
-        plot = movie.get('plot outline', "")
-
-    if plot and len(plot) > 800:
-        plot = plot[:800] + "..."
-
-    # Standard Genres filtering (Old logic)
-    STANDARD_GENRES = {
-        'Action', 'Adventure', 'Animation', 'Biography', 'Comedy', 'Crime', 'Documentary',
-        'Drama', 'Family', 'Fantasy', 'Film-Noir', 'History', 'Horror', 'Music',
-        'Musical', 'Mystery', 'Romance', 'Sci-Fi', 'Sport', 'Thriller', 'War', 'Western'
-    }
-    raw_genres = movie.get("genres", [])
-    if isinstance(raw_genres, str):
-        raw_genres = [g.strip() for g in raw_genres.split(",")]
-    
-    genres = ", ".join(g for g in raw_genres if g in STANDARD_GENRES) or "N/A"
-
-    # Return Dictionary with OLD KEYS for channel.py compatibility
-    return {
-        'title': movie.get('title'),
-        'votes': movie.get('votes'),
-        "aka": listx_to_str(movie.get("akas")),
-        "seasons": movie.get("number of seasons"),
-        "box_office": movie.get('box office'),
-        'localized_title': movie.get('localized title'),
-        'kind': movie.get("kind"),
-        "imdb_id": f"tt{movie.movieID}",
-        "cast": listx_to_str(movie.get("cast")),
-        "runtime": listx_to_str(movie.get("runtimes")),
-        "countries": listx_to_str(movie.get("countries")),
-        "certificates": listx_to_str(movie.get("certificates")),
-        "languages": listx_to_str(movie.get("languages")),
-        "director": listx_to_str(movie.get("director")),
-        "writer": listx_to_str(movie.get("writer")),
-        "producer": listx_to_str(movie.get("producer")),
-        "composer": listx_to_str(movie.get("composer")),
-        "cinematographer": listx_to_str(movie.get("cinematographer")),
-        "music_team": listx_to_str(movie.get("music department")),
-        "distributors": listx_to_str(movie.get("distributors")),
-        'release_date': date,
-        'year': movie.get('year'),
-        'genres': genres,
-        'poster': movie.get('full-size cover url'), # OLD KEY: poster
-        'plot': plot,
-        'rating': str(movie.get("rating")),
-        'url': f'https://www.imdb.com/title/tt{movie.movieID}'
-    }
-
-
 
 async def old_get_poster(query, bulk=False, id=False, file=None):
     if not id:
@@ -458,7 +339,7 @@ BLOCKED_WORDS = [
     'interview'
 ]
 
-async def old_get_poster(query, bulk=False, id=False, file=None):
+async def get_poster(query, bulk=False, id=False, file=None):
     if not id:
         query = (query.strip()).lower()
         title = query
