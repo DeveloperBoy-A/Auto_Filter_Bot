@@ -27,7 +27,7 @@ BTN_URL_REGEX = re.compile(
 )
 
 
-imdb = IMDBKit()
+#imdb = IMDBKit()
 imdb = Cinemagoer()   
 BANNED = {}
 SMART_OPEN = '“'
@@ -225,7 +225,7 @@ def listx_to_str(k):
 #________________________
  
 
-async def get_poster(query, bulk=False, id=False, file=None):
+async def old_get_poster(query, bulk=False, id=False, file=None):
     if not id:
         query = (query.strip()).lower()
         title = query
