@@ -27,8 +27,8 @@ BTN_URL_REGEX = re.compile(
 )
 
 
-#imdb = IMDBKit()
-imdb = Cinemagoer()   
+imdb = IMDBKit()
+#imdb = Cinemagoer()   
 BANNED = {}
 SMART_OPEN = '“'
 SMART_CLOSE = '”'
@@ -225,7 +225,7 @@ def listx_to_str(k):
 #________________________
  
 
-async def old_get_poster(query, bulk=False, id=False, file=None):
+async def get_poster(query, bulk=False, id=False, file=None):
     if not id:
         query = (query.strip()).lower()
         title = query
@@ -340,7 +340,7 @@ BLOCKED_WORDS = [
     'interview'
 ]
 
-async def get_poster(query, bulk=False, id=False, file=None):
+async def old_get_poster(query, bulk=False, id=False, file=None):
     if not id:
         query = (query.strip()).lower()
         title = query
