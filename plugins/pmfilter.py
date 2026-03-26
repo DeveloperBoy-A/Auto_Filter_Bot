@@ -2005,6 +2005,7 @@ async def old_ai_spell_check(chat_id, wrong_name):
         if files:
             return movie
         movie_list.remove(movie)
+#-----------------------------------#-----------------------------------
 
 async def ai_spell_check(chat_id, wrong_name):
     async def search_movie(wrong_name):
@@ -2016,9 +2017,9 @@ async def ai_spell_check(chat_id, wrong_name):
     movie_list = await search_movie(wrong_name)
     if not movie_list:
         return
-    for _ in range(5):
+    for _ in range(3):
         closest_match = process.extractOne(wrong_name, movie_list)
-        if not closest_match or closest_match[1] <= 80:
+        if not closest_match or closest_match[1] <= 70:
             return
         movie = closest_match[0]
         files, _, _ = await get_search_results(chat_id=chat_id, query=movie)
