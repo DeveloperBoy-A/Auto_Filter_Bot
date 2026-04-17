@@ -242,7 +242,7 @@ Nᴀᴍᴇ - {}
 Iᴅ : <code>{}</code>
 Nᴀᴍᴇ : {}
 
-Mᴇꜱꜱᴀɢᴇ : <b>{}</b>"""
+Mᴇꜱꜱᴀɢᴇ : <code>{}</code>"""
 
     CAPTION = """<b><a href="https://t.me/newmovieswebseries_group">
 🎬 𝑻𝒊𝒕𝒍𝒆 : {file_name}
