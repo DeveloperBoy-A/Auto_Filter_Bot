@@ -225,7 +225,7 @@ def listx_to_str(k):
     return ', '.join(result) if result else "N/A"
 
 
-async def get_poster(query, bulk=False, id=False, file=None):
+async def no_get_poster(query, bulk=False, id=False, file=None):
     if not id:
         query = (query.strip()).lower()
         title = query
@@ -328,7 +328,7 @@ async def get_poster(query, bulk=False, id=False, file=None):
 #________________________
  
 
-async def st_get_poster(query, bulk=False, id=False, file=None):
+async def get_poster(query, bulk=False, id=False, file=None):
     if not id:
         query = (query.strip()).lower()
         title = query
