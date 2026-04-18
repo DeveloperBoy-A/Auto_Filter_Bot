@@ -1,9 +1,11 @@
 import re
 import os
+import datetime
 import logging
 from info import  *
 from imdb import Cinemagoer 
 from imdbkit import IMDBKit
+from rapidfuzz import fuzz
 from fuzzywuzzy import process 
 #from urllib.parse import quote_plus
 import asyncio
@@ -27,8 +29,7 @@ BTN_URL_REGEX = re.compile(
 )
 
 
-imdb = IMDBKit()
-#imdb = Cinemagoer()   
+imdb = IMDBKit() 
 BANNED = {}
 SMART_OPEN = '“'
 SMART_CLOSE = '”'
@@ -222,10 +223,111 @@ def listx_to_str(k):
 
     return ', '.join(result) if result else "N/A"
 
+
+async def get_poster(query, bulk=False, id=False, file=None):
+    if not id:
+        query = (query.strip()).lower()
+        title = query
+        year_val = None
+
+        # 1. Year Extraction
+        year_list = re.findall(r'[1-2]\d{3}$', query, re.IGNORECASE)
+        if year_list:
+            year_val = year_list[0]
+            title = (query.replace(year_val, "")).strip()
+        elif file is not None:
+            year_list = re.findall(r'[1-2]\d{3}', file, re.IGNORECASE)
+            if year_list: 
+                year_val = year_list[0]
+
+        # IMDb Search
+        search_result = await asyncio.to_thread(imdb.search_movie, title.lower())
+        if not search_result or not hasattr(search_result, "titles"):
+            return None
+
+        movie_list = search_result.titles[:20] 
+
+        # 2. Kind Filter (Sirf Movies aur Series)
+        kind_filter = ['movie', 'tv series', 'tvSeries', 'tvMiniSeries', 'tvMovie']
+        filtered = [m for m in movie_list if m.kind and m.kind in kind_filter]
+
+        # 3. BLACKLIST Filter (Review, Podcast, Trailer hatane ke liye)
+        bad_words = ["review", "podcast", "trailer", "teaser", "news", "special", "vlog"]
+        filtered = [
+            m for m in filtered 
+            if not any(word in m.title.lower() for word in bad_words)
+        ]
+
+        # 4. Future Year Filter (Agle saal tak ki movies hi allow karein)
+        current_year = datetime.datetime.now().year
+        filtered = [m for m in filtered if not m.year or m.year <= (current_year + 1)]
+
+        # 5. ACCURACY CHECK (Similarity Score)
+        # Ye part check karega ki IMDb ka title user ke title se kitna match karta hai
+        final_list = []
+        for m in filtered:
+            # Score nikalein (0 to 100)
+            score = fuzz.token_sort_ratio(title.lower(), m.title.lower())
+            if score > 70:  # 70% se kam match wale ko reject karein
+                m.similarity_score = score
+                final_list.append(m)
+
+        # Score ke hisaab se sort karein (Sabse accurate upar)
+        final_list.sort(key=lambda x: getattr(x, 'similarity_score', 0), reverse=True)
+
+        if not final_list:
+            return None
+
+        if bulk:
+            return final_list[:10]
+
+        movie_brief = final_list[0]
+        movieid_str = movie_brief.imdb_id
+    else:
+        movieid_str = query
+
+    # IMDb se detailed data fetch karein
+    movie = await asyncio.to_thread(imdb.get_movie, movieid_str)
+    if not movie:
+        return None
+
+    # Baaki ka logic same rahega (Detailed Data)
+    if hasattr(movie, 'release_date') and movie.release_date:
+        date = movie.release_date
+    elif hasattr(movie, 'year') and movie.year:
+        date = str(movie.year)
+    else:
+        date = "N/A"
+
+    plot = movie.plot[0] if isinstance(movie.plot, list) and movie.plot else (movie.plot or "")
+    if len(plot) > 800:
+        plot = plot[:800] + "..."
+
+    imdb_id = movie.imdb_id
+    if not imdb_id.startswith("tt"):
+        imdb_id = f"tt{imdb_id}"
+
+    return {
+        'title': movie.title,
+        'votes': getattr(movie, 'votes', 'N/A'),
+        "aka": listx_to_str(getattr(movie, 'title_akas', [])),
+        "kind": movie.kind,
+        "imdb_id": imdb_id,
+        "cast": listx_to_str(getattr(movie, 'stars', [])),
+        "runtime": listx_to_str(getattr(movie, 'duration', [])),
+        "director": listx_to_str(getattr(movie, 'directors', [])),
+        "release_date": date,
+        'year': movie.year,
+        'genres': listx_to_str(getattr(movie, 'genres', [])),
+        'poster': getattr(movie, 'cover_url', ''), 
+        'plot': plot,
+        'rating': str(getattr(movie, 'rating', '0')),
+        "url": f"https://www.imdb.com/title/{imdb_id}"
+    }
 #________________________
  
 
-async def get_poster(query, bulk=False, id=False, file=None):
+async def 1st_get_poster(query, bulk=False, id=False, file=None):
     if not id:
         query = (query.strip()).lower()
         title = query
