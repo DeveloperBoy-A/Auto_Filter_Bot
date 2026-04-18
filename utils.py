@@ -328,7 +328,7 @@ async def get_poster(query, bulk=False, id=False, file=None):
 #________________________
  
 
-async def 1st_get_poster(query, bulk=False, id=False, file=None):
+async def st_get_poster(query, bulk=False, id=False, file=None):
     if not id:
         query = (query.strip()).lower()
         title = query
