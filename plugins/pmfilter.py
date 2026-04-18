@@ -1762,9 +1762,7 @@ async def auto_filter(client, msg, spoll=False):
             removes = ["in", "upload", "series", "full",
                        "horror", "thriller", "mystery", "print", "file", "pls", "please", "send", "give", "movie", "movies", "new", "latest", "bro", "bruh",
                        "link", "dubbed", "download", "subtitle", "subtitles", "anyone", "any",
-                       "venum", "iruka", "pannunga", "anuppunga", "film", "undo", "kitti", "kitty", "tharu"]
-            search = search.replace("'", " ")
-            search = search.replace("&", " ")
+                       "venum", "iruka", "pannunga", "anuppunga", "film", "undo", "kitti", "kitty", "tharu" "&"]
             for x in find:
                 if x in removes:
                     continue
@@ -1774,6 +1772,8 @@ async def auto_filter(client, msg, spoll=False):
             search = re.sub(r"\s+", " ", search).strip()
             search = search.replace("-", " ")
             search = search.replace(":", "")
+            search = search.replace("'", " ")
+            search = search.replace("&", " ")
             # 🔥 REMOVE SYMBOLS
             search = re.sub(r"[!@#$%^*()_+=\[\]{};\"<>?/\\|]", "", search)
             search = re.sub(r"\s+", " ", search).strip()
