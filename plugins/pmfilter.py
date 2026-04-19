@@ -1092,7 +1092,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
             msg = f"<b>Hey {user.mention},</b>\n\n<u>{content}</u> marked unavailable 💔"
 
-            asyncio.create_task(send_auto_delete(client, int(from_user), msg, InlineKeyboardMarkup(btn2), 60))
+            asyncio.create_task(send_auto_delete(client, int(from_user), msg, InlineKeyboardMarkup(btn2), 24000))
             await query.answer("Set to Unavailable!")
 
     # ---------------- NOT RELEASED ---------------- #
@@ -1115,7 +1115,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
             msg = f"<b>Hey {user.mention}\n\n<code>{content}</code> not released yet 🕊️</b>"
 
-            asyncio.create_task(send_auto_delete(client, int(from_user), msg, InlineKeyboardMarkup(btn2), 60))
+            asyncio.create_task(send_auto_delete(client, int(from_user), msg, InlineKeyboardMarkup(btn2), 24000))
             await query.answer("Set to Not Released!")
 
     # ---------------- WRONG SPELLING ---------------- #
@@ -1138,7 +1138,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
             msg = f"<b>Hey {user.mention}\n\nWrong spelling: <code>{content}</code> ❗</b>"
 
-            asyncio.create_task(send_auto_delete(client, int(from_user), msg, InlineKeyboardMarkup(btn2), 60))
+            asyncio.create_task(send_auto_delete(client, int(from_user), msg, InlineKeyboardMarkup(btn2), 24000))
             await query.answer("Wrong Spelling Set!")
 
     # ---------------- HINDI NOT AVAILABLE ---------------- #
@@ -1161,7 +1161,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
             msg = f"<b>Hey {user.mention}\n\n<code>{content}</code> not available in Hindi ❌</b>"
 
-            asyncio.create_task(send_auto_delete(client, int(from_user), msg, InlineKeyboardMarkup(btn2), 60))
+            asyncio.create_task(send_auto_delete(client, int(from_user), msg, InlineKeyboardMarkup(btn2), 24000))
             await query.answer("Hindi Not Available!")
 
     # ---------------- UPLOADED ---------------- #
@@ -1186,7 +1186,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
             msg = f"<b>Hey {user.mention},\n\n<u>{content}</u> uploaded ✅</b>"
 
-            asyncio.create_task(send_auto_delete(client, int(from_user), msg, InlineKeyboardMarkup(btn2), 60))
+            asyncio.create_task(send_auto_delete(client, int(from_user), msg, InlineKeyboardMarkup(btn2), 24000))
             await query.answer("Uploaded!")
 
     # ---------------- ALREADY AVAILABLE ---------------- #
@@ -1211,7 +1211,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
             msg = f"<b>Hey {user.mention},\n\n<u>{content}</u> already available ✅</b>"
 
-            asyncio.create_task(send_auto_delete(client, int(from_user), msg, InlineKeyboardMarkup(btn2), 60))
+            asyncio.create_task(send_auto_delete(client, int(from_user), msg, InlineKeyboardMarkup(btn2), 24000))
             await query.answer("Already Available!")
 
     # ================= ALERT SECTION ================= #
