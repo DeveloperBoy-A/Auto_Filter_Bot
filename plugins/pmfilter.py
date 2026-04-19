@@ -1774,6 +1774,7 @@ async def auto_filter(client, msg, spoll=False):
             search = re.sub(r"\s+", " ", search).strip()
             search = search.replace("-", " ")
             search = search.replace(":", "")
+            search = search.replace(".", " ")
             search = search.replace("'", " ")
             search = search.replace("&", " ")
             # 🔥 REMOVE SYMBOLS
