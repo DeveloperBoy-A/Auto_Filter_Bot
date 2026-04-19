@@ -781,14 +781,14 @@ async def requests(bot, message):
         try:
             link = await bot.create_chat_invite_link(int(REQST_CHANNEL))
             btn_user = [[
-                InlineKeyboardButton('ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ📢', url=MOVIE_UPDATE_CHANNEL_LINK),
+                InlineKeyboardButton('ᴍᴏᴠɪᴇ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ📢', url=MOVIE_UPDATE_CHANNEL_LINK),
                 InlineKeyboardButton('ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ👁‍🗨', url=f"{reported_post.link}")
             ]]
             
             confirm_msg = await message.reply_text(
                 "<b>✅ आपकी रिक्वेस्ट सफलतापूर्वक भेज दी गई है!\n\n"
                 "⌛ थोड़ा इंतज़ार (Wait) कीजिये...\n"
-                "📢 नीचे दिए गए बटन पर क्लिक करके चैनल Join करें और अपनी रिक्वेस्ट चेक करें।</b>",
+                "📢 नीचे दिए गए बटन पर क्लिक करके चैनल Join करें available होते ही यहां Post डाल दी जाएगी और अपनी रिक्वेस्ट चेक कर सकते हो।</b>",
                 reply_markup=InlineKeyboardMarkup(btn_user)
             )
             
