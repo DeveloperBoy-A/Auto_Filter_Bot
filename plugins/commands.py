@@ -781,7 +781,7 @@ async def requests(bot, message):
         try:
             link = await bot.create_chat_invite_link(int(REQST_CHANNEL))
             btn_user = [[
-                InlineKeyboardButton('ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ📢', url=link.invite_link),
+                InlineKeyboardButton('ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ📢', url=MOVIE_UPDATE_CHANNEL_LINK),
                 InlineKeyboardButton('ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ👁‍🗨', url=f"{reported_post.link}")
             ]]
             
