@@ -1077,7 +1077,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
                                   callback_data=f"unalert#{from_user}")]
         ]
         btn2 = [
-            [InlineKeyboardButton('ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ', url=link.invite_link),
+            [InlineKeyboardButton('ᴍᴏᴠɪᴇ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ📢', url=MOVIE_UPDATE_CHANNEL_LINK),
              InlineKeyboardButton("ᴠɪᴇᴡ ꜱᴛᴀᴛᴜꜱ", url=f"{query.message.link}")]
         ]
         if query.from_user.id in ADMINS:
@@ -1106,7 +1106,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         btn = [[InlineKeyboardButton(
             "📌 Not Released 📌", callback_data=f"nralert#{from_user}")]]
         btn2 = [[
-            InlineKeyboardButton('ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ', url=link.invite_link),
+            InlineKeyboardButton('ᴍᴏᴠɪᴇ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ📢', url=MOVIE_UPDATE_CHANNEL_LINK),
             InlineKeyboardButton("ᴠɪᴇᴡ ꜱᴛᴀᴛᴜꜱ", url=f"{query.message.link}")
         ]]
         if query.from_user.id in ADMINS:
@@ -1148,7 +1148,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
                                  callback_data=f"wsalert#{from_user}")
         ]]
         btn2 = [[
-            InlineKeyboardButton('ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ', url=link.invite_link),
+            InlineKeyboardButton('ᴍᴏᴠɪᴇ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ📢', url=MOVIE_UPDATE_CHANNEL_LINK),
             InlineKeyboardButton("ᴠɪᴇᴡ ꜱᴛᴀᴛᴜꜱ", url=f"{query.message.link}")
         ]]
         if query.from_user.id in ADMINS:
@@ -1190,7 +1190,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 "⚜️ Not Available In The Hindi ⚜️", callback_data=f"hnalert#{from_user}")
         ]]
         btn2 = [[
-            InlineKeyboardButton('ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ', url=link.invite_link),
+            InlineKeyboardButton('ᴍᴏᴠɪᴇ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ📢', url=MOVIE_UPDATE_CHANNEL_LINK),
             InlineKeyboardButton("ᴠɪᴇᴡ ꜱᴛᴀᴛᴜꜱ", url=f"{query.message.link}")
         ]]
         if query.from_user.id in ADMINS:
@@ -1232,7 +1232,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 "✅ ᴜᴘʟᴏᴀᴅᴇᴅ ✅", callback_data=f"upalert#{from_user}")
         ]]
         btn2 = [[
-            InlineKeyboardButton('ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ', url=link.invite_link),
+            InlineKeyboardButton('ᴍᴏᴠɪᴇ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ📢', url=MOVIE_UPDATE_CHANNEL_LINK),
             InlineKeyboardButton("ᴠɪᴇᴡ ꜱᴛᴀᴛᴜꜱ", url=f"{query.message.link}")
         ], [
             InlineKeyboardButton("🔍 ꜱᴇᴀʀᴄʜ ʜᴇʀᴇ 🔎", url=GRP_LNK)
@@ -1251,7 +1251,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
                     text=(
                         f"<b>Hᴇʏ {user.mention},\n\n"
                         f"<u>{content}</u> Yᴏᴜʀ ʀᴇǫᴜᴇꜱᴛ ʜᴀꜱ ʙᴇᴇɴ ᴜᴘʟᴏᴀᴅᴇᴅ ʙʏ ᴏᴜʀ ᴍᴏᴅᴇʀᴀᴛᴏʀs.\n"
-                        f"Kɪɴᴅʟʏ sᴇᴀʀᴄʜ ɪɴ ᴏᴜʀ Gʀᴏᴜᴘ.</b>\n\n"
+                        f"ʏᴏᴜʀ ᴍᴏᴠɪᴇ ᴘᴏsᴛ ʜᴀs ʙᴇᴇɴ ᴜᴘʟᴏᴀᴅᴇᴅ ᴛᴏ ᴛʜᴇ ᴍᴏᴠɪᴇ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ — ᴘʟᴇᴀsᴇ ᴄʜᴇᴄᴋ, ᴏʀ sᴇᴀʀᴄʜ 🔍 ɪɴ ᴛʜᴇ sᴇᴀʀᴄʜ ɢʀᴏᴜᴘ. .</b>\n\n"
                         f"#Uᴘʟᴏᴀᴅᴇᴅ✅"
                     ),
                     reply_markup=InlineKeyboardMarkup(btn2)
@@ -1262,7 +1262,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
                     text=(
                         f"<u>{content}</u>\n\n"
                         f"<b>Hᴇʏ {user.mention}, Yᴏᴜʀ ʀᴇǫᴜᴇꜱᴛ ʜᴀꜱ ʙᴇᴇɴ ᴜᴘʟᴏᴀᴅᴇᴅ ʙʏ ᴏᴜʀ ᴍᴏᴅᴇʀᴀᴛᴏʀs."
-                        f"Kɪɴᴅʟʏ sᴇᴀʀᴄʜ ɪɴ ᴏᴜʀ Gʀᴏᴜᴘ.</b>\n\n"
+                        f"ʏᴏᴜʀ ᴍᴏᴠɪᴇ ᴘᴏsᴛ ʜᴀs ʙᴇᴇɴ ᴜᴘʟᴏᴀᴅᴇᴅ ᴛᴏ ᴛʜᴇ ᴍᴏᴠɪᴇ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ — ᴘʟᴇᴀsᴇ ᴄʜᴇᴄᴋ, ᴏʀ sᴇᴀʀᴄʜ 🔍 ɪɴ ᴛʜᴇ sᴇᴀʀᴄʜ ɢʀᴏᴜᴘ..</b>\n\n"
                         f"#Uᴘʟᴏᴀᴅᴇᴅ✅\n\n"
                         f"<small>Bʟᴏᴄᴋᴇᴅ? Uɴʙʟᴏᴄᴋ ᴛʜᴇ ʙᴏᴛ ᴛᴏ ʀᴇᴄᴇɪᴠᴇ ᴍᴇꜱꜱᴀɢᴇꜱ.</small>"
                     ),
@@ -1278,7 +1278,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
                                  callback_data=f"alalert#{from_user}")
         ]]
         btn2 = [[
-            InlineKeyboardButton('ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ', url=link.invite_link),
+            InlineKeyboardButton('ᴍᴏᴠɪᴇ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ📢', url=MOVIE_UPDATE_CHANNEL_LINK),
             InlineKeyboardButton("ᴠɪᴇᴡ ꜱᴛᴀᴛᴜꜱ", url=f"{query.message.link}")
         ], [
             InlineKeyboardButton("🔍 ꜱᴇᴀʀᴄʜ ʜᴇʀᴇ 🔎", url=GRP_LNK)
