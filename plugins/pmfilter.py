@@ -18,6 +18,7 @@ from Script import script
 from pyrogram.errors.exceptions.bad_request_400 import MediaEmpty, PhotoInvalidDimensions, WebpageMediaEmpty
 from database.refer import referdb
 from database.users_chats_db import db
+import unicodedata
 import asyncio
 import re
 import math
@@ -1603,7 +1604,43 @@ async def cb_handler(client: Client, query: CallbackQuery):
             await query.message.edit_reply_markup(reply_markup)
     await query.answer(MSG_ALRT)
 
+#__________________________________
 
+def normalize_season(search):
+    import re
+
+    # season → s
+    search = re.sub(r'season[\s\-]*(\d+)', r's \1', search, flags=re.IGNORECASE)
+
+    # s1 / s 1 / S-1 → s 1
+    search = re.sub(r'\bs[\s\-]*(\d+)', r's \1', search, flags=re.IGNORECASE)
+
+    # convert to s01, s02
+    def pad(match):
+        num = int(match.group(1))
+        return f"s{num:02d}"
+
+    return re.sub(r'\bs\s*(\d+)', pad, search, flags=re.IGNORECASE)
+
+
+def normalize_episode(search):
+    import re
+
+    # episode → e
+    search = re.sub(r'episode[\s\-]*(\d+)', r'e \1', search, flags=re.IGNORECASE)
+
+    # ep1 / ep 1 / Ep-1 → e 1
+    search = re.sub(r'\bep[\s\-]*(\d+)', r'e \1', search, flags=re.IGNORECASE)
+
+    # e1 / e 1 → e 1 (normalize)
+    search = re.sub(r'\be[\s\-]*(\d+)', r'e \1', search, flags=re.IGNORECASE)
+
+    # convert to e01, e02
+    def pad(match):
+        num = int(match.group(1))
+        return f"e{num:02d}"
+
+    return re.sub(r'\be\s*(\d+)', pad, search, flags=re.IGNORECASE)
     #______________________________________________________AUTO_FILTER____________________________________________________________
 
 async def auto_filter(client, msg, spoll=False):
@@ -1621,6 +1658,9 @@ async def auto_filter(client, msg, spoll=False):
         if len(message.text) < 100:
             search = message.text
             search = search.lower()
+            # ✅ Unicode normalize(VERY IMPORTANT)
+            search = unicodedata.normalize('NFKD', search)
+            search = search.encode('ascii', 'ignore').decode('ascii')
             search = re.sub(
                 "["
                 "\U0001F600-\U0001F64F"  # emoticons
@@ -1639,7 +1679,7 @@ async def auto_filter(client, msg, spoll=False):
             removes = ["in", "upload", "series", "full",
                        "horror", "thriller", "mystery", "print", "file", "pls", "please", "send", "give", "movie", "movies", "new", "latest", "bro", "bruh",
                        "link", "dubbed", "download", "subtitle", "subtitles", "anyone", "any",
-                       "venum", "iruka", "pannunga", "anuppunga", "film", "undo", "kitti", "kitty", "tharu" "&"]
+                       "venum", "iruka", "pannunga", "anuppunga", "film", "undo", "kitti", "kitty", "tharu", "&"]
             for x in find:
                 if x in removes:
                     continue
@@ -1647,6 +1687,9 @@ async def auto_filter(client, msg, spoll=False):
                     search = search + x + " "
             search = re.sub(r"\b(pl(i|e)*?(s|z+|ease|se|ese|(e+)s(e)?)|((send|snd|giv(e)?|gib)(\sme)?)|movie(s)?|new|latest|bro|bruh|broh|helo|that|find|dubbed|link|venum|iruka|pannunga|pannungga|anuppunga|anupunga|anuppungga|anupungga|film|undo|kitti|kitty|tharu|kittumo|kittum|movie|any(one)|download\ssubtitle(s)?)", "", search, flags=re.IGNORECASE)
             search = re.sub(r"\s+", " ", search).strip()
+            # ✅ season normalize
+            search = normalize_season(search)
+            search = normalize_episode(search)
             search = search.replace("-", " ")
             search = search.replace(":", "")
             search = search.replace(".", " ")
