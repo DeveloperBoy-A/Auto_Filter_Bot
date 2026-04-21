@@ -121,6 +121,38 @@ def unpack_new_file_id(new_file_id):
         logger.error(f"Failed to unpack file_id: {e}")
         return None, None
 
+#__________________________________
+def normalize_season_episode(text):
+    import re
+
+    text = text.lower()
+
+    text = re.sub(r'(\d+)[xX](\d+)',
+                  lambda m: f"S{int(m.group(1)):02d} E{int(m.group(2)):02d}",
+                  text)
+
+    text = re.sub(r'season[\s\-]*(\d+)',
+                  lambda m: f"S{int(m.group(1)):02d}", text)
+    text = re.sub(r'\bs[\s\-]*(\d+)',
+                  lambda m: f"S{int(m.group(1)):02d}", text)
+
+    text = re.sub(r'episode[\s\-]*(\d+)',
+                  lambda m: f"E{int(m.group(1)):02d}", text)
+    text = re.sub(r'\bep[\s\-]*(\d+)',
+                  lambda m: f"E{int(m.group(1)):02d}", text)
+    text = re.sub(r'\be[\s\-]*(\d+)',
+                  lambda m: f"E{int(m.group(1)):02d}", text)
+
+    text = re.sub(r's(\d+)e(\d+)',
+                  lambda m: f"S{int(m.group(1)):02d} E{int(m.group(2)):02d}",
+                  text)
+
+    text = re.sub(r'\s+', ' ', text).strip()
+
+    text = text.title()
+
+    return text
+
 # ---------------- Language Aliases ----------------
 LANGUAGE_ALIASES = {
     "Hindi": ["hindi", "hin"],
@@ -197,9 +229,12 @@ async def save_file(media):
         base_name = re.sub(r"[._\-]+", " ", base_name)
         base_name = re.sub(r"\s+", " ", base_name).strip()
 
+        # ✅ season/episode format fix
+        base_name = normalize_season_episode(base_name)
+
         # prefix se pehle ka garbage remove
         base_name = remove_prefix_garbage(base_name)
-
+        
         # ---------------- CAPTION READ (IMPORTANT) ----------------
         caption_text = media.caption or ""
 
