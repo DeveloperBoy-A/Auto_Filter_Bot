@@ -1641,6 +1641,44 @@ def normalize_episode(search):
         return f"e{num:02d}"
 
     return re.sub(r'\be\s*(\d+)', pad, search, flags=re.IGNORECASE)
+
+
+
+def normalize_for_search(text):
+    text = text.lower()
+
+    # 1x02 → s01 e02
+    text = re.sub(r'(\d+)[xX](\d+)',
+                  lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}",
+                  text)
+
+    # season → s01
+    text = re.sub(r'season[\s\-]*(\d+)',
+                  lambda m: f"s{int(m.group(1)):02d}", text)
+
+    # s1 / s 1
+    text = re.sub(r'\bs[\s\-]*(\d+)',
+                  lambda m: f"s{int(m.group(1)):02d}", text)
+
+    # episode → e01
+    text = re.sub(r'episode[\s\-]*(\d+)',
+                  lambda m: f"e{int(m.group(1)):02d}", text)
+
+    # ep → e01
+    text = re.sub(r'\bep[\s\-]*(\d+)',
+                  lambda m: f"e{int(m.group(1)):02d}", text)
+
+    # e1 → e01
+    text = re.sub(r'\be[\s\-]*(\d+)',
+                  lambda m: f"e{int(m.group(1)):02d}", text)
+
+    # S1E2 → s01 e02
+    text = re.sub(r's(\d+)e(\d+)',
+                  lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}",
+                  text)
+
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
     #______________________________________________________AUTO_FILTER____________________________________________________________
 
 async def auto_filter(client, msg, spoll=False):
@@ -1687,9 +1725,10 @@ async def auto_filter(client, msg, spoll=False):
                     search = search + x + " "
             search = re.sub(r"\b(pl(i|e)*?(s|z+|ease|se|ese|(e+)s(e)?)|((send|snd|giv(e)?|gib)(\sme)?)|movie(s)?|new|latest|bro|bruh|broh|helo|that|find|dubbed|link|venum|iruka|pannunga|pannungga|anuppunga|anupunga|anuppungga|anupungga|film|undo|kitti|kitty|tharu|kittumo|kittum|movie|any(one)|download\ssubtitle(s)?)", "", search, flags=re.IGNORECASE)
             search = re.sub(r"\s+", " ", search).strip()
+            search = normalize_for_search(search)
             # ✅ season normalize
-            search = normalize_season(search)
-            search = normalize_episode(search)
+            #search = normalize_season(search)
+            #search = normalize_episode(search)
             search = search.replace("-", " ")
             search = search.replace(":", "")
             search = search.replace(".", " ")
