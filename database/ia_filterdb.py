@@ -369,44 +369,52 @@ def normalize_for_search(text):
 def expand_query(query):
     query = query.lower()
     patterns = []
+    
+    # Title nikalne ke liye season/episode part ko hatayein
+    # Jaise "money heist s01" se "money heist" alag karein
+    title = re.sub(r'(s\d+|e\d+|season\s*\d+|episode\s*\d+|ep\s*\d+)', '', query).strip()
+    
+    s_match = re.search(r"s(\d{1,2})|season\s*(\d{1,2})", query)
+    e_match = re.search(r"e(\d{1,2})|episode\s*(\d{1,2})|ep\s*(\d{1,2})", query)
 
-    s = re.search(r"s(\d{1,2})", query)
-    e = re.search(r"e(\d{1,2})", query)
+    s_num = None
+    if s_match:
+        s_num = int(s_match.group(1) or s_match.group(2))
+        
+    e_num = None
+    if e_match:
+        e_num = int(e_match.group(1) or e_match.group(2) or e_match.group(3))
 
-    if s:
-        sn = int(s.group(1))
-        patterns.extend([
-            f"s{sn}", f"s{sn:02d}",
-            f"season {sn}", f"season{sn}",
-            f"season {sn:02d}"
-        ])
+    # 1. Agar sirf Title ho (Koi S ya E na ho)
+    if not s_num and not e_num:
+        return [query]
 
-    if e:
-        en = int(e.group(1))
-        patterns.extend([
-            f"e{en}", f"e{en:02d}",
-            f"ep{en}", f"ep {en}",
-            f"episode {en}", f"episode{en}",
-            f"episode {en:02d}"
-        ])
+    # 2. Agar Season aur Episode dono hon
+    if s_num and e_num:
+        variations = [
+            f"s{s_num}e{e_num}", f"s{s_num:02d}e{e_num:02d}",
+            f"s{s_num} e{e_num}", f"s{s_num:02d} e{e_num:02d}",
+            f"season {s_num} episode {e_num}",
+            f"{s_num}x{e_num:02d}"
+        ]
+        for v in variations:
+            patterns.append(f"{title} {v}".strip())
 
-    # 🔥 Combined formats
-    if s and e:
-        sn = int(s.group(1))
-        en = int(e.group(1))
+    # 3. Agar sirf Season ho
+    elif s_num:
+        variations = [f"s{s_num}", f"s{s_num:02d}", f"season {s_num}", f"season{s_num}"]
+        for v in variations:
+            patterns.append(f"{title} {v}".strip())
 
-        patterns.extend([
-            f"s{sn}e{en}",
-            f"s{sn:02d}e{en:02d}",
-            f"s{sn} e{en}",
-            f"s{sn:02d} e{en:02d}",
-            f"season {sn} episode {en}",
-            f"season{sn}episode{en}",
-            f"{sn}x{en:02d}"  # 1x01 support
-        ])
+    # 4. Agar sirf Episode ho
+    elif e_num:
+        variations = [f"e{e_num}", f"e{e_num:02d}", f"ep{e_num}", f"episode {e_num}"]
+        for v in variations:
+            patterns.append(f"{title} {v}".strip())
 
+    # Original query ko bhi add karein
     patterns.append(query)
-
+    
     return list(set(patterns))
 
 
