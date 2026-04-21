@@ -1673,8 +1673,8 @@ def normalize_for_search(text):
                   lambda m: f"e{int(m.group(1)):02d}", text)
 
     # S1E2 → s01 e02
-    text = re.sub(r's(\d+)e(\d+)',
-                  lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}",
+    #text = re.sub(r's(\d+)e(\d+)',
+                  #lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}",
                   text)
 
     text = re.sub(r"\s+", " ", text).strip()
