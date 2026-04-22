@@ -503,7 +503,6 @@ def extract_season_episode(name):
     return season, episode
 #_________________________________
 
-
 async def get_search_results(chat_id, query, file_type=None, max_results=10, offset=0, filter=False):
     # ---------------- SETTINGS ----------------
     if chat_id:
@@ -513,7 +512,7 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
     # ---------------- NORMALIZE + EXPAND ----------------
     if not isinstance(query, list):
         query = normalize_for_search(query)
-        query = expand_query(query)
+        query = expand_query(query)[:10]  # 🔥 limit for speed
 
     # ---------------- REGEX BUILD ----------------
     regex_list = []
@@ -563,13 +562,12 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
         files.extend(files2)
 
     # ---------------- 🔥 SMART SERIES DETECTION ----------------
-    # check results me season+episode hai ya nahi
     is_series = any(
-        re.search(r"s\d{1,2}.*e\d{1,2}", file.file_name.lower())
+        re.search(r"s\d{1,2}.*e\d{1,2}", str(file.file_name).lower())
         for file in files
     )
 
-    # ---------------- SORTING ----------------
+    # ---------------- SORT HELPERS ----------------
     def extract_season_episode(name):
         name = name.lower()
         s = re.search(r"s(\d{1,2})", name)
@@ -578,30 +576,31 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
         episode = int(e.group(1)) if e else 0
         return season, episode
 
+    # ---------------- SORTING ----------------
     if is_series:
-    # 📺 SERIES → Season → Episode → Quality → Source
-    files = sorted(
-        files,
-        key=lambda x: (
-            extract_season_episode(x.file_name)[0],
-            extract_season_episode(x.file_name)[1],
-            extract_quality(x.file_name),
-            extract_source(x.file_name),
-            x.file_id
-        ),
-        reverse=True
-    )
-else:
-    # 🎬 MOVIE → Quality → Source → Latest
-    files = sorted(
-        files,
-        key=lambda x: (
-            extract_quality(x.file_name),
-            extract_source(x.file_name),
-            x.file_id
-        ),
-        reverse=True
-    )
+        # 📺 SERIES → Season → Episode → Quality → Source
+        files = sorted(
+            files,
+            key=lambda x: (
+                extract_season_episode(x.file_name)[0],
+                extract_season_episode(x.file_name)[1],
+                extract_quality(x.file_name),
+                extract_source(x.file_name),
+                x.file_id
+            ),
+            reverse=True
+        )
+    else:
+        # 🎬 MOVIE → Quality → Source → Latest
+        files = sorted(
+            files,
+            key=lambda x: (
+                extract_quality(x.file_name),
+                extract_source(x.file_name),
+                x.file_id
+            ),
+            reverse=True
+        )
 
     # ---------------- OFFSET ----------------
     next_offset = offset + len(files)
