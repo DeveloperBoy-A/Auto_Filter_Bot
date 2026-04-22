@@ -417,53 +417,112 @@ def expand_query(query):
     
     return list(set(patterns))
 
+# ---------------- EXTRACT SEASON/EPISODE ----------------
+def extract_season_episode(name):
+    name = name.lower()
+    s = re.search(r"s(\d{1,2})", name)
+    e = re.search(r"e(\d{1,2})", name)
+
+    season = int(s.group(1)) if s else 0
+    episode = int(e.group(1)) if e else 0
+
+    return season, episode
+
 
 
 async def get_search_results(chat_id, query, file_type=None, max_results=10, offset=0, filter=False):
-    # Settings handle karna
+    # ---------------- SETTINGS ----------------
     if chat_id:
         settings = await get_settings(int(chat_id))
         max_results = 10 if settings.get("max_btn") else int(MAX_B_TN)
 
-    # Agar query list nahi hai toh normalize aur expand karein
+    # ---------------- NORMALIZE + EXPAND ----------------
     if not isinstance(query, list):
         query = normalize_for_search(query)
         query = expand_query(query)
 
-    # Regex list taiyar karna (List of compiled patterns)
+    # ---------------- REGEX BUILD ----------------
     regex_list = []
     for q in query:
         q = q.strip()
-        if not q: continue
-        
-        # Regex pattern jo spaces ko wildcards se badal de
-        pattern = re.escape(q).replace(r"\ ", r".*[\s\.\+\-_()\[\]]")
-        regex_list.append(re.compile(pattern, re.IGNORECASE))
+        if not q:
+            continue
 
-    # MongoDB Filter taiyar karna
+        pattern = re.escape(q).replace(r"\ ", r".*[\s\.\+\-_()\[\]]")
+
+        try:
+            regex_list.append(re.compile(pattern, re.IGNORECASE))
+        except re.error:
+            continue
+
+    # ---------------- FILTER ----------------
     conditions = []
     for r in regex_list:
         conditions.append({"file_name": r})
         if USE_CAPTION_FILTER:
             conditions.append({"caption": r})
-    
+
     filter_mongo = {"$or": conditions}
-    
+
     if file_type:
         filter_mongo["file_type"] = file_type
 
-    # Database query
+    # ---------------- FETCH DATA ----------------
     total_results = await Media.count_documents(filter_mongo)
     if MULTIPLE_DB:
         total_results += await Media2.count_documents(filter_mongo)
 
-    files = await Media.find(filter_mongo).sort("$natural", -1).skip(offset).limit(max_results).to_list(length=max_results)
+    files = await Media.find(filter_mongo)\
+        .sort("$natural", -1)\
+        .skip(offset)\
+        .limit(max_results)\
+        .to_list(length=max_results)
 
     if MULTIPLE_DB and len(files) < max_results:
         remaining = max_results - len(files)
-        files2 = await Media2.find(filter_mongo).sort("$natural", -1).skip(offset).limit(remaining).to_list(length=remaining)
+        files2 = await Media2.find(filter_mongo)\
+            .sort("$natural", -1)\
+            .skip(offset)\
+            .limit(remaining)\
+            .to_list(length=remaining)
+
         files.extend(files2)
 
+    # ---------------- 🔥 SMART SERIES DETECTION ----------------
+    # check results me season+episode hai ya nahi
+    is_series = any(
+        re.search(r"s\d{1,2}.*e\d{1,2}", file.file_name.lower())
+        for file in files
+    )
+
+    # ---------------- SORTING ----------------
+    def extract_season_episode(name):
+        name = name.lower()
+        s = re.search(r"s(\d{1,2})", name)
+        e = re.search(r"e(\d{1,2})", name)
+        season = int(s.group(1)) if s else 0
+        episode = int(e.group(1)) if e else 0
+        return season, episode
+
+    if is_series:
+        # 📺 SERIES SORT (Season → Episode → Latest)
+        files = sorted(
+            files,
+            key=lambda x: (
+                extract_season_episode(x.file_name)[0],
+                extract_season_episode(x.file_name)[1],
+            ),
+            reverse=True
+        )
+    else:
+        # 🎬 MOVIE SORT (latest first)
+        files = sorted(
+            files,
+            key=lambda x: x.file_id,
+            reverse=True
+        )
+
+    # ---------------- OFFSET ----------------
     next_offset = offset + len(files)
     if next_offset >= total_results:
         next_offset = ""
