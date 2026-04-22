@@ -327,6 +327,80 @@ async def save_file(media):
     except Exception as e:
         logger.exception(f"[ERROR] Save failed → {file_name}", exc_info=e)
         return False, 3
+
+
+#__________________________________
+# FOR GET SEARCH RESULT THIS CODE UPDATE BY 🅰️NKIT MEENA 
+#__________________________________
+SOURCE_ORDER = {
+    # 🟢 BEST (Disc / Original)
+    "bluray": 15,
+    "blu-ray": 15,
+    "bdrip": 14,
+    "bdremux": 14,
+    "remux": 14,
+
+    # 🟢 OTT / WEB
+    "web-dl": 13,
+    "webdl": 13,
+    "webrip": 12,
+    "web": 11,
+
+    # 🟡 TV / Satellite
+    "hdtv": 10,
+    "hdrip": 9,
+    "dvdrip": 8,
+    "dvd": 7,
+
+    # 🟠 Pre-release
+    "predvd": 6,
+    "pre-dvd": 6,
+    "pre": 5,
+
+    # 🔴 Theatre Prints
+    "hdts": 4,
+    "hd-ts": 4,
+    "hdtc": 3,
+    "hd-tc": 3,
+    "tc": 3,
+    "ts": 4,
+
+    # 🔴 LOWEST
+    "camrip": 2,
+    "cam": 1,
+    "scr": 2,       # screener
+    "dvdscr": 2
+}
+QUALITY_ORDER = {
+    "4320p": 8,
+    "8k": 8,
+    "2160p": 7,
+    "4k": 7,
+    "1440p": 6,
+    "1080p": 5,
+    "720p": 4,
+    "480p": 3,
+    "360p": 2,
+    "240p": 1,
+    "144p": 0
+}
+
+def extract_quality(name):
+    name = name.lower()
+    for q in QUALITY_ORDER:
+        if q in name:
+            return QUALITY_ORDER[q]
+    return -1
+
+
+def extract_source(name):
+    name = name.lower()
+    for s in SOURCE_ORDER:
+        if s in name:
+            return SOURCE_ORDER[s]
+    return -1
+
+
 #___________________________________
 
 def normalize_for_search(text):
@@ -427,7 +501,7 @@ def extract_season_episode(name):
     episode = int(e.group(1)) if e else 0
 
     return season, episode
-
+#_________________________________
 
 
 async def get_search_results(chat_id, query, file_type=None, max_results=10, offset=0, filter=False):
@@ -505,22 +579,29 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
         return season, episode
 
     if is_series:
-        # 📺 SERIES SORT (Season → Episode → Latest)
-        files = sorted(
-            files,
-            key=lambda x: (
-                extract_season_episode(x.file_name)[0],
-                extract_season_episode(x.file_name)[1],
-            ),
-            reverse=True
-        )
-    else:
-        # 🎬 MOVIE SORT (latest first)
-        files = sorted(
-            files,
-            key=lambda x: x.file_id,
-            reverse=True
-        )
+    # 📺 SERIES → Season → Episode → Quality → Source
+    files = sorted(
+        files,
+        key=lambda x: (
+            extract_season_episode(x.file_name)[0],
+            extract_season_episode(x.file_name)[1],
+            extract_quality(x.file_name),
+            extract_source(x.file_name),
+            x.file_id
+        ),
+        reverse=True
+    )
+else:
+    # 🎬 MOVIE → Quality → Source → Latest
+    files = sorted(
+        files,
+        key=lambda x: (
+            extract_quality(x.file_name),
+            extract_source(x.file_name),
+            x.file_id
+        ),
+        reverse=True
+    )
 
     # ---------------- OFFSET ----------------
     next_offset = offset + len(files)
@@ -529,6 +610,8 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
 
     return files, next_offset, total_results
 
+
+#_________________________________
 
 async def get_bad_files(query, file_type=None):
     query = query.strip()
