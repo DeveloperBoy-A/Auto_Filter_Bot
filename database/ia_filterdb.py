@@ -122,16 +122,14 @@ def unpack_new_file_id(new_file_id):
         return None, None
 
 
-# ---------------- Normalize Season/Episode ----------------
-def normalize_season_episode(text):
-    text = re.sub(r'\b[Ss](\d+)[Ee](\d+)\b', lambda m: f"S{int(m.group(1)):02d}E{int(m.group(2)):02d}", text)
-    text = re.sub(r'\b(\d+)[xX](\d+)\b', lambda m: f"S{int(m.group(1)):02d}E{int(m.group(2)):02d}", text)
-    text = re.sub(r'\bseason[\s\-]*(\d+)\b', lambda m: f"S{int(m.group(1)):02d}", text, flags=re.IGNORECASE)
-    text = re.sub(r'\bepisode[\s\-]*(\d+)\b', lambda m: f"E{int(m.group(1)):02d}", text, flags=re.IGNORECASE)
-    text = re.sub(r'\bep[\s\-]*(\d+)\b', lambda m: f"E{int(m.group(1)):02d}", text, flags=re.IGNORECASE)
-    return re.sub(r'\s+', ' ', text).strip()
+import re
+import os
+import logging
+from info import MULTIPLE_DB, INDEX_CAPTION # Ensure these are in your info.py
 
-# ---------------- Configuration Lists ----------------
+logger = logging.getLogger(__name__)
+
+# ------------------- Configuration -------------------
 LANGUAGE_ALIASES = {
     "Hindi": ["hindi", "hin"], "English": ["english", "eng"], "Tamil": ["tamil", "tam"],
     "Telugu": ["telugu", "tel"], "Malayalam": ["malayalam", "mal"], "Kannada": ["kannada", "kan"],
@@ -139,106 +137,126 @@ LANGUAGE_ALIASES = {
 }
 
 RESOLUTIONS = ["4320p", "2160p", "4k", "1440p", "1080p", "720p", "480p", "360p"]
-
-SOURCES = {
-    "BLURAY": ["bluray", "blu-ray", "bdrip", "bdremux"],
-    "WEB-DL": ["web-dl", "webdl"],
-    "WEBRIP": ["webrip", "web rip"],
-    "HDRIP": ["hdrip"]
-}
-
 AUDIO_TAGS = ["DDP5.1", "DDP2.0", "DD5.1", "DD2.0", "AAC", "DTS", "Atmos", "TrueHD", "ESub", "MSub"]
 
-# ---------------- Extract Metadata (NAME FIXED) ----------------
-# Iska naam wapis extract_languages_quality kar diya hai taaki ImportError na aaye
+# ------------------- Helper Logic -------------------
+
+def normalize_season_episode(text):
+    """Normalize EP/Season numbers without losing extra info."""
+    text = re.sub(r'\b[Ss](\d+)\s*[Ee][Pp]?(\d+)\b', lambda m: f"S{int(m.group(1)):02d}E{int(m.group(2)):02d}", text, flags=re.IGNORECASE)
+    return text
+
 def extract_languages_quality(caption: str):
+    """Backup extraction from caption."""
     if not caption: return [], None, None, None
     caption = caption.lower()
-    found_langs, seen_langs = [], set()
+    found_langs, seen = [], set()
     res, src, aud = None, None, None
 
     for lang, aliases in LANGUAGE_ALIASES.items():
         for a in aliases:
             if re.search(rf"\b{re.escape(a)}\b", caption):
-                if lang not in seen_langs:
-                    found_langs.append(lang); seen_langs.add(lang)
+                if lang not in seen:
+                    found_langs.append(lang); seen.add(lang)
                 break
     for r in RESOLUTIONS:
         if r.lower() in caption: res = r.upper(); break
-    for s, aliases in SOURCES.items():
-        for a in aliases:
-            if a.lower() in caption: src = s; break
-        if src: break
     for tag in AUDIO_TAGS:
         if tag.lower() in caption: aud = tag; break
+    return found_langs, res, None, aud
 
-    return found_langs, res, src, aud
+def format_audio_languages(text, caption_langs):
+    """Languages ko format karta hai bina Combined/Complete ki position chhede."""
+    found_in_text = []
+    # 1. Identify languages already in the filename
+    for lang, aliases in LANGUAGE_ALIASES.items():
+        for a in aliases:
+            if re.search(rf"\b{re.escape(a)}\b", text, flags=re.IGNORECASE):
+                if lang not in found_in_text: found_in_text.append(lang)
+                break
+    
+    final_langs = found_in_text if found_in_text else caption_langs
+    if not final_langs: return text
 
-# ---------------- Smart Audio Formatting ----------------
-def format_audio_languages(text, languages):
-    if not languages: return text
-    for lang in languages:
-        text = re.sub(rf"\b{re.escape(lang)}\b", "", text, flags=re.IGNORECASE)
+    # 2. Clean old loose language words and dual tags
+    for lang_key in LANGUAGE_ALIASES:
+        for alias in LANGUAGE_ALIASES[lang_key]:
+            text = re.sub(rf"\b{re.escape(alias)}\b", "", text, flags=re.IGNORECASE)
     text = re.sub(r'\b(dual|multi)[\s\-]?(audio)?\b', '', text, flags=re.IGNORECASE)
     text = re.sub(r'\s+', ' ', text).strip()
 
-    if len(languages) == 1: lang_text = languages[0]
-    elif len(languages) == 2: lang_text = f"[{' + '.join(languages)}] DUAL-AUDIO"
-    else: lang_text = f"[{' + '.join(languages)}] MULTI-AUDIO"
+    # 3. Create formatted tag
+    if len(final_langs) == 1:
+        lang_tag = final_langs[0]
+    elif len(final_langs) == 2:
+        lang_tag = f"[{' + '.join(final_langs)}] DUAL-AUDIO"
+    else:
+        lang_tag = f"[{' + '.join(final_langs)}] MULTI-AUDIO"
 
-    res_p = [re.escape(r) for r in RESOLUTIONS]
-    src_p = []
-    for aliases in SOURCES.values(): src_p.extend([re.escape(a) for a in aliases])
-    extra = ["x264", "x265", "hevc", "ddp", "dd5", "dd2", "dts", "aac", "atmos", "combined", "complete"]
-    master_regex = r'\b(' + '|'.join(res_p + src_p + extra) + r')\b'
-    match = re.search(master_regex, text, flags=re.IGNORECASE)
+    # 4. Insert before resolution or source (But NOT shifting Combined/Complete)
+    pivot = r'\b(720p|1080p|480p|2160p|4k|WEB-DL|WEBRip|BluRay|HDRip|BDrip|H\.265|H\.264|x264|x265)\b'
+    match = re.search(pivot, text, flags=re.IGNORECASE)
     if match:
         idx = match.start()
-        return f"{text[:idx].strip()} {lang_text} {text[idx:].strip()}"
-    return f"{text} {lang_text}"
+        return f"{text[:idx].strip()} {lang_tag} {text[idx:].strip()}"
+    return f"{text} {lang_tag}"
 
-# ---------------- Main Save Function ----------------
+# ------------------- Main Function -------------------
+
 async def save_file(media):
     try:
+        # Note: unpack_new_file_id is usually a global function in your script
         file_id, file_ref = unpack_new_file_id(media.file_id)
-        original_name = str(media.file_name or "Unnamed_File").strip()
-        base_name, ext = os.path.splitext(original_name)
+        base_name, ext = os.path.splitext(str(media.file_name or "File").strip())
 
-        base_name = re.sub(r"[._\-]+", " ", base_name)
+        # Step 1: Basic Cleaning (Keep important dots)
+        base_name = base_name.replace("_", " ").replace("-", " ")
+        
+        # Step 2: Normalize SxxExx
         base_name = normalize_season_episode(base_name)
 
+        # Step 3: Uppercase COMBINED/COMPLETE (Position preserve)
         base_name = re.sub(r'\bcombined\b', 'COMBINED', base_name, flags=re.IGNORECASE)
         base_name = re.sub(r'\bcomplete\b', 'COMPLETE', base_name, flags=re.IGNORECASE)
 
-        caption_text = media.caption or ""
-        # Yahan bhi function ka naam fix kar diya
-        langs, res_cap, src_cap, aud_cap = extract_languages_quality(caption_text)
+        # Step 4: Technical Formatting (Dots Fix)
+        base_name = re.sub(r'\bdd[pP]2\s*0\b', 'DDP2.0', base_name, flags=re.IGNORECASE)
+        base_name = re.sub(r'\bdd[pP]5\s*1\b', 'DDP5.1', base_name, flags=re.IGNORECASE)
+        base_name = re.sub(r'\bh\s*265\b', 'H.265', base_name, flags=re.IGNORECASE)
+        base_name = re.sub(r'\bh\s*264\b', 'H.264', base_name, flags=re.IGNORECASE)
 
-        base_name = format_audio_languages(base_name, langs)
+        # Step 5: Process Languages
+        cap_langs, _, _, _ = extract_languages_quality(media.caption or "")
+        base_name = format_audio_languages(base_name, cap_langs)
 
-        b_low = base_name.lower()
-        if res_cap and res_cap.lower() not in b_low: base_name += f" {res_cap}"
-        if src_cap and src_cap.lower() not in b_low: base_name += f" {src_cap}"
-        if aud_cap and aud_cap.lower() not in b_low: base_name += f" {aud_cap}"
-
+        # Step 6: Final Assembly
         file_name = f"{base_name}{ext}"
+        # Keep dots, brackets, and alphanumeric characters
         file_name = re.sub(r"[^\w\s().\-\[\]\+]", " ", file_name)
         file_name = re.sub(r"\s+", " ", file_name).strip()
 
+        # Step 7: Database Logic
         saveMedia = Media
         if MULTIPLE_DB:
-            exists = await Media.count_documents({"file_id": file_id}, limit=1)
-            if exists: return False, 0
-            if await check_db_size(db) >= 407: saveMedia = Media2
+            if await Media.count_documents({"file_id": file_id}, limit=1): 
+                return False, 0
+            # Ensure check_db_size is defined in your script
+            if await check_db_size(db) >= 407: 
+                saveMedia = Media2
 
-        caption_html = getattr(media.caption, "html", None) if media.caption and INDEX_CAPTION else None
+        # Step 8: Commit
         record = saveMedia(
-            file_id=file_id, file_ref=file_ref, file_name=file_name,
-            file_size=media.file_size, file_type=media.file_type,
-            mime_type=media.mime_type, caption=caption_html
+            file_id=file_id,
+            file_ref=file_ref,
+            file_name=file_name,
+            file_size=media.file_size,
+            file_type=media.file_type,
+            mime_type=media.mime_type,
+            caption=getattr(media.caption, "html", None) if INDEX_CAPTION else None
         )
         await record.commit()
         return True, 1
+
     except Exception as e:
         logger.error(f"Save failed: {e}", exc_info=True)
         return False, 3
