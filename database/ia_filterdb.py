@@ -121,17 +121,14 @@ def unpack_new_file_id(new_file_id):
         logger.error(f"Failed to unpack file_id: {e}")
         return None, None
 
+
 # ---------------- Normalize Season/Episode ----------------
 def normalize_season_episode(text):
-    # S1E2 → S01E02
     text = re.sub(r'\b[Ss](\d+)[Ee](\d+)\b', lambda m: f"S{int(m.group(1)):02d}E{int(m.group(2)):02d}", text)
-    # 1x02 → S01E02
     text = re.sub(r'\b(\d+)[xX](\d+)\b', lambda m: f"S{int(m.group(1)):02d}E{int(m.group(2)):02d}", text)
-    # Season 1 → S01 | Episode 1 → E01
     text = re.sub(r'\bseason[\s\-]*(\d+)\b', lambda m: f"S{int(m.group(1)):02d}", text, flags=re.IGNORECASE)
     text = re.sub(r'\bepisode[\s\-]*(\d+)\b', lambda m: f"E{int(m.group(1)):02d}", text, flags=re.IGNORECASE)
     text = re.sub(r'\bep[\s\-]*(\d+)\b', lambda m: f"E{int(m.group(1)):02d}", text, flags=re.IGNORECASE)
-    
     return re.sub(r'\s+', ' ', text).strip()
 
 # ---------------- Configuration Lists ----------------
@@ -150,68 +147,54 @@ SOURCES = {
     "HDRIP": ["hdrip"]
 }
 
-# Added Audio & Subtitle tags for extraction
 AUDIO_TAGS = ["DDP5.1", "DDP2.0", "DD5.1", "DD2.0", "AAC", "DTS", "Atmos", "TrueHD", "ESub", "MSub"]
 
-# ---------------- Extract Metadata ----------------
-def extract_metadata(caption: str):
+# ---------------- Extract Metadata (NAME FIXED) ----------------
+# Iska naam wapis extract_languages_quality kar diya hai taaki ImportError na aaye
+def extract_languages_quality(caption: str):
     if not caption: return [], None, None, None
     caption = caption.lower()
-    
     found_langs, seen_langs = [], set()
     res, src, aud = None, None, None
 
-    # 1. Languages
     for lang, aliases in LANGUAGE_ALIASES.items():
         for a in aliases:
             if re.search(rf"\b{re.escape(a)}\b", caption):
                 if lang not in seen_langs:
                     found_langs.append(lang); seen_langs.add(lang)
                 break
-    # 2. Resolution
     for r in RESOLUTIONS:
         if r.lower() in caption: res = r.upper(); break
-    # 3. Source
     for s, aliases in SOURCES.items():
         for a in aliases:
             if a.lower() in caption: src = s; break
         if src: break
-    # 4. Audio Tags
     for tag in AUDIO_TAGS:
         if tag.lower() in caption: aud = tag; break
-        
+
     return found_langs, res, src, aud
 
 # ---------------- Smart Audio Formatting ----------------
 def format_audio_languages(text, languages):
     if not languages: return text
-
-    # Remove existing language/dual tags to avoid messy names
     for lang in languages:
         text = re.sub(rf"\b{re.escape(lang)}\b", "", text, flags=re.IGNORECASE)
     text = re.sub(r'\b(dual|multi)[\s\-]?(audio)?\b', '', text, flags=re.IGNORECASE)
     text = re.sub(r'\s+', ' ', text).strip()
 
-    # Create new tag format
     if len(languages) == 1: lang_text = languages[0]
     elif len(languages) == 2: lang_text = f"[{' + '.join(languages)}] DUAL-AUDIO"
     else: lang_text = f"[{' + '.join(languages)}] MULTI-AUDIO"
 
-    # Positioning: In keywords ke pehle language tag lagao
     res_p = [re.escape(r) for r in RESOLUTIONS]
     src_p = []
     for aliases in SOURCES.values(): src_p.extend([re.escape(a) for a in aliases])
-    
-    # Technical tags for positioning
     extra = ["x264", "x265", "hevc", "ddp", "dd5", "dd2", "dts", "aac", "atmos", "combined", "complete"]
-    
     master_regex = r'\b(' + '|'.join(res_p + src_p + extra) + r')\b'
     match = re.search(master_regex, text, flags=re.IGNORECASE)
-    
     if match:
         idx = match.start()
         return f"{text[:idx].strip()} {lang_text} {text[idx:].strip()}"
-    
     return f"{text} {lang_text}"
 
 # ---------------- Main Save Function ----------------
@@ -221,50 +204,33 @@ async def save_file(media):
         original_name = str(media.file_name or "Unnamed_File").strip()
         base_name, ext = os.path.splitext(original_name)
 
-        # 1. Initial Clean & Normalization
         base_name = re.sub(r"[._\-]+", " ", base_name)
         base_name = normalize_season_episode(base_name)
 
-        # 2. Force Uppercase Specific Keywords
         base_name = re.sub(r'\bcombined\b', 'COMBINED', base_name, flags=re.IGNORECASE)
         base_name = re.sub(r'\bcomplete\b', 'COMPLETE', base_name, flags=re.IGNORECASE)
 
-        # 3. Metadata Extraction from Caption
         caption_text = media.caption or ""
-        langs, res_cap, src_cap, aud_cap = extract_metadata(caption_text)
+        # Yahan bhi function ka naam fix kar diya
+        langs, res_cap, src_cap, aud_cap = extract_languages_quality(caption_text)
 
-        # 4. Format Languages (Brackets & Dual/Multi Tag)
         base_name = format_audio_languages(base_name, langs)
 
-        # 5. Add Metadata with Duplication Check
         b_low = base_name.lower()
-        if res_cap and res_cap.lower() not in b_low:
-            base_name += f" {res_cap}"
-        if src_cap and src_cap.lower() not in b_low:
-            base_name += f" {src_cap}"
-        if aud_cap and aud_cap.lower() not in b_low:
-            base_name += f" {aud_cap}"
+        if res_cap and res_cap.lower() not in b_low: base_name += f" {res_cap}"
+        if src_cap and src_cap.lower() not in b_low: base_name += f" {src_cap}"
+        if aud_cap and aud_cap.lower() not in b_low: base_name += f" {aud_cap}"
 
-        # 6. Final Clean (Allow Dots for Audio 2.0/5.1)
         file_name = f"{base_name}{ext}"
         file_name = re.sub(r"[^\w\s().\-\[\]\+]", " ", file_name)
         file_name = re.sub(r"\s+", " ", file_name).strip()
 
-        # 7. Database Check & Selection
         saveMedia = Media
-        target_db = "Primary"
-        
         if MULTIPLE_DB:
             exists = await Media.count_documents({"file_id": file_id}, limit=1)
-            if exists:
-                logger.info(f"[SKIP] '{file_name}' already exists.")
-                return False, 0
-            
-            if await check_db_size(db) >= 407:
-                saveMedia = Media2
-                target_db = "Secondary"
+            if exists: return False, 0
+            if await check_db_size(db) >= 407: saveMedia = Media2
 
-        # 8. Save Record
         caption_html = getattr(media.caption, "html", None) if media.caption and INDEX_CAPTION else None
         record = saveMedia(
             file_id=file_id, file_ref=file_ref, file_name=file_name,
@@ -272,13 +238,11 @@ async def save_file(media):
             mime_type=media.mime_type, caption=caption_html
         )
         await record.commit()
-        
-        logger.info(f"[SUCCESS] Saved → {file_name} ({target_db})")
         return True, 1
-
     except Exception as e:
-        logger.error(f"[ERROR] Save failed: {e}", exc_info=True)
+        logger.error(f"Save failed: {e}", exc_info=True)
         return False, 3
+
 
 
 
