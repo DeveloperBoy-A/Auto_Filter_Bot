@@ -122,7 +122,7 @@ def unpack_new_file_id(new_file_id):
         return None, None
 
 
-Def normalize_season_episode(text):
+def normalize_season_episode(text):
     import re
 
     text = text.lower()
