@@ -162,7 +162,7 @@ LANGUAGE_ALIASES = {
     "Malayalam": ["malayalam", "mal"],
     "Kannada": ["kannada", "kan"],
     "Punjabi": ["punjabi", "pan"],
-    "Bengali": ["bengali", "ben"]
+    "Bengali": ["bengali", "ben"],
      "Korean": ["korean", "kor", "k-drama", "kdrama"] 
 }
 
