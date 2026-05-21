@@ -350,7 +350,7 @@ async def save_file(media):
         # RELEASE TAG (FINAL SAFE)
         # =====================================================
 
-        RELEASE_TAG = "~[@Tokyo_Updates]"
+        RELEASE_TAG = "~[Tokyo_Updates]"
 
         parts = [p for p in parts if p and "Tokyo_Updates" not in p]
         parts.append(RELEASE_TAG)
