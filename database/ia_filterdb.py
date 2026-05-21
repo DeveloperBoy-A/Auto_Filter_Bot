@@ -595,6 +595,23 @@ async def save_file(media):
         )
 
         # =================================================
+        # REMOVE END RELEASE GROUP
+        # =================================================
+
+        base_name = re.sub(
+            r'\s+Ms\s+Tokyo$',
+            '',
+            base_name,
+            flags=re.IGNORECASE
+        )
+
+        base_name = re.sub(
+            r'\s+',
+            ' ',
+            base_name
+        ).strip()
+
+        # =================================================
         # CAPTION
         # =================================================
 
@@ -615,6 +632,8 @@ async def save_file(media):
         # =================================================
         # BUILD FINAL FILE NAME
         # =================================================
+
+        release_tag = "~[@Tokyo_Updates]"
 
         parts = []
 
@@ -737,7 +756,7 @@ async def save_file(media):
         # FIXED RELEASE GROUP
         # =================================================
 
-        parts.append("Tokyo_Updates")
+        parts.append(release_tag)
 
         # =================================================
         # FINAL FILE NAME
@@ -756,6 +775,11 @@ async def save_file(media):
             ' ',
             file_name
         ).strip()
+
+        file_name = file_name.replace(
+            "Tokyo Updates",
+            release_tag
+        )
 
         # =================================================
         # SAVE
@@ -813,6 +837,7 @@ async def save_file(media):
         )
 
         return False, 3
+
 
 #__________________________________
 # FOR GET SEARCH RESULT THIS CODE UPDATE BY 🅰️NKIT MEENA 
