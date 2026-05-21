@@ -279,10 +279,6 @@ EXTRA_TAGS = {
         "7.1"
     ],
 
-    "HEVC": [
-        "hevc"
-    ],
-
     "x264": [
         "x264"
     ],
@@ -359,6 +355,74 @@ def normalize_season_episode(text):
     return text
 
 # =========================================================
+# CLEAN BASE NAME
+# =========================================================
+
+def clean_base_name(base_name):
+
+    patterns = [
+
+        # SOURCES
+        r'\bWEB[\s\-]?DL\b',
+        r'\bWEB[\s\-]?RIP\b',
+        r'\bHDRIP\b',
+        r'\bBLURAY\b',
+        r'\bBDRIP\b',
+        r'\bDVDRIP\b',
+        r'\bHDTS\b',
+        r'\bHDTC\b',
+        r'\bCAMRIP\b',
+        r'\bCAM\b',
+
+        # RESOLUTIONS
+        r'\b4320P\b',
+        r'\b2160P\b',
+        r'\b4K\b',
+        r'\b1440P\b',
+        r'\b1080P\b',
+        r'\b720P\b',
+        r'\b576P\b',
+        r'\b480P\b',
+        r'\b360P\b',
+        r'\b240P\b',
+        r'\b144P\b',
+
+        # VIDEO TAGS
+        r'\bx264\b',
+        r'\bx265\b',
+        r'\b10BIT\b',
+
+        # AUDIO TAGS
+        r'\bAAC\b',
+        r'\bDD\+\b',
+        r'\bDTS\b',
+        r'\bATMOS\b',
+        r'\bTRUEHD\b',
+        r'\b5\.1\b',
+        r'\b7\.1\b',
+
+        # SUBTITLE TAGS
+        r'\bESUB\b',
+    ]
+
+    for pattern in patterns:
+
+        base_name = re.sub(
+            pattern,
+            '',
+            base_name,
+            flags=re.IGNORECASE
+        )
+
+    base_name = re.sub(
+        r'\s+',
+        ' ',
+        base_name
+    ).strip()
+
+    return base_name
+
+# =========================================================
 # EXTRACT INFO
 # =========================================================
 
@@ -405,7 +469,14 @@ def extract_languages_quality(caption):
             re.IGNORECASE
         ):
 
-            resolution = r.upper()
+            if r.lower() == "4k":
+
+                resolution = "2160P"
+
+            else:
+
+                resolution = r.upper()
+
             break
 
     # ---------------- SOURCE ----------------
@@ -519,6 +590,10 @@ async def save_file(media):
             base_name
         )
 
+        base_name = clean_base_name(
+            base_name
+        )
+
         # =================================================
         # CAPTION
         # =================================================
@@ -573,16 +648,18 @@ async def save_file(media):
 
                 parts.append(source)
 
-        # ---------------- VIDEO TAGS ----------------
+        # =================================================
+        # VIDEO TAGS
+        # =================================================
 
-        video_priority = [
-            "HEVC",
+        video_order = [
+
             "x265",
             "x264",
             "10Bit"
         ]
 
-        for tag in video_priority:
+        for tag in video_order:
 
             if tag in extra_tags:
 
@@ -590,19 +667,38 @@ async def save_file(media):
 
                     parts.append(tag)
 
-        # ---------------- AUDIO TAGS ----------------
+        # =================================================
+        # AUDIO CODECS
+        # =================================================
 
-        audio_priority = [
+        audio_codec_order = [
+
             "AAC",
             "DD+",
             "DTS",
             "ATMOS",
-            "TRUEHD",
+            "TRUEHD"
+        ]
+
+        for tag in audio_codec_order:
+
+            if tag in extra_tags:
+
+                if tag.lower() not in base_lower:
+
+                    parts.append(tag)
+
+        # =================================================
+        # AUDIO CHANNELS
+        # =================================================
+
+        audio_channel_order = [
+
             "5.1",
             "7.1"
         ]
 
-        for tag in audio_priority:
+        for tag in audio_channel_order:
 
             if tag in extra_tags:
 
@@ -610,13 +706,16 @@ async def save_file(media):
 
                     parts.append(tag)
 
-        # ---------------- SUBTITLE TAGS ----------------
+        # =================================================
+        # SUBTITLE TAGS
+        # =================================================
 
-        subtitle_priority = [
+        subtitle_order = [
+
             "ESub"
         ]
 
-        for tag in subtitle_priority:
+        for tag in subtitle_order:
 
             if tag in extra_tags:
 
@@ -624,13 +723,21 @@ async def save_file(media):
 
                     parts.append(tag)
 
-        # ---------------- KBPS ----------------
+        # =================================================
+        # KBPS
+        # =================================================
 
         if kbps_tag:
 
             if kbps_tag.lower() not in base_lower:
 
                 parts.append(kbps_tag)
+
+        # =================================================
+        # FIXED RELEASE GROUP
+        # =================================================
+
+        parts.append("Tokyo_Updates")
 
         # =================================================
         # FINAL FILE NAME
@@ -645,8 +752,8 @@ async def save_file(media):
         )
 
         file_name = re.sub(
-            r"\s+",
-            " ",
+            r'\s+',
+            ' ',
             file_name
         ).strip()
 
@@ -706,7 +813,6 @@ async def save_file(media):
         )
 
         return False, 3
-
 
 #__________________________________
 # FOR GET SEARCH RESULT THIS CODE UPDATE BY 🅰️NKIT MEENA 
