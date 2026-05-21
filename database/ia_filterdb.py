@@ -123,6 +123,8 @@ def unpack_new_file_id(new_file_id):
 
 
 
+
+
 # =========================================================
 # LANGUAGE ALIASES
 # =========================================================
@@ -168,6 +170,7 @@ def normalize_season_episode(text):
 
 
 def clean_base_name(base_name):
+
     patterns = [
         r'\bWEB[\s\-]?DL\b', r'\bWEB[\s\-]?RIP\b',
         r'\bHDRIP\b', r'\bBLURAY\b', r'\bBDRIP\b',
@@ -175,20 +178,24 @@ def clean_base_name(base_name):
         r'\bCAMRIP\b', r'\bCAM\b',
         r'\b4320P\b', r'\b2160P\b', r'\b4K\b',
         r'\b1440P\b', r'\b1080P\b', r'\b720P\b',
+        r'\b480P\b', r'\b360P\b', r'\b240P\b',
         r'\bx264\b', r'\bx265\b', r'\b10BIT\b',
         r'\bAAC\b', r'\bDD\+\b', r'\bDTS\b',
         r'\bATMOS\b', r'\bTRUEHD\b',
-        r'\bESUB\b'
+        r'\bESUB\b',
+        r'\bHDHUB4U\b', r'\bRRBZMOVI\b', r'\bDS4K\b',
+        r'\bMS\s?TOKYO\b'
     ]
 
     for p in patterns:
         base_name = re.sub(p, '', base_name, flags=re.IGNORECASE)
 
+    base_name = re.sub(r"[._\-]+", " ", base_name)
     return re.sub(r'\s+', ' ', base_name).strip()
 
 
 # =========================================================
-# CAPTION PARSER (FIXED)
+# CAPTION PARSER
 # =========================================================
 
 def extract_languages_quality(caption):
@@ -213,12 +220,12 @@ def extract_languages_quality(caption):
         "HDRip": ["hdrip"],
         "BluRay": ["bluray"],
         "DVDRip": ["dvdrip"],
-        "CAM": ["cam"],
+        "CAMRip": ["cam"],
     }
 
     for src, aliases in SOURCES.items():
         for a in aliases:
-            if a.lower() in caption:
+            if a in caption:
                 source = src
                 break
         if source:
@@ -245,7 +252,7 @@ def extract_languages_quality(caption):
                 extra_tags.append(tag)
                 break
 
-    # language detection (FIXED)
+    # languages
     for lang, aliases in LANGUAGE_ALIASES.items():
         for a in aliases:
             if a in caption:
@@ -267,7 +274,7 @@ def extract_languages_quality(caption):
 
 
 # =========================================================
-# MAIN SAVE FUNCTION (FIXED + STABLE)
+# MAIN SAVE FUNCTION (FINAL COMPLETE)
 # =========================================================
 
 async def save_file(media):
@@ -278,13 +285,11 @@ async def save_file(media):
         original_name = str(media.file_name or "Unnamed File")
         base_name, ext = os.path.splitext(original_name)
 
-        # CLEAN PIPELINE
+        # CLEAN TITLE PIPELINE
         base_name = re.sub(r"[._\-]+", " ", base_name)
         base_name = normalize_season_episode(base_name)
         base_name = remove_prefix_garbage(base_name)
         base_name = clean_base_name(base_name)
-
-        base_lower = base_name.lower()
 
         caption = str(media.caption or "")
         extracted = extract_languages_quality(caption)
@@ -296,68 +301,67 @@ async def save_file(media):
         kbps_tag = extracted["kbps"]
 
         parts = []
-        parts.append(base_name)
+
+        # SAFE ADD FUNCTION
+        def add_unique(value):
+            if value and value.lower() not in " ".join(parts).lower():
+                parts.append(value)
+
+        # =====================================================
+        # ORDER SYSTEM (STRICT FIXED)
+        # =====================================================
+
+        # TITLE
+        add_unique(base_name)
 
         # LANGUAGES
         for lang in languages:
-            parts.append(lang)
+            add_unique(lang)
 
         # RESOLUTION
-        if resolution:
-            parts.append(resolution)
+        add_unique(resolution)
 
         # SOURCE
-        if source:
-            parts.append(source)
-
-        # =========================
-        # STRICT ORDER SYSTEM
-        # =========================
-
-        video = ["x265", "x264", "10Bit"]
-        audio_codecs = ["AAC", "DD+", "DTS", "ATMOS", "TRUEHD"]
-        audio_channels = ["5.1", "7.1"]
+        add_unique(source)
 
         # VIDEO
-        for t in video:
+        for t in ["x265", "x264", "10Bit"]:
             if t in extra_tags:
-                parts.append(t)
+                add_unique(t)
 
-        # AUDIO CODECS
-        for t in audio_codecs:
+        # AUDIO CODECS (AAC FIRST AS YOU WANT)
+        for t in ["AAC", "DD+", "DTS", "ATMOS", "TRUEHD"]:
             if t in extra_tags:
-                parts.append(t)
+                add_unique(t)
 
         # CHANNELS
-        for t in audio_channels:
+        for t in ["5.1", "7.1"]:
             if t in extra_tags:
-                parts.append(t)
+                add_unique(t)
 
         # SUBTITLE
         if "ESub" in extra_tags:
-            parts.append("ESub")
+            add_unique("ESub")
 
         # KBPS
-        if kbps_tag:
-            parts.append(kbps_tag)
+        add_unique(kbps_tag)
 
-        # =========================
-        # RELEASE TAG (BULLETPROOF)
-        # =========================
+        # =====================================================
+        # RELEASE TAG (FINAL SAFE)
+        # =====================================================
 
         RELEASE_TAG = "~[@Tokyo_Updates]"
 
-        parts = [p for p in parts if "Tokyo_Updates" not in p]
+        parts = [p for p in parts if p and "Tokyo_Updates" not in p]
         parts.append(RELEASE_TAG)
 
         # FINAL BUILD
         file_name = " ".join(parts).strip()
         file_name = re.sub(r'\s+', ' ', file_name)
         file_name = file_name + ext
-
         file_name = re.sub(r'\s+\.', '.', file_name)
 
-        # SAVE
+        # SAVE (your DB layer)
         record = Media(
             file_id=file_id,
             file_ref=file_ref,
@@ -381,7 +385,6 @@ async def save_file(media):
     except Exception as e:
         logger.exception(f"[ERROR] {e}")
         return False, 3
-
 #__________________________________
 # FOR GET SEARCH RESULT THIS CODE UPDATE BY 🅰️NKIT MEENA 
 #__________________________________
