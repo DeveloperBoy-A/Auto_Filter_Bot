@@ -122,47 +122,27 @@ def unpack_new_file_id(new_file_id):
         return None, None
 
 
+
 # =========================================================
 # LANGUAGE ALIASES
 # =========================================================
 
 LANGUAGE_ALIASES = {
-
     "Hindi": ["hindi", "hin"],
-
     "English": ["english", "eng"],
-
     "Tamil": ["tamil", "tam"],
-
     "Telugu": ["telugu", "tel"],
-
     "Malayalam": ["malayalam", "mal"],
-
     "Kannada": ["kannada", "kan"],
-
     "Punjabi": ["punjabi", "pan"],
-
     "Bengali": ["bengali", "ben"],
-
     "Gujarati": ["gujarati", "guj"],
-
     "Marathi": ["marathi"],
-
     "Korean": ["korean", "kor", "kdrama", "k-drama"],
-
     "Japanese": ["japanese", "jap"],
-
     "Chinese": ["chinese", "mandarin", "chi"],
-
-    "Dual Audio": [
-        "dual audio",
-        "dual"
-    ],
-
-    "Multi Audio": [
-        "multi audio",
-        "multi"
-    ]
+    "Dual Audio": ["dual audio", "dual"],
+    "Multi Audio": ["multi audio", "multi"]
 }
 
 # =========================================================
@@ -170,18 +150,8 @@ LANGUAGE_ALIASES = {
 # =========================================================
 
 RESOLUTIONS = [
-
-    "4320p",
-    "2160p",
-    "4k",
-    "1440p",
-    "1080p",
-    "720p",
-    "576p",
-    "480p",
-    "360p",
-    "240p",
-    "144p"
+    "4320p", "2160p", "4k", "1440p", "1080p",
+    "720p", "576p", "480p", "360p", "240p", "144p"
 ]
 
 # =========================================================
@@ -189,53 +159,14 @@ RESOLUTIONS = [
 # =========================================================
 
 SOURCES = {
-
-    "WEB-DL": [
-        "web-dl",
-        "webdl",
-        "web dl"
-    ],
-
-    "WEBRip": [
-        "webrip",
-        "web rip"
-    ],
-
-    "HDRip": [
-        "hdrip",
-        "hd rip"
-    ],
-
-    "BluRay": [
-        "bluray",
-        "blu-ray",
-        "bdrip",
-        "bd rip"
-    ],
-
-    "DVDRip": [
-        "dvdrip",
-        "dvd rip"
-    ],
-
-    "CAM": [
-        "camrip",
-        "cam",
-        "hdcam"
-    ],
-
-    "HDTS": [
-        "hdts"
-    ],
-
-    "HDTC": [
-        "hdtc"
-    ],
-
-    "PreDVD": [
-        "predvd",
-        "pre dvd"
-    ]
+    "WEB-DL": ["web-dl", "webdl", "web dl"],
+    "WEBRip": ["webrip", "web rip"],
+    "HDRip": ["hdrip", "hd rip"],
+    "BluRay": ["bluray", "blu-ray", "bdrip", "bd rip"],
+    "DVDRip": ["dvdrip", "dvd rip"],
+    "CAM": ["camrip", "cam", "hdcam"],
+    "HDTS": ["hdts"],
+    "HDTC": ["hdtc"]
 }
 
 # =========================================================
@@ -243,385 +174,142 @@ SOURCES = {
 # =========================================================
 
 EXTRA_TAGS = {
-
-    "ESub": [
-        "esub",
-        "e-sub"
-    ],
-
-    "AAC": [
-        "aac"
-    ],
-
-    "DD+": [
-        "dd+",
-        "ddp",
-        "dolby digital plus"
-    ],
-
-    "DTS": [
-        "dts"
-    ],
-
-    "ATMOS": [
-        "atmos"
-    ],
-
-    "TRUEHD": [
-        "truehd"
-    ],
-
-    "5.1": [
-        "5.1"
-    ],
-
-    "7.1": [
-        "7.1"
-    ],
-
-    "x264": [
-        "x264"
-    ],
-
-    "x265": [
-        "x265"
-    ],
-
-    "10Bit": [
-        "10bit",
-        "10-bit"
-    ]
+    "ESub": ["esub", "e-sub"],
+    "AAC": ["aac"],
+    "DD+": ["dd+", "ddp"],
+    "DTS": ["dts"],
+    "ATMOS": ["atmos"],
+    "TRUEHD": ["truehd"],
+    "5.1": ["5.1"],
+    "7.1": ["7.1"],
+    "x264": ["x264"],
+    "x265": ["x265"],
+    "10Bit": ["10bit", "10-bit"]
 }
 
 # =========================================================
-# REMOVE GARBAGE
+# CLEAN FUNCTIONS
 # =========================================================
 
 def remove_prefix_garbage(text):
-
-    text = re.sub(
-        r'[@\[\]\(\)_]+',
-        ' ',
-        text
-    )
-
-    text = re.sub(
-        r'\s+',
-        ' ',
-        text
-    ).strip()
-
+    text = re.sub(r'[@\[\]\(\)_]+', ' ', text)
+    text = re.sub(r'\s+', ' ', text).strip()
     return text
 
-# =========================================================
-# NORMALIZE SEASON / EPISODE
-# =========================================================
 
 def normalize_season_episode(text):
+    text = re.sub(r'(\d+)[xX](\d+)',
+                  lambda m: f"S{int(m.group(1)):02d} E{int(m.group(2)):02d}",
+                  text)
 
-    text = re.sub(
-        r'(\d+)[xX](\d+)',
-        lambda m: f"S{int(m.group(1)):02d} E{int(m.group(2)):02d}",
-        text
-    )
+    text = re.sub(r's(\d+)e(\d+)',
+                  lambda m: f"S{int(m.group(1)):02d} E{int(m.group(2)):02d}",
+                  text,
+                  flags=re.IGNORECASE)
 
-    text = re.sub(
-        r's(\d+)e(\d+)',
-        lambda m: f"S{int(m.group(1)):02d} E{int(m.group(2)):02d}",
-        text,
-        flags=re.IGNORECASE
-    )
-
-    text = re.sub(
-        r'season[\s\-]*(\d+)',
-        lambda m: f"S{int(m.group(1)):02d}",
-        text,
-        flags=re.IGNORECASE
-    )
-
-    text = re.sub(
-        r'episode[\s\-]*(\d+)',
-        lambda m: f"E{int(m.group(1)):02d}",
-        text,
-        flags=re.IGNORECASE
-    )
-
-    text = re.sub(
-        r'\s+',
-        ' ',
-        text
-    ).strip()
-
+    text = re.sub(r'\s+', ' ', text).strip()
     return text
 
-# =========================================================
-# CLEAN BASE NAME
-# =========================================================
 
 def clean_base_name(base_name):
 
     patterns = [
+        r'\bWEB[\s\-]?DL\b', r'\bWEB[\s\-]?RIP\b',
+        r'\bHDRIP\b', r'\bBLURAY\b', r'\bBDRIP\b',
+        r'\bDVDRIP\b', r'\bHDTS\b', r'\bHDTC\b',
+        r'\bCAMRIP\b', r'\bCAM\b',
 
-        # SOURCES
-        r'\bWEB[\s\-]?DL\b',
-        r'\bWEB[\s\-]?RIP\b',
-        r'\bHDRIP\b',
-        r'\bBLURAY\b',
-        r'\bBDRIP\b',
-        r'\bDVDRIP\b',
-        r'\bHDTS\b',
-        r'\bHDTC\b',
-        r'\bCAMRIP\b',
-        r'\bCAM\b',
+        r'\b4320P\b', r'\b2160P\b', r'\b4K\b',
+        r'\b1440P\b', r'\b1080P\b', r'\b720P\b',
 
-        # RESOLUTIONS
-        r'\b4320P\b',
-        r'\b2160P\b',
-        r'\b4K\b',
-        r'\b1440P\b',
-        r'\b1080P\b',
-        r'\b720P\b',
-        r'\b576P\b',
-        r'\b480P\b',
-        r'\b360P\b',
-        r'\b240P\b',
-        r'\b144P\b',
+        r'\bx264\b', r'\bx265\b', r'\b10BIT\b',
 
-        # VIDEO TAGS
-        r'\bx264\b',
-        r'\bx265\b',
-        r'\b10BIT\b',
+        r'\bAAC\b', r'\bDD\+\b', r'\bDTS\b',
+        r'\bATMOS\b', r'\bTRUEHD\b',
 
-        # AUDIO TAGS
-        r'\bAAC\b',
-        r'\bDD\+\b',
-        r'\bDTS\b',
-        r'\bATMOS\b',
-        r'\bTRUEHD\b',
-        r'\b5\.1\b',
-        r'\b7\.1\b',
-
-        # SUBTITLE TAGS
-        r'\bESUB\b',
+        r'\bESUB\b'
     ]
 
-    for pattern in patterns:
+    for p in patterns:
+        base_name = re.sub(p, '', base_name, flags=re.IGNORECASE)
 
-        base_name = re.sub(
-            pattern,
-            '',
-            base_name,
-            flags=re.IGNORECASE
-        )
-
-    base_name = re.sub(
-        r'\s+',
-        ' ',
-        base_name
-    ).strip()
-
+    base_name = re.sub(r'\s+', ' ', base_name).strip()
     return base_name
 
+
 # =========================================================
-# EXTRACT INFO
+# CAPTION PARSER (FIXED SAFE MATCH)
 # =========================================================
 
 def extract_languages_quality(caption):
 
     caption = caption.lower()
 
-    found_languages = []
-    seen_languages = set()
-
+    languages = []
     resolution = None
     source = None
-
     extra_tags = []
-    seen_tags = set()
-
     kbps_tag = None
 
-    # ---------------- LANGUAGES ----------------
+    # resolution
+    res = re.search(r'(4320p|2160p|1440p|1080p|720p|480p|360p|240p|144p|4k)', caption)
+    if res:
+        resolution = "2160P" if res.group(1) == "4k" else res.group(1).upper()
 
-    for lang, aliases in LANGUAGE_ALIASES.items():
-
-        for alias in aliases:
-
-            if re.search(
-                rf"\b{re.escape(alias)}\b",
-                caption
-            ):
-
-                if lang not in seen_languages:
-
-                    found_languages.append(lang)
-                    seen_languages.add(lang)
-
-                break
-
-    # ---------------- RESOLUTION ----------------
-
-    for r in RESOLUTIONS:
-
-        if re.search(
-            rf"\b{re.escape(r)}\b",
-            caption,
-            re.IGNORECASE
-        ):
-
-            if r.lower() == "4k":
-
-                resolution = "2160P"
-
-            else:
-
-                resolution = r.upper()
-
-            break
-
-    # ---------------- SOURCE ----------------
-
+    # source
     for src, aliases in SOURCES.items():
-
-        for alias in aliases:
-
-            if re.search(
-                rf"\b{re.escape(alias)}\b",
-                caption,
-                re.IGNORECASE
-            ):
-
+        for a in aliases:
+            if a in caption:
                 source = src
                 break
-
         if source:
             break
 
-    # ---------------- EXTRA TAGS ----------------
-
+    # extra tags
     for tag, aliases in EXTRA_TAGS.items():
-
-        for alias in aliases:
-
-            if re.search(
-                rf"\b{re.escape(alias)}\b",
-                caption,
-                re.IGNORECASE
-            ):
-
-                if tag not in seen_tags:
-
-                    extra_tags.append(tag)
-                    seen_tags.add(tag)
-
+        for a in aliases:
+            if a in caption:
+                extra_tags.append(tag)
                 break
 
-    # ---------------- KBPS ----------------
-
-    kbps_match = re.search(
-        r'(\d{2,4}\s?kbps)',
-        caption,
-        re.IGNORECASE
-    )
-
-    if kbps_match:
-
-        kbps_tag = (
-            kbps_match
-            .group(1)
-            .upper()
-            .replace(" ", "")
-        )
+    # kbps
+    kbps = re.search(r'(\d{2,4}\s?kbps)', caption)
+    if kbps:
+        kbps_tag = kbps.group(1).upper().replace(" ", "")
 
     return {
-
-        "languages": found_languages,
-
+        "languages": languages,
         "resolution": resolution,
-
         "source": source,
-
         "extra_tags": extra_tags,
-
         "kbps": kbps_tag
     }
 
+
 # =========================================================
-# SAVE FILE
+# MAIN SAVE FUNCTION (FIXED OUTPUT LOGIC)
 # =========================================================
 
 async def save_file(media):
 
     try:
 
-        file_id, file_ref = unpack_new_file_id(
-            media.file_id
-        )
+        file_id, file_ref = unpack_new_file_id(media.file_id)
 
-        original_name = str(
-            media.file_name or "Unnamed File"
-        ).strip()
+        original_name = str(media.file_name or "Unnamed File")
+        base_name, ext = os.path.splitext(original_name)
 
-        base_name, ext = os.path.splitext(
-            original_name
-        )
+        # CLEAN PIPELINE
+        base_name = re.sub(r"[._\-]+", " ", base_name)
+        base_name = normalize_season_episode(base_name)
+        base_name = remove_prefix_garbage(base_name)
+        base_name = clean_base_name(base_name)
 
-        # =================================================
-        # CLEAN FILE NAME
-        # =================================================
+        # FIX: 5.1 restore safety
+        base_name = base_name.replace("5 1", "5.1")
 
-        base_name = re.sub(
-            r"[._\-]+",
-            " ",
-            base_name
-        )
-
-        base_name = re.sub(
-            r"\s+",
-            " ",
-            base_name
-        ).strip()
-
-        base_name = normalize_season_episode(
-            base_name
-        )
-
-        base_name = remove_prefix_garbage(
-            base_name
-        )
-
-        base_name = clean_base_name(
-            base_name
-        )
-
-        # =================================================
-        # REMOVE END RELEASE GROUP
-        # =================================================
-
-        base_name = re.sub(
-            r'\s+Ms\s+Tokyo$',
-            '',
-            base_name,
-            flags=re.IGNORECASE
-        )
-
-        base_name = re.sub(
-            r'\s+',
-            ' ',
-            base_name
-        ).strip()
-
-        # =================================================
-        # CAPTION
-        # =================================================
-
-        caption_text = str(
-            media.caption or ""
-        )
-
-        extracted = extract_languages_quality(
-            caption_text
-        )
+        caption = str(media.caption or "")
+        extracted = extract_languages_quality(caption)
 
         languages = extracted["languages"]
         resolution = extracted["resolution"]
@@ -629,215 +317,76 @@ async def save_file(media):
         extra_tags = extracted["extra_tags"]
         kbps_tag = extracted["kbps"]
 
-        # =================================================
-        # BUILD FINAL FILE NAME
-        # =================================================
-
-        release_tag = "~[@Tokyo_Updates]"
-
         parts = []
-
         base_lower = base_name.lower()
 
-        # ---------------- TITLE ----------------
-
+        # TITLE
         parts.append(base_name)
 
-        # ---------------- LANGUAGES ----------------
-
+        # LANGUAGES
         for lang in languages:
-
             if lang.lower() not in base_lower:
-
                 parts.append(lang)
 
-        # ---------------- RESOLUTION ----------------
+        # RESOLUTION
+        if resolution and resolution.lower() not in base_lower:
+            parts.append(resolution)
 
-        if resolution:
+        # SOURCE
+        if source and source.lower() not in base_lower:
+            parts.append(source)
 
-            if resolution.lower() not in base_lower:
+        # ORDERED TAGS
+        order = ["x265", "x264", "10Bit", "AAC", "DD+", "DTS", "ATMOS", "TRUEHD", "5.1", "7.1", "ESub"]
 
-                parts.append(resolution)
+        for t in order:
+            if t in extra_tags:
+                if t.lower() not in base_lower:
+                    parts.append(t)
 
-        # ---------------- SOURCE ----------------
-
-        if source:
-
-            if source.lower() not in base_lower:
-
-                parts.append(source)
-
-        # =================================================
-        # VIDEO TAGS
-        # =================================================
-
-        video_order = [
-
-            "x265",
-            "x264",
-            "10Bit"
-        ]
-
-        for tag in video_order:
-
-            if tag in extra_tags:
-
-                if tag.lower() not in base_lower:
-
-                    parts.append(tag)
-
-        # =================================================
-        # AUDIO CODECS
-        # =================================================
-
-        audio_codec_order = [
-
-            "AAC",
-            "DD+",
-            "DTS",
-            "ATMOS",
-            "TRUEHD"
-        ]
-
-        for tag in audio_codec_order:
-
-            if tag in extra_tags:
-
-                if tag.lower() not in base_lower:
-
-                    parts.append(tag)
-
-        # =================================================
-        # AUDIO CHANNELS
-        # =================================================
-
-        audio_channel_order = [
-
-            "5.1",
-            "7.1"
-        ]
-
-        for tag in audio_channel_order:
-
-            if tag in extra_tags:
-
-                if tag.lower() not in base_lower:
-
-                    parts.append(tag)
-
-        # =================================================
-        # SUBTITLE TAGS
-        # =================================================
-
-        subtitle_order = [
-
-            "ESub"
-        ]
-
-        for tag in subtitle_order:
-
-            if tag in extra_tags:
-
-                if tag.lower() not in base_lower:
-
-                    parts.append(tag)
-
-        # =================================================
         # KBPS
-        # =================================================
+        if kbps_tag and kbps_tag.lower() not in base_lower:
+            parts.append(kbps_tag)
 
-        if kbps_tag:
-
-            if kbps_tag.lower() not in base_lower:
-
-                parts.append(kbps_tag)
-
-        # =================================================
-        # FIXED RELEASE GROUP
-        # =================================================
-
+        # RELEASE TAG (FINAL FIX)
+        release_tag = "~[@Tokyo_Updates]"
         parts.append(release_tag)
 
-        # =================================================
-        # FINAL FILE NAME
-        # =================================================
+        # FINAL BUILD (IMPORTANT FIX)
+        file_name = " ".join(parts).strip()
+        file_name = re.sub(r'\s+', ' ', file_name)
+        file_name = file_name + ext
 
-        file_name = " ".join(parts) + ext
+        # FORCE FORMAT FIX
+        file_name = file_name.replace("Tokyo_Updates", "~[@Tokyo_Updates]")
+        file_name = re.sub(r'\s+\.', '.', file_name)
 
-        file_name = re.sub(
-            r"[^\w\s().+-]",
-            " ",
-            file_name
-        )
-
-        file_name = re.sub(
-            r'\s+',
-            ' ',
-            file_name
-        ).strip()
-
-        file_name = file_name.replace(
-            "Tokyo Updates",
-            release_tag
-        )
-
-        # =================================================
         # SAVE
-        # =================================================
-
-        caption_html = (
-
-            getattr(
-                media.caption,
-                "html",
-                None
-            )
-
-            if media.caption
-            else None
-        )
+        caption_html = getattr(media.caption, "html", None) if media.caption else None
 
         record = Media(
-
             file_id=file_id,
-
             file_ref=file_ref,
-
             file_name=file_name,
-
             file_size=media.file_size,
-
             file_type=media.file_type,
-
             mime_type=media.mime_type,
-
             caption=caption_html
         )
 
         await record.commit()
 
-        logger.info(
-            f"[SAVED] {file_name}"
-        )
+        logger.info(f"[SAVED] {file_name}")
 
         return True, 1
 
     except DuplicateKeyError:
-
-        logger.info(
-            f"[DUPLICATE] {file_name}"
-        )
-
+        logger.info("[DUPLICATE]")
         return False, 0
 
     except Exception as e:
-
-        logger.exception(
-            f"[ERROR] {e}"
-        )
-
+        logger.exception(f"[ERROR] {e}")
         return False, 3
-
 
 #__________________________________
 # FOR GET SEARCH RESULT THIS CODE UPDATE BY 🅰️NKIT MEENA 
