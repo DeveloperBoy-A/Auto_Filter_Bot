@@ -196,24 +196,24 @@ SOURCES = {
         "web dl"
     ],
 
-    "WEBRIP": [
+    "WEBRip": [
         "webrip",
         "web rip"
     ],
 
-    "HDRIP": [
+    "HDRip": [
         "hdrip",
         "hd rip"
     ],
 
-    "BLURAY": [
+    "BluRay": [
         "bluray",
         "blu-ray",
         "bdrip",
         "bd rip"
     ],
 
-    "DVDRIP": [
+    "DVDRip": [
         "dvdrip",
         "dvd rip"
     ],
@@ -232,14 +232,14 @@ SOURCES = {
         "hdtc"
     ],
 
-    "PRE-DVD": [
+    "PreDVD": [
         "predvd",
         "pre dvd"
     ]
 }
 
 # =========================================================
-# AUDIO / EXTRA TAGS
+# EXTRA TAGS
 # =========================================================
 
 EXTRA_TAGS = {
@@ -280,8 +280,7 @@ EXTRA_TAGS = {
     ],
 
     "HEVC": [
-        "hevc",
-        "x265"
+        "hevc"
     ],
 
     "x264": [
@@ -542,9 +541,13 @@ async def save_file(media):
         # BUILD FINAL FILE NAME
         # =================================================
 
-        parts = [base_name]
+        parts = []
 
         base_lower = base_name.lower()
+
+        # ---------------- TITLE ----------------
+
+        parts.append(base_name)
 
         # ---------------- LANGUAGES ----------------
 
@@ -570,13 +573,56 @@ async def save_file(media):
 
                 parts.append(source)
 
-        # ---------------- EXTRA TAGS ----------------
+        # ---------------- VIDEO TAGS ----------------
 
-        for tag in extra_tags:
+        video_priority = [
+            "HEVC",
+            "x265",
+            "x264",
+            "10Bit"
+        ]
 
-            if tag.lower() not in base_lower:
+        for tag in video_priority:
 
-                parts.append(tag)
+            if tag in extra_tags:
+
+                if tag.lower() not in base_lower:
+
+                    parts.append(tag)
+
+        # ---------------- AUDIO TAGS ----------------
+
+        audio_priority = [
+            "AAC",
+            "DD+",
+            "DTS",
+            "ATMOS",
+            "TRUEHD",
+            "5.1",
+            "7.1"
+        ]
+
+        for tag in audio_priority:
+
+            if tag in extra_tags:
+
+                if tag.lower() not in base_lower:
+
+                    parts.append(tag)
+
+        # ---------------- SUBTITLE TAGS ----------------
+
+        subtitle_priority = [
+            "ESub"
+        ]
+
+        for tag in subtitle_priority:
+
+            if tag in extra_tags:
+
+                if tag.lower() not in base_lower:
+
+                    parts.append(tag)
 
         # ---------------- KBPS ----------------
 
@@ -587,7 +633,7 @@ async def save_file(media):
                 parts.append(kbps_tag)
 
         # =================================================
-        # FINAL NAME
+        # FINAL FILE NAME
         # =================================================
 
         file_name = " ".join(parts) + ext
@@ -660,7 +706,6 @@ async def save_file(media):
         )
 
         return False, 3
-
 
 
 #__________________________________
