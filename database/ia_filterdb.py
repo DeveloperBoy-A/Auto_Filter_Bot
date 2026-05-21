@@ -122,210 +122,543 @@ def unpack_new_file_id(new_file_id):
         return None, None
 
 
-def normalize_season_episode(text):
-    import re
+# =========================================================
+# LANGUAGE ALIASES
+# =========================================================
 
-    text = text.lower()
+LANGUAGE_ALIASES = {
 
-    text = re.sub(r'(\d+)[xX](\d+)',
-                  lambda m: f"S{int(m.group(1)):02d} E{int(m.group(2)):02d}",
-                  text)
+    "Hindi": ["hindi", "hin"],
 
-    text = re.sub(r'season[\s\-]*(\d+)',
-                  lambda m: f"S{int(m.group(1)):02d}", text)
-    text = re.sub(r'\bs[\s\-]*(\d+)',
-                  lambda m: f"S{int(m.group(1)):02d}", text)
+    "English": ["english", "eng"],
 
-    text = re.sub(r'episode[\s\-]*(\d+)',
-                  lambda m: f"E{int(m.group(1)):02d}", text)
-    text = re.sub(r'\bep[\s\-]*(\d+)',
-                  lambda m: f"E{int(m.group(1)):02d}", text)
-    text = re.sub(r'\be[\s\-]*(\d+)',
-                  lambda m: f"E{int(m.group(1)):02d}", text)
+    "Tamil": ["tamil", "tam"],
 
-    text = re.sub(r's(\d+)e(\d+)',
-                  lambda m: f"S{int(m.group(1)):02d} E{int(m.group(2)):02d}",
-                  text)
+    "Telugu": ["telugu", "tel"],
 
-    text = re.sub(r'\s+', ' ', text).strip()
+    "Malayalam": ["malayalam", "mal"],
 
-    text = text.title()
+    "Kannada": ["kannada", "kan"],
+
+    "Punjabi": ["punjabi", "pan"],
+
+    "Bengali": ["bengali", "ben"],
+
+    "Gujarati": ["gujarati", "guj"],
+
+    "Marathi": ["marathi"],
+
+    "Korean": ["korean", "kor", "kdrama", "k-drama"],
+
+    "Japanese": ["japanese", "jap"],
+
+    "Chinese": ["chinese", "mandarin", "chi"],
+
+    "Dual Audio": [
+        "dual audio",
+        "dual"
+    ],
+
+    "Multi Audio": [
+        "multi audio",
+        "multi"
+    ]
+}
+
+# =========================================================
+# RESOLUTIONS
+# =========================================================
+
+RESOLUTIONS = [
+
+    "4320p",
+    "2160p",
+    "4k",
+    "1440p",
+    "1080p",
+    "720p",
+    "576p",
+    "480p",
+    "360p",
+    "240p",
+    "144p"
+]
+
+# =========================================================
+# SOURCES
+# =========================================================
+
+SOURCES = {
+
+    "WEB-DL": [
+        "web-dl",
+        "webdl",
+        "web dl"
+    ],
+
+    "WEBRIP": [
+        "webrip",
+        "web rip"
+    ],
+
+    "HDRIP": [
+        "hdrip",
+        "hd rip"
+    ],
+
+    "BLURAY": [
+        "bluray",
+        "blu-ray",
+        "bdrip",
+        "bd rip"
+    ],
+
+    "DVDRIP": [
+        "dvdrip",
+        "dvd rip"
+    ],
+
+    "CAM": [
+        "camrip",
+        "cam",
+        "hdcam"
+    ],
+
+    "HDTS": [
+        "hdts"
+    ],
+
+    "HDTC": [
+        "hdtc"
+    ],
+
+    "PRE-DVD": [
+        "predvd",
+        "pre dvd"
+    ]
+}
+
+# =========================================================
+# AUDIO / EXTRA TAGS
+# =========================================================
+
+EXTRA_TAGS = {
+
+    "ESub": [
+        "esub",
+        "e-sub"
+    ],
+
+    "AAC": [
+        "aac"
+    ],
+
+    "DD+": [
+        "dd+",
+        "ddp",
+        "dolby digital plus"
+    ],
+
+    "DTS": [
+        "dts"
+    ],
+
+    "ATMOS": [
+        "atmos"
+    ],
+
+    "TRUEHD": [
+        "truehd"
+    ],
+
+    "5.1": [
+        "5.1"
+    ],
+
+    "7.1": [
+        "7.1"
+    ],
+
+    "HEVC": [
+        "hevc",
+        "x265"
+    ],
+
+    "x264": [
+        "x264"
+    ],
+
+    "x265": [
+        "x265"
+    ],
+
+    "10Bit": [
+        "10bit",
+        "10-bit"
+    ]
+}
+
+# =========================================================
+# REMOVE GARBAGE
+# =========================================================
+
+def remove_prefix_garbage(text):
+
+    text = re.sub(
+        r'[@\[\]\(\)_]+',
+        ' ',
+        text
+    )
+
+    text = re.sub(
+        r'\s+',
+        ' ',
+        text
+    ).strip()
 
     return text
 
-# ---------------- Language Aliases ----------------
-LANGUAGE_ALIASES = {
-    "Hindi": ["hindi", "hin"],
-    "English": ["english", "eng"],
-    "Tamil": ["tamil", "tam"],
-    "Telugu": ["telugu", "tel"],
-    "Malayalam": ["malayalam", "mal"],
-    "Kannada": ["kannada", "kan"],
-    "Punjabi": ["punjabi", "pan"],
-    "Bengali": ["bengali", "ben"],
-     "Korean": ["korean", "kor", "k-drama", "kdrama"] 
-}
+# =========================================================
+# NORMALIZE SEASON / EPISODE
+# =========================================================
 
-# ---------------- Resolutions ----------------
-RESOLUTIONS = ["2160p","4k","1080p","720p","480p","360p","240p","144p"]
+def normalize_season_episode(text):
 
-# ---------------- Sources ----------------
-SOURCES = {
-    "HDRIP": ["hdrip","hd rip"],
-    "WEB-DL": ["web-dl","webdl"],
-    "WEBRIP": ["webrip","web rip"],
-    "BLURAY": ["bluray","blu-ray","bdrip"]
-}
+    text = re.sub(
+        r'(\d+)[xX](\d+)',
+        lambda m: f"S{int(m.group(1)):02d} E{int(m.group(2)):02d}",
+        text
+    )
 
+    text = re.sub(
+        r's(\d+)e(\d+)',
+        lambda m: f"S{int(m.group(1)):02d} E{int(m.group(2)):02d}",
+        text,
+        flags=re.IGNORECASE
+    )
 
-# ---------------- Extract info from caption ----------------
-def extract_languages_quality(caption: str):
+    text = re.sub(
+        r'season[\s\-]*(\d+)',
+        lambda m: f"S{int(m.group(1)):02d}",
+        text,
+        flags=re.IGNORECASE
+    )
+
+    text = re.sub(
+        r'episode[\s\-]*(\d+)',
+        lambda m: f"E{int(m.group(1)):02d}",
+        text,
+        flags=re.IGNORECASE
+    )
+
+    text = re.sub(
+        r'\s+',
+        ' ',
+        text
+    ).strip()
+
+    return text
+
+# =========================================================
+# EXTRACT INFO
+# =========================================================
+
+def extract_languages_quality(caption):
+
     caption = caption.lower()
 
     found_languages = []
-    seen = set()
+    seen_languages = set()
+
     resolution = None
     source = None
 
-    # Languages
+    extra_tags = []
+    seen_tags = set()
+
+    kbps_tag = None
+
+    # ---------------- LANGUAGES ----------------
+
     for lang, aliases in LANGUAGE_ALIASES.items():
-        for a in aliases:
-            if re.search(rf"\b{re.escape(a)}\b", caption):
-                if lang not in seen:
+
+        for alias in aliases:
+
+            if re.search(
+                rf"\b{re.escape(alias)}\b",
+                caption
+            ):
+
+                if lang not in seen_languages:
+
                     found_languages.append(lang)
-                    seen.add(lang)
+                    seen_languages.add(lang)
+
                 break
 
-    # Resolution
+    # ---------------- RESOLUTION ----------------
+
     for r in RESOLUTIONS:
-        if r in caption:
+
+        if re.search(
+            rf"\b{re.escape(r)}\b",
+            caption,
+            re.IGNORECASE
+        ):
+
             resolution = r.upper()
             break
 
-    # Source
+    # ---------------- SOURCE ----------------
+
     for src, aliases in SOURCES.items():
-        for a in aliases:
-            if a in caption:
+
+        for alias in aliases:
+
+            if re.search(
+                rf"\b{re.escape(alias)}\b",
+                caption,
+                re.IGNORECASE
+            ):
+
                 source = src
                 break
+
         if source:
             break
 
-    return found_languages, resolution, source
+    # ---------------- EXTRA TAGS ----------------
 
+    for tag, aliases in EXTRA_TAGS.items():
 
-# ---------------- Save File ----------------
+        for alias in aliases:
+
+            if re.search(
+                rf"\b{re.escape(alias)}\b",
+                caption,
+                re.IGNORECASE
+            ):
+
+                if tag not in seen_tags:
+
+                    extra_tags.append(tag)
+                    seen_tags.add(tag)
+
+                break
+
+    # ---------------- KBPS ----------------
+
+    kbps_match = re.search(
+        r'(\d{2,4}\s?kbps)',
+        caption,
+        re.IGNORECASE
+    )
+
+    if kbps_match:
+
+        kbps_tag = (
+            kbps_match
+            .group(1)
+            .upper()
+            .replace(" ", "")
+        )
+
+    return {
+
+        "languages": found_languages,
+
+        "resolution": resolution,
+
+        "source": source,
+
+        "extra_tags": extra_tags,
+
+        "kbps": kbps_tag
+    }
+
+# =========================================================
+# SAVE FILE
+# =========================================================
+
 async def save_file(media):
-    """
-    Save file in database with FORCED language + quality from caption
-    """
 
     try:
-        file_id, file_ref = unpack_new_file_id(media.file_id)
 
-        original_name = str(media.file_name or "Unnamed File").strip()
-        base_name, ext = os.path.splitext(original_name)
+        file_id, file_ref = unpack_new_file_id(
+            media.file_id
+        )
 
-        # ---------------- CLEAN BASE NAME ----------------
-        base_name = re.sub(r"[._\-]+", " ", base_name)
-        base_name = re.sub(r"\s+", " ", base_name).strip()
+        original_name = str(
+            media.file_name or "Unnamed File"
+        ).strip()
 
-        # ✅ season/episode format fix
-        base_name = normalize_season_episode(base_name)
-        # prefix se pehle ka garbage remove
-        base_name = remove_prefix_garbage(base_name)
+        base_name, ext = os.path.splitext(
+            original_name
+        )
 
-        # ---------------- CAPTION READ (IMPORTANT) ----------------
-        caption_text = media.caption or ""
+        # =================================================
+        # CLEAN FILE NAME
+        # =================================================
 
-        # ---------------- EXTRACT INFO ----------------
-        languages, resolution_caption, source_caption = extract_languages_quality(
+        base_name = re.sub(
+            r"[._\-]+",
+            " ",
+            base_name
+        )
+
+        base_name = re.sub(
+            r"\s+",
+            " ",
+            base_name
+        ).strip()
+
+        base_name = normalize_season_episode(
+            base_name
+        )
+
+        base_name = remove_prefix_garbage(
+            base_name
+        )
+
+        # =================================================
+        # CAPTION
+        # =================================================
+
+        caption_text = str(
+            media.caption or ""
+        )
+
+        extracted = extract_languages_quality(
             caption_text
         )
 
-        # ---------------- BUILD FINAL NAME (FORCED) ----------------
+        languages = extracted["languages"]
+        resolution = extracted["resolution"]
+        source = extracted["source"]
+        extra_tags = extracted["extra_tags"]
+        kbps_tag = extracted["kbps"]
+
+        # =================================================
+        # BUILD FINAL FILE NAME
+        # =================================================
+
         parts = [base_name]
 
-        # 🔹 language duplicate avoid (minimal & safe)
         base_lower = base_name.lower()
-        added_langs = set()
+
+        # ---------------- LANGUAGES ----------------
 
         for lang in languages:
-            l = lang.lower()
-            if l in base_lower or l in added_langs:
-                continue
-            parts.append(lang)
-            added_langs.add(l)
 
-        # 🔹 Optional: resolution duplicate avoid
-        added_res = set()
-        if resolution_caption:
-            r_upper = resolution_caption.upper()
-            if r_upper not in added_res:
-                parts.append(r_upper)
-                added_res.add(r_upper)
+            if lang.lower() not in base_lower:
 
-        # 🔹 Optional: source duplicate avoid
-        added_src = set()
-        if source_caption:
-            if source_caption not in added_src:
-                parts.append(source_caption)
-                added_src.add(source_caption)
+                parts.append(lang)
+
+        # ---------------- RESOLUTION ----------------
+
+        if resolution:
+
+            if resolution.lower() not in base_lower:
+
+                parts.append(resolution)
+
+        # ---------------- SOURCE ----------------
+
+        if source:
+
+            if source.lower() not in base_lower:
+
+                parts.append(source)
+
+        # ---------------- EXTRA TAGS ----------------
+
+        for tag in extra_tags:
+
+            if tag.lower() not in base_lower:
+
+                parts.append(tag)
+
+        # ---------------- KBPS ----------------
+
+        if kbps_tag:
+
+            if kbps_tag.lower() not in base_lower:
+
+                parts.append(kbps_tag)
+
+        # =================================================
+        # FINAL NAME
+        # =================================================
 
         file_name = " ".join(parts) + ext
 
-        # ---------------- FINAL CLEAN ----------------
-        file_name = re.sub(r"[^\w\s().]", " ", file_name)
-        file_name = re.sub(r"\s+", " ", file_name).strip()
+        file_name = re.sub(
+            r"[^\w\s().+-]",
+            " ",
+            file_name
+        )
 
-        # ---------------- DB SELECTION ----------------
-        saveMedia = Media
-        target_db = "Primary"
+        file_name = re.sub(
+            r"\s+",
+            " ",
+            file_name
+        ).strip()
 
-        if MULTIPLE_DB:
-            try:
-                exists = await Media.count_documents({"file_id": file_id}, limit=1)
-                if exists:
-                    logger.info(f"[SKIP] '{file_name}' already exists.")
-                    return False, 0
+        # =================================================
+        # SAVE
+        # =================================================
 
-                db_size = await check_db_size(db)
-                if db_size >= 407:
-                    saveMedia = Media2
-                    target_db = "Secondary"
-                    logger.warning("Switching to Secondary DB")
-
-            except Exception as e:
-                logger.error("DB check failed, using Primary DB", exc_info=e)
-
-        # ---------------- SAVE ----------------
         caption_html = (
-            getattr(media.caption, "html", None)
-            if media.caption and INDEX_CAPTION
+
+            getattr(
+                media.caption,
+                "html",
+                None
+            )
+
+            if media.caption
             else None
         )
 
-        record = saveMedia(
+        record = Media(
+
             file_id=file_id,
+
             file_ref=file_ref,
+
             file_name=file_name,
+
             file_size=media.file_size,
+
             file_type=media.file_type,
+
             mime_type=media.mime_type,
-            caption=caption_html,
+
+            caption=caption_html
         )
 
         await record.commit()
 
-        logger.info(f"[SUCCESS] Saved → {file_name} ({target_db})")
+        logger.info(
+            f"[SAVED] {file_name}"
+        )
+
         return True, 1
 
     except DuplicateKeyError:
-        logger.info(f"[SKIP] Duplicate → {file_name}")
+
+        logger.info(
+            f"[DUPLICATE] {file_name}"
+        )
+
         return False, 0
 
     except Exception as e:
-        logger.exception(f"[ERROR] Save failed → {file_name}", exc_info=e)
+
+        logger.exception(
+            f"[ERROR] {e}"
+        )
+
         return False, 3
 
 
