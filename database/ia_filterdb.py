@@ -313,50 +313,60 @@ async def save_file(media):
         extra_tags = extracted["extra_tags"]
         kbps_tag = extracted["kbps"]
 
-        parts = []
+                parts = []
 
+        # FIXED ANTI-DUPLICATE FUNCTION (Bina recursion ke)
         def add_unique(value):
-            if value and value.lower() not in " ".join(parts).lower():
-                parts.append(value)
+            if value:
+                # Value ka pehla letter capital karo (jaise 'hindi' ka 'Hindi')
+                formatted_value = value.strip().title()
+                
+                # Agar ye word pehle se parts list me nahi hai, tabhi add karo
+                if formatted_value.lower() not in [p.lower() for p in parts]:
+                    parts.append(formatted_value)
 
         # =====================================================
         # ORDER SYSTEM (STRICT FIXED)
         # =====================================================
 
-        # BASE NAME
-            add_unique(base_name.title())
+        # 1. TITLE
+        add_unique(base_name)
 
-        # LANGUAGES
+        # 2. LANGUAGES (Ab 'hindi' hamesha 'Hindi' hi banega)
         for lang in languages:
-            add_unique(lang.title())
+            add_unique(lang)
 
-        # RESOLUTION
-        add_unique(resolution)
+        # 3. RESOLUTION
+        if resolution:
+            # Resolution ko hamesha CAPITAL me rakhne ke liye alag se append kar rahe hain
+            if resolution.lower() not in [p.lower() for p in parts]:
+                parts.append(resolution.upper())
 
-        # SOURCE
+        # 4. SOURCE
         add_unique(source)
 
-        # VIDEO
+        # 5. VIDEO CODECS
         for t in ["x265", "x264", "10Bit"]:
             if t in extra_tags:
                 add_unique(t)
 
-        # AUDIO CODECS
+        # 6. AUDIO CODECS
         for t in ["AAC", "DD+", "DTS", "ATMOS", "TRUEHD"]:
             if t in extra_tags:
                 add_unique(t)
 
-        # CHANNELS
+        # 7. CHANNELS
         for t in ["5.1", "7.1"]:
             if t in extra_tags:
                 add_unique(t)
 
-        # SUBTITLE
+        # 8. SUBTITLE
         if "ESub" in extra_tags:
             add_unique("ESub")
 
-        # KBPS
+        # 9. KBPS
         add_unique(kbps_tag)
+
 
         # =====================================================
         # RELEASE TAG (FINAL SAFE)
