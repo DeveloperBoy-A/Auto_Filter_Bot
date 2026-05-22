@@ -201,10 +201,10 @@ def extract_pure_title(original_name):
     return re.sub(r'\s+', ' ', pure_title).strip()
 
 # =========================================================
-# 3. AAPKA CUSTOM SEASON & EPISODE NORMALIZER (Fixed & Tuned)
+# 3. AAPKA CUSTOM SEASON & EPISODE NORMALIZER
 # =========================================================
 def normalize_season_episode(text):
-    text = text.lower() # Taaki uppercase/lowercase dono regex handle ho jaye
+    text = text.lower()
 
     text = re.sub(r'(\d+)[xX](\d+)',
                   lambda m: f"S{int(m.group(1)):02d} E{int(m.group(2)):02d}",
@@ -217,7 +217,7 @@ def normalize_season_episode(text):
                   lambda m: f"S{int(m.group(1)):02d}", text)
 
     text = re.sub(r'episode[\s\-]*(\d+)',
-                  lambda m: f"E{int(m.group(1)):02d}", text) # Fixed group(2) to group(1)
+                  lambda m: f"E{int(m.group(1)):02d}", text)
 
     text = re.sub(r'\bep[\s\-]*(\d+)',
                   lambda m: f"E{int(m.group(1)):02d}", text)
@@ -234,15 +234,14 @@ def normalize_season_episode(text):
     return text
 
 # =========================================================
-# 4. DETAILS SCANNER
+# 4. UPDATED NAME FUNCTION FOR COMMANDS.PY IMPORT
 # =========================================================
-def extract_all_details(text_to_scan):
+def extract_languages_quality(text_to_scan):
     scan_lower = text_to_scan.lower()
     
     year_match = re.search(r'\b(19\d{2}|20[0-2]\d)\b', text_to_scan)
     year = year_match.group(1) if year_match else None
 
-    # Yahan aapka function use ho raha hai
     normalized_se = normalize_season_episode(text_to_scan)
     se_match = re.search(r'\b(S\d{2}\s?E\d{2}|S\d{2}|E\d{2})\b', normalized_se, re.IGNORECASE)
     season_episode = se_match.group(1).upper() if se_match else None
@@ -322,7 +321,9 @@ async def save_file(media):
         base_name, ext = os.path.splitext(original_name)
 
         text_to_scan = f"{original_name} {getattr(media, 'caption', '') or ''}"
-        extracted = extract_all_details(text_to_scan)
+        
+        # Naye naam se call kiya gaya hai yahan bhi
+        extracted = extract_languages_quality(text_to_scan)
 
         cleaned_title = extract_pure_title(base_name)
 
@@ -343,7 +344,7 @@ async def save_file(media):
         if final_title:
             add_unique(final_title)
 
-        # [2] Season & Episode (Aapke function se nikla hua perfectly formatted SXX EXX)
+        # [2] Season & Episode
         if extracted["season_episode"]:
             add_unique(extracted["season_episode"])
 
@@ -419,6 +420,7 @@ async def save_file(media):
     except Exception as e:
         logger.exception(f"[ERROR] {e}")
         return False, 3
+
 
 
 
