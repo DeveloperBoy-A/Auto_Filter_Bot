@@ -323,16 +323,12 @@ async def save_file(media):
         # ORDER SYSTEM (STRICT FIXED)
         # =====================================================
 
-        # FIX 2: SQUID GAME Capital Issue Fixed 
-        # (Agar text chote me hai toh proper Title Case karega, warna original safe rakhega)
-        if base_name.islower() or base_name.isupper():
+        # BASE NAME
             add_unique(base_name.title())
-        else:
-            add_unique(base_name)
 
         # LANGUAGES
         for lang in languages:
-            add_unique(lang)
+            add_unique(lang.title())
 
         # RESOLUTION
         add_unique(resolution)
