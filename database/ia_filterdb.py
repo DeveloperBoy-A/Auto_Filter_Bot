@@ -285,14 +285,15 @@ def extract_languages_quality(text_to_scan):
 
     extra_tags = []
     TAGS_MAP = {
-        "HEVC": ["x265", "hevc"], 
-        "X264": ["x264", "avc"], 
+        "HEVC X265": ["x265", "hevc"], 
+        "AVC X264": ["x264", "avc"], 
         "10BIT": ["10bit"], 
         "AAC": ["aac"],
         "Dolby 5.1": ["5.1", "6ch", "dd+", "eac3", "dts"], 
         "Atmos 7.1": ["atmos", "truehd", "7.1", "8ch"],
         "(Eng-Sub)": ["esub", "esubs"], 
-        "(Hardsub)": ["hsub", "hsubs"]
+        "(Hardsub)": ["hsub", "hsubs"],
+        "(Msub)": ["msub", "msubs"]
     }
     for tag, aliases in TAGS_MAP.items():
         for a in aliases:
