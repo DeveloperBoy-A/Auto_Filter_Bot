@@ -211,46 +211,45 @@ def extract_pure_title(original_name):
 # =========================================================
 def normalize_season_episode(text):
     text = text.lower()
+    
+    # 1. Ep (01 08) ya Ep (01-08) jaise formats ko handle karne ke liye (Aapki file ke liye khas)
+    text = re.sub(r'\bep[\s\-]*\(?(\d+)[\s\-–]+(\d+)\)?', lambda m: f"E{int(m.group(1)):02d}-{int(m.group(2)):02d}", text)
+    
+    # 2. Baki standard formats
+    text = re.sub(r'(\d+)[xX](\d+)', lambda m: f"S{int(m.group(1)):02d} E{int(m.group(2)):02d}", text)
+    text = re.sub(r'season[\s\-]*(\d+)', lambda m: f"S{int(m.group(1)):02d}", text)
+    text = re.sub(r'\bs[\s\-]*(\d+)', lambda m: f"S{int(m.group(1)):02d}", text)
+    text = re.sub(r'episode[\s\-]*(\d+)', lambda m: f"E{int(m.group(1)):02d}", text)
+    text = re.sub(r'\bep[\s\-]*(\d+)', lambda m: f"E{int(m.group(1)):02d}", text)
+    text = re.sub(r'\be[\s\-]*(\d+)', lambda m: f"E{int(m.group(1)):02d}", text)
+    text = re.sub(r's(\d+)e(\d+)', lambda m: f"S{int(m.group(1)):02d} E{int(m.group(2)):02d}", text)
+    
+    return re.sub(r'\s+', ' ', text).strip()
 
-    text = re.sub(r'(\d+)[xX](\d+)',
-                  lambda m: f"S{int(m.group(1)):02d} E{int(m.group(2)):02d}",
-                  text)
-
-    text = re.sub(r'season[\s\-]*(\d+)',
-                  lambda m: f"S{int(m.group(1)):02d}", text)
-
-    text = re.sub(r'\bs[\s\-]*(\d+)',
-                  lambda m: f"S{int(m.group(1)):02d}", text)
-
-    text = re.sub(r'episode[\s\-]*(\d+)',
-                  lambda m: f"E{int(m.group(1)):02d}", text)
-
-    text = re.sub(r'\bep[\s\-]*(\d+)',
-                  lambda m: f"E{int(m.group(1)):02d}", text)
-
-    text = re.sub(r'\be[\s\-]*(\d+)',
-                  lambda m: f"E{int(m.group(1)):02d}", text)
-
-    text = re.sub(r's(\d+)e(\d+)',
-                  lambda m: f"S{int(m.group(1)):02d} E{int(m.group(2)):02d}",
-                  text)
-
-    text = re.sub(r'\s+', ' ', text).strip()
-
-    return text
 
 # =========================================================
 # 4. UPDATED NAME FUNCTION FOR COMMANDS.PY IMPORT
 # =========================================================
 def extract_languages_quality(text_to_scan):
     scan_lower = text_to_scan.lower()
-    
+
     year_match = re.search(r'\b(19\d{2}|20[0-2]\d)\b', text_to_scan)
     year = year_match.group(1) if year_match else None
 
+    # UPDATED REGEX: Ab yeh Season aur Episode Dono ko Saath Me Target Karega
     normalized_se = normalize_season_episode(text_to_scan)
-    se_match = re.search(r'\b(S\d{2}\s?E\d{2}|S\d{2}|E\d{2})\b', normalized_se, re.IGNORECASE)
-    season_episode = se_match.group(1).upper() if se_match else None
+    se_match = re.search(r'\b(S\d{2}\s?E\d{2}(?:-\d{2})?|S\d{2}|E\d{2}(?:-\d{2})?)\b', normalized_se, re.IGNORECASE)
+    
+    # Agar alag se Season aur Episode dono milte hain toh unhe jod do
+    if not se_match:
+        s_match = re.search(r'\b(S\d{2})\b', normalized_se, re.IGNORECASE)
+        e_match = re.search(r'\b(E\d{2}(?:-\d{2})?)\b', normalized_se, re.IGNORECASE)
+        if s_match and e_match:
+            season_episode = f"{s_match.group(1).upper()} {e_match.group(1).upper()}"
+        else:
+            season_episode = s_match.group(1).upper() if s_match else (e_match.group(1).upper() if e_match else None)
+    else:
+        season_episode = se_match.group(1).upper()
 
     resolution = None
     res = re.search(r'(4320p|2160p|1440p|1080p|720p|480p|360p|240p|4k)', scan_lower)
