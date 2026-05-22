@@ -163,11 +163,14 @@ OTT_MAP = {
 # 2. SMART DYNAMIC TITLE EXTRACTOR (FIXED: Front & Back Cutting)
 # =========================================================
 def extract_pure_title(original_name):
-    # 1. Sirf shuruati brackets [...] aur fāltu spaces ko saaf karo
-    clean_name = re.sub(r'^\[.*?\]', '', original_name) 
+    # 1. Shuruati brackets [...] ko saaf karo
+    clean_name = re.sub(r'^\[.*?\]', '', original_name).strip() 
     
-    # [FIX] Shuruat se word udane waali khatarnak line ko yahan se hata diya hai.
-    # Ab Telegram handles (@channel) aur symbols ko space mein badlo
+    # 🔥 TELEGRAM HANDLES FIXED: 
+    # Agar shuruat mein @channels aur uske sath wale symbols (- ya _) hon, toh unhe uda do
+    clean_name = re.sub(r'^@\w+[\s_\-–]*', '', clean_name).strip()
+    
+    # Baki bache symbols ko spaces mein badlo
     clean_name = re.sub(r'[@\[\]\(\)_]+', ' ', clean_name)
     clean_name = re.sub(r"[._\-]+", " ", clean_name)
     
