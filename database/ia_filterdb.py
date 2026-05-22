@@ -263,13 +263,21 @@ def extract_languages_quality(text_to_scan):
         "WEBRip": ["webrip", "web rip"],
         "HDRip": ["hdrip"],
         "BluRay": ["bluray"],
+        "BRRip": ["brrip", "bdrip"],
         "DVDRip": ["dvdrip"],
-        "CAMRip": ["cam"]
+        "DVDScr": ["dvdscr", "scr", "dvd-scr"],
+        "REMUX": ["remux"],
+        "Digital": ["digital"],
+        "HDTC": ["hdtc", "hd-tc", "telecine"],       # 🔥 Naya: Alag se HDTC add kar diya
+        "HDTS": ["hdts", "hd-ts", "ts", "telesync"], # 🔥 Naya: TS aur HDTS dono ko sahi se pakadne ke liye
+        "HDCAM": ["hdcam", "hd-cam", "hd cam"],
+        "CAMRip": ["cam", "camrip", "cinema"],
+        "PreDVD": ["predvd", "pre dvd"]
     }
     for src, aliases in SOURCES.items():
         for a in aliases:
             if a in scan_lower:
-                source = src.upper()
+                source = src  # Same to same left-side jaisa output dikhega
                 break
         if source:
             break
@@ -380,7 +388,7 @@ async def save_file(media):
             add_unique(extracted["source"])
 
         # [9] Video Codec
-        for vcodec in ["HEVC", "X264"]:
+        for vcodec in ["HEVC X265", "AVC X264"]:
             if vcodec in extracted["extra_tags"]:
                 add_unique(vcodec)
 
@@ -390,7 +398,7 @@ async def save_file(media):
                 add_unique(acodec)
 
         # [11] Subtitles
-        for sub in ["(Eng-Sub)", "(Hardsub)"]:
+        for sub in ["(Eng-Sub)", "(Hardsub)", "(Msub)"]:
             if sub in extracted["extra_tags"]:
                 add_unique(sub)
 
