@@ -313,7 +313,7 @@ async def save_file(media):
         extra_tags = extracted["extra_tags"]
         kbps_tag = extracted["kbps"]
 
-                parts = []
+        parts = []
 
         # FIXED ANTI-DUPLICATE FUNCTION (Bina recursion ke)
         def add_unique(value):
