@@ -160,29 +160,26 @@ OTT_MAP = {
 }
 
 # =========================================================
-# 2. SMART DYNAMIC TITLE EXTRACTOR
+# 2. SMART DYNAMIC TITLE EXTRACTOR (FIXED: Front & Back Cutting)
 # =========================================================
 def extract_pure_title(original_name):
+    # 1. Sirf shuruati brackets [...] aur fāltu spaces ko saaf karo
     clean_name = re.sub(r'^\[.*?\]', '', original_name) 
-    clean_name = re.sub(r'^[A-Za-z0-9]{3,12}[\s_\-–]+', '', clean_name)
+    
+    # [FIX] Shuruat se word udane waali khatarnak line ko yahan se hata diya hai.
+    # Ab Telegram handles (@channel) aur symbols ko space mein badlo
     clean_name = re.sub(r'[@\[\]\(\)_]+', ' ', clean_name)
     clean_name = re.sub(r"[._\-]+", " ", clean_name)
     
+    # 2. Strictly technical anchors (Sirf inke aane par hi title piche se katega)
     stop_anchors = [
-        r'\bS\d{2}\s?E\d{2}\b', r'\bS\d{1,2}\b', r'\bE\d{1,2}\b',
-        r'\b(19|20)\d{2}\b',
-        r'\b\d{3,4}p\b', r'\b4k\b',
-        r'\bweb[\s\-]?dl\b', r'\bwebrip\b', r'\bhdrip\b', r'\bbluray\b',
-        r'\bx264\b', r'\bx265\b', r'\b10bit\b', r'\baac\d?\b', r'\bdd\+\b'
+        r'\bS\d{2}\s?E\d{2}\b', r'\bS\d{1,2}\b', r'\bE\d{1,2}\b', 
+        r'\b(19|20)\d{2}\b',                                      
+        r'\b\d{3,4}p\b', r'\b4k\b',                               
+        r'\bweb[\s\-]?dl\b', r'\bwebrip\b', r'\bhdrip\b', r'\bbluray\b', 
+        r'\bx264\b', r'\bx265\b', r'\bhevc\b', r'\b10bit\b',      
+        r'\bhdcam\b', r'\bcamrip\b', r'\bcam\b'                    
     ]
-    
-    for aliases in LANGUAGE_ALIASES.values():
-        for alias in aliases:
-            stop_anchors.append(rf'\b{re.escape(alias)}\b')
-            
-    for aliases in OTT_MAP.values():
-        for alias in aliases:
-            stop_anchors.append(rf'\b{re.escape(alias)}\b')
             
     lower_name = clean_name.lower()
     first_match_index = len(clean_name)
@@ -190,7 +187,7 @@ def extract_pure_title(original_name):
     for anchor in stop_anchors:
         match = re.search(anchor, lower_name)
         if match and match.start() < first_match_index:
-            if match.start() > 2:
+            if match.start() > 2: 
                 first_match_index = match.start()
                 
     if first_match_index < len(clean_name):
@@ -198,7 +195,13 @@ def extract_pure_title(original_name):
     else:
         pure_title = clean_name.strip()
         
+    # 3. Agar title ke aakhiri mein bhasha ka naam chipka reh gaya hai, toh use hatao
+    for lang, aliases in LANGUAGE_ALIASES.items():
+        for alias in aliases:
+            pure_title = re.sub(rf'\b{re.escape(alias)}\b$', '', pure_title, flags=re.IGNORECASE).strip()
+
     return re.sub(r'\s+', ' ', pure_title).strip()
+
 
 # =========================================================
 # 3. AAPKA CUSTOM SEASON & EPISODE NORMALIZER
