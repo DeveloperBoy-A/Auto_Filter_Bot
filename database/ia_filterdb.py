@@ -184,11 +184,11 @@ def normalize_season_episode(text):
 
     text = re.sub(r'\s+', ' ', text).strip()
 
-    return text.upper()
+    # FIX: Yahan se .title() hata diya taaki numbers ke baad capital letters kharab na ho
+    return text
 
 
 def clean_base_name(base_name):
-
     patterns = [
         r'\bWEB[\s\-]?DL\b', r'\bWEB[\s\-]?RIP\b',
         r'\bHDRIP\b', r'\bBLURAY\b', r'\bBDRIP\b',
@@ -217,7 +217,6 @@ def clean_base_name(base_name):
 # =========================================================
 
 def extract_languages_quality(caption):
-
     caption = caption.lower()
 
     resolution = None
@@ -226,12 +225,10 @@ def extract_languages_quality(caption):
     kbps_tag = None
     languages = []
 
-    # resolution
     res = re.search(r'(4320p|2160p|1440p|1080p|720p|480p|360p|240p|144p|4k)', caption)
     if res:
         resolution = "2160P" if res.group(1) == "4k" else res.group(1).upper()
 
-    # source
     SOURCES = {
         "WEB-DL": ["web-dl", "webdl", "web dl"],
         "WEBRip": ["webrip", "web rip"],
@@ -249,7 +246,6 @@ def extract_languages_quality(caption):
         if source:
             break
 
-    # extra tags
     EXTRA_TAGS = {
         "x265": ["x265"],
         "x264": ["x264"],
@@ -270,14 +266,12 @@ def extract_languages_quality(caption):
                 extra_tags.append(tag)
                 break
 
-    # languages
     for lang, aliases in LANGUAGE_ALIASES.items():
         for a in aliases:
             if a in caption:
                 languages.append(lang)
                 break
 
-    # kbps
     kbps = re.search(r'(\d{2,4}\s?kbps)', caption)
     if kbps:
         kbps_tag = kbps.group(1).upper().replace(" ", "")
@@ -292,22 +286,23 @@ def extract_languages_quality(caption):
 
 
 # =========================================================
-# MAIN SAVE FUNCTION (FINAL COMPLETE)
+# MAIN SAVE FUNCTION (FINAL COMPLETE WITH FIXES)
 # =========================================================
 
 async def save_file(media):
-
     try:
         file_id, file_ref = unpack_new_file_id(media.file_id)
 
         original_name = str(media.file_name or "Unnamed File")
         base_name, ext = os.path.splitext(original_name)
 
-        # CLEAN TITLE PIPELINE
-        base_name = re.sub(r"[._\-]+", " ", base_name)
-        base_name = normalize_season_episode(base_name)
-        base_name = remove_prefix_garbage(base_name)
-        base_name = clean_base_name(base_name)
+        # =====================================================
+        # FIX 1: CLEAN TITLE PIPELINE ORDER RESOLVED
+        # =====================================================
+        base_name = clean_base_name(base_name)        # Pehle technical kachra hatao (jab tak dots hain)
+        base_name = re.sub(r"[._\-]+", " ", base_name) # Ab bache hue dots ko space karo
+        base_name = normalize_season_episode(base_name) # Ab season/episode ko normal standard format do
+        base_name = remove_prefix_garbage(base_name)   # Ab extra brackets ya symbols hatao
 
         caption = str(media.caption or "")
         extracted = extract_languages_quality(caption)
@@ -320,7 +315,6 @@ async def save_file(media):
 
         parts = []
 
-        # SAFE ADD FUNCTION
         def add_unique(value):
             if value and value.lower() not in " ".join(parts).lower():
                 parts.append(value)
@@ -329,8 +323,12 @@ async def save_file(media):
         # ORDER SYSTEM (STRICT FIXED)
         # =====================================================
 
-        # TITLE
-        add_unique(base_name)
+        # FIX 2: SQUID GAME Capital Issue Fixed 
+        # (Agar text chote me hai toh proper Title Case karega, warna original safe rakhega)
+        if base_name.islower() or base_name.isupper():
+            add_unique(base_name.title())
+        else:
+            add_unique(base_name)
 
         # LANGUAGES
         for lang in languages:
@@ -347,7 +345,7 @@ async def save_file(media):
             if t in extra_tags:
                 add_unique(t)
 
-        # AUDIO CODECS (AAC FIRST AS YOU WANT)
+        # AUDIO CODECS
         for t in ["AAC", "DD+", "DTS", "ATMOS", "TRUEHD"]:
             if t in extra_tags:
                 add_unique(t)
@@ -403,6 +401,8 @@ async def save_file(media):
     except Exception as e:
         logger.exception(f"[ERROR] {e}")
         return False, 3
+
+
 #__________________________________
 # FOR GET SEARCH RESULT THIS CODE UPDATE BY 🅰️NKIT MEENA 
 #__________________________________
