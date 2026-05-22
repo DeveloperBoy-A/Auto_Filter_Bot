@@ -157,16 +157,34 @@ def remove_prefix_garbage(text):
 
 
 def normalize_season_episode(text):
+    text = text.lower()
+
     text = re.sub(r'(\d+)[xX](\d+)',
                   lambda m: f"S{int(m.group(1)):02d} E{int(m.group(2)):02d}",
                   text)
 
+    text = re.sub(r'season[\s\-]*(\d+)',
+                  lambda m: f"S{int(m.group(1)):02d}", text)
+
+    text = re.sub(r'\bs[\s\-]*(\d+)',
+                  lambda m: f"S{int(m.group(1)):02d}", text)
+
+    text = re.sub(r'episode[\s\-]*(\d+)',
+                  lambda m: f"E{int(m.group(1)):02d}", text)
+
+    text = re.sub(r'\bep[\s\-]*(\d+)',
+                  lambda m: f"E{int(m.group(1)):02d}", text)
+
+    text = re.sub(r'\be[\s\-]*(\d+)',
+                  lambda m: f"E{int(m.group(1)):02d}", text)
+
     text = re.sub(r's(\d+)e(\d+)',
                   lambda m: f"S{int(m.group(1)):02d} E{int(m.group(2)):02d}",
-                  text,
-                  flags=re.IGNORECASE)
+                  text)
 
-    return re.sub(r'\s+', ' ', text).strip()
+    text = re.sub(r'\s+', ' ', text).strip()
+
+    return text.upper()
 
 
 def clean_base_name(base_name):
