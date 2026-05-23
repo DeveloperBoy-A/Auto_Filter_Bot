@@ -446,22 +446,11 @@ async def save_file(media):
 # ----------------- 1. कॉन्फ़िगरेशन और रैंकिंग डिक्शनरी -----------------
 
 SOURCE_ORDER = {
-    # 🟢 BEST (Disc / Original)
     "bluray": 15, "blu-ray": 15, "bdrip": 14, "brrip": 14, "bdremux": 14, "remux": 14,
-
-    # 🟢 OTT / WEB / Digital
     "web-dl": 13, "webdl": 13, "web dl": 13, "webrip": 12, "web rip": 12, "digital": 11, "web": 11,
-
-    # 🟡 TV / Satellite / DVD
     "hdtv": 10, "hdrip": 9, "dvdrip": 8, "dvd": 7,
-
-    # 🟠 Pre-release / Screeners
     "predvd": 6, "pre-dvd": 6, "pre dvd": 6, "pre": 5, "dvdscr": 2, "dvd-scr": 2, "scr": 2,          
-
-    # 🔴 Theatre Prints (TC / TS)
     "hdts": 4, "hd-ts": 4, "ts": 4, "telesync": 4, "hdtc": 3, "hd-tc": 3, "tc": 3, "telecine": 3,     
-    
-    # 🔴 LOWEST (Cam Prints)
     "hdcam": 2, "hd-cam": 2, "hd cam": 2, "camrip": 2, "cam": 1, "cinema": 1        
 }
 
@@ -469,7 +458,7 @@ QUALITY_ORDER = {
     "4320p": 8, "8k": 8, "2160p": 7, "4k": 7, "1440p": 6, "1080p": 5, "720p": 4, "480p": 3, "360p": 2, "240p": 1, "144p": 0
 }
 
-# ----------------- 2. एक्सट्रैक्शन फंक्शंस (Extraction Functions) -----------------
+# ----------------- 2. एक्सट्रैक्शन फंक्शंस -----------------
 
 def extract_quality(name):
     name = name.lower()
@@ -487,7 +476,6 @@ def extract_source(name):
 
 def extract_season_episode(name):
     name = name.lower()
-    # यह S10E09, S10 E09, S08, Season 10 Episode 9 सभी वेरिएशन्स को सही तरीके से पहचानता है
     s = re.search(r"\bs(?:eason)?[\s._-]*(\d{1,2})", name)
     e = re.search(r"\be(?:pisode|p)?[\s._-]*(\d{1,2})", name)
     
@@ -495,7 +483,7 @@ def extract_season_episode(name):
     episode = int(e.group(1)) if e else 0
     return season, episode
 
-# ----------------- 3. क्वेरी नॉर्मलाइजेशन और एक्सपेंशन -----------------
+# ----------------- 3. क्वेरी नॉर्मलाइजेशन और स्मार्ट एक्सपेंशन -----------------
 
 def normalize_for_search(text):
     text = text.lower()
@@ -509,6 +497,7 @@ def expand_query(query):
     query = query.lower()
     patterns = [query]
 
+    # सीज़न/एपिसोड टैग्स को हटाकर साफ़ टाइटल निकालना
     title = re.sub(r'\b(s\d+|e\d+|season[\s-]*\d+|episode[\s-]*\d+|ep[\s-]*\d+)\b', '', query)
     title = re.sub(r'[\s._-]+', ' ', title).strip()
 
@@ -518,22 +507,21 @@ def expand_query(query):
     s_num = int(s_match.group(1) or s_match.group(2)) if s_match else None
     e_num = int(e_match.group(1) or e_match.group(2) or e_match.group(3)) if e_match else None
 
-    # S10E09 और S10 E09 दोनों तरह के वेरिएशन्स डेटाबेस सर्च के लिए तैयार करना
     if s_num and e_num:
         variations = [
-            f"s{s_num:02d}e{e_num:02d}",   # s10e09
-            f"s{s_num:02d} e{e_num:02d}",  # s10 e09
-            f"s{s_num}e{e_num}",           # s10e9
-            f"s{s_num:02d}",               # s10
-            f"e{e_num:02d}"                # e09
+            f"s{s_num:02d}e{e_num:02d}", f"s{s_num:02d} e{e_num:02d}", 
+            f"s{s_num}e{e_num}", f"s{s_num:02d}", f"e{e_num:02d}"
         ]
-        patterns.extend([f"{title} {v}".strip() for v in variations])
+        for v in variations:
+            patterns.append(f"{title} {v}".strip())
     elif s_num:
         variations = [f"s{s_num:02d}", f"s{s_num}", f"season {s_num}"]
-        patterns.extend([f"{title} {v}".strip() for v in variations])
+        for v in variations:
+            patterns.append(f"{title} {v}".strip())
     elif e_num:
         variations = [f"e{e_num:02d}", f"e{e_num}", f"episode {e_num}"]
-        patterns.extend([f"{title} {v}".strip() for v in variations])
+        for v in variations:
+            patterns.append(f"{title} {v}".strip())
 
     return list(set(patterns))
 
@@ -544,7 +532,7 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
         settings = await get_settings(int(chat_id))
         max_results = 10 if settings.get("max_btn") else int(MAX_B_TN)
 
-    # 💾 यूज़र की मूल सर्च क्वेरी को डायनामिक मैचिंग के लिए सुरक्षित रखना
+    # यूज़र की मूल सर्च क्वेरी को संभाल कर रखना
     original_query = str(query).lower().strip()
 
     if not isinstance(query, list):
@@ -555,7 +543,12 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
     for q in query:
         q = q.strip()
         if not q: continue
-        pattern = re.escape(q).replace(r'\ ', r'[\s\.\+\-_()\[\]]+')
+        
+        # 🔥 यहाँ सुधार है: शब्दों को अलग करके उनके बीच वाइल्डकार्ड (.*) लगा रहे हैं।
+        # इससे "jana", "nayagan" और "hindi" के बीच में कुछ भी लिखा हो (जैसे साल या क्वालिटी), मोंगोडीबी उसे ढूँढ लेगा।
+        words = q.split()
+        pattern = r'.*'.join(re.escape(w) for w in words)
+        
         try:
             regex_list.append(re.compile(pattern, re.IGNORECASE))
         except re.error:
@@ -585,23 +578,29 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
 
     is_series = any(re.search(r"s\d{1,2}.*e\d{1,2}", str(file.file_name).lower()) for file in files)
 
-    # 🎯 यूनिवर्सल स्मार्ट सॉर्टिंग लॉजिक (Universal Smart Sorting Logic)
+    # 🎯 स्मार्ट सॉर्टिंग लॉजिक (फर्स्ट वर्ड/क्वेरी मैचिंग को सबसे ऊपर रखने के लिए)
+    # हम सिर्फ पहले शब्द को भी चेक करेंगे ताकि "jana nayagan hindi" सर्च करने पर "jana" से शुरू होने वाली ही पहले आए।
+    first_word = original_query.split()[0] if original_query.split() else original_query
+
     if is_series:
         files = sorted(
             files,
             key=lambda x: (
-                # ⭐ नियम 1: क्या फाइल का नाम यूज़र की क्वेरी से शुरू होता है? (चाहे आगे [, ( या . ही क्यों न हो)
+                # 1. क्या फ़ाइल का नाम यूज़र की पूरी क्वेरी से शुरू होता है?
                 not (re.match(rf"^[\s._\-\[\(]*{re.escape(original_query)}", x.file_name.lower())),
+                
+                # 1b. बैकअप: क्या फ़ाइल का नाम कम से कम पहले शब्द से शुरू होता है?
+                not (re.match(rf"^[\s._\-\[\(]*{re.escape(first_word)}", x.file_name.lower())),
 
-                # नियम 2: न्यूमेरिकल रेटिंग (लेटेस्ट सीज़न/एपिसोड हमेशा ऊपर, जैसे S10E09 पहले S10E08 बाद में)
+                # 2. न्यूमेरिकल रेटिंग (लेटेस्ट सीज़न/एपिसोड)
                 -extract_season_episode(x.file_name)[0],      
                 -extract_season_episode(x.file_name)[1],      
 
-                # नियम 3: टेक्स्ट पैटर्न मैचिंग (साफ स्ट्रिंग्स S10E09 को बिना स्पेस के प्राथमिकता देने के लिए)
+                # 3. टेक्स्ट पैटर्न मैचिंग 
                 not (re.search(r'\bs\d{1,2}e\d{1,2}\b', x.file_name.lower())), 
                 not (re.search(r'\bs\d{1,2}\s*e\d{1,2}\b', x.file_name.lower())), 
 
-                # नियम 4: क्वालिटी और सोर्स रेटिंग
+                # 4. क्वालिटी और सोर्स
                 -extract_quality(x.file_name),                
                 -extract_source(x.file_name),                 
                 x.file_id
@@ -611,10 +610,13 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
         files = sorted(
             files,
             key=lambda x: (
-                # ⭐ नियम 1: मूवीज के लिए भी - क्या फाइल का नाम यूज़र की सर्च क्वेरी से शुरू होता है?
+                # 1. क्या फ़ाइल का नाम यूज़र की पूरी क्वेरी से शुरू होता है?
                 not (re.match(rf"^[\s._\-\[\(]*{re.escape(original_query)}", x.file_name.lower())),
+                
+                # 1b. बैकअप: क्या फ़ाइल का नाम कम से कम पहले शब्द से शुरू होता है?
+                not (re.match(rf"^[\s._\-\[\(]*{re.escape(first_word)}", x.file_name.lower())),
 
-                # नियम 2: क्वालिटी और सोर्स रेटिंग (हाइगेस्ट क्वालिटी पहले)
+                # बाकी पुराने रूल्स
                 -extract_quality(x.file_name),
                 -extract_source(x.file_name),
                 x.file_id
