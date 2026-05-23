@@ -1982,7 +1982,7 @@ async def ai_spell_check(chat_id, wrong_name):
         return
     for _ in range(3):
         closest_match = process.extractOne(wrong_name, movie_list)
-        if not closest_match or closest_match[1] <= 70:
+        if not closest_match or closest_match[1] <= 85:
             return
         movie = closest_match[0]
         files, _, _ = await get_search_results(chat_id=chat_id, query=movie)
