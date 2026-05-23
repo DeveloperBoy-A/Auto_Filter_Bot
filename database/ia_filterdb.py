@@ -442,203 +442,125 @@ async def save_file(media):
 #__________________________________
 # FOR GET SEARCH RESULT THIS CODE UPDATE BY 🅰️NKIT MEENA 
 #__________________________________
+
+# ----------------- 1. कॉन्फ़िगरेशन और रैंकिंग डिक्शनरी -----------------
+
 SOURCE_ORDER = {
     # 🟢 BEST (Disc / Original)
-    "bluray": 15,
-    "blu-ray": 15,
-    "bdrip": 14,
-    "bdremux": 14,
-    "remux": 14,
+    "bluray": 15, "blu-ray": 15, "bdrip": 14, "brrip": 14, "bdremux": 14, "remux": 14,
 
-    # 🟢 OTT / WEB
-    "web-dl": 13,
-    "webdl": 13,
-    "webrip": 12,
-    "web": 11,
+    # 🟢 OTT / WEB / Digital
+    "web-dl": 13, "webdl": 13, "web dl": 13, "webrip": 12, "web rip": 12, "digital": 11, "web": 11,
 
-    # 🟡 TV / Satellite
-    "hdtv": 10,
-    "hdrip": 9,
-    "dvdrip": 8,
-    "dvd": 7,
+    # 🟡 TV / Satellite / DVD
+    "hdtv": 10, "hdrip": 9, "dvdrip": 8, "dvd": 7,
 
-    # 🟠 Pre-release
-    "predvd": 6,
-    "pre-dvd": 6,
-    "pre": 5,
+    # 🟠 Pre-release / Screeners
+    "predvd": 6, "pre-dvd": 6, "pre dvd": 6, "pre": 5, "dvdscr": 2, "dvd-scr": 2, "scr": 2,          
 
-    # 🔴 Theatre Prints
-    "hdts": 4,
-    "hd-ts": 4,
-    "hdtc": 3,
-    "hd-tc": 3,
-    "tc": 3,
-    "ts": 4,
-
-    # 🔴 LOWEST
-    "camrip": 2,
-    "cam": 1,
-    "scr": 2,       # screener
-    "dvdscr": 2
+    # 🔴 Theatre Prints (TC / TS)
+    "hdts": 4, "hd-ts": 4, "ts": 4, "telesync": 4, "hdtc": 3, "hd-tc": 3, "tc": 3, "telecine": 3,     
+    
+    # 🔴 LOWEST (Cam Prints)
+    "hdcam": 2, "hd-cam": 2, "hd cam": 2, "camrip": 2, "cam": 1, "cinema": 1        
 }
+
 QUALITY_ORDER = {
-    "4320p": 8,
-    "8k": 8,
-    "2160p": 7,
-    "4k": 7,
-    "1440p": 6,
-    "1080p": 5,
-    "720p": 4,
-    "480p": 3,
-    "360p": 2,
-    "240p": 1,
-    "144p": 0
+    "4320p": 8, "8k": 8, "2160p": 7, "4k": 7, "1440p": 6, "1080p": 5, "720p": 4, "480p": 3, "360p": 2, "240p": 1, "144p": 0
 }
+
+# ----------------- 2. एक्सट्रैक्शन फंक्शंस (Extraction Functions) -----------------
 
 def extract_quality(name):
     name = name.lower()
-    for q in QUALITY_ORDER:
+    for q, weight in QUALITY_ORDER.items():
         if q in name:
-            return QUALITY_ORDER[q]
+            return weight
     return -1
-
 
 def extract_source(name):
     name = name.lower()
-    for s in SOURCE_ORDER:
+    for s, weight in SOURCE_ORDER.items():
         if s in name:
-            return SOURCE_ORDER[s]
+            return weight
     return -1
 
+def extract_season_episode(name):
+    name = name.lower()
+    # यह S10E09, S10 E09, S08, Season 10 Episode 9 सभी वेरिएशन्स को सही तरीके से पहचानता है
+    s = re.search(r"\bs(?:eason)?[\s._-]*(\d{1,2})", name)
+    e = re.search(r"\be(?:pisode|p)?[\s._-]*(\d{1,2})", name)
+    
+    season = int(s.group(1)) if s else 0
+    episode = int(e.group(1)) if e else 0
+    return season, episode
 
-#___________________________________
+# ----------------- 3. क्वेरी नॉर्मलाइजेशन और एक्सपेंशन -----------------
 
 def normalize_for_search(text):
     text = text.lower()
-
-    # 1x02 → s01 e02
-    text = re.sub(r'(\d+)[xX](\d+)',
-                  lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}",
-                  text)
-
-    # season → s01
-    text = re.sub(r'season[\s\-]*(\d+)',
-                  lambda m: f"s{int(m.group(1)):02d}", text)
-
-    # s1 → s01
-    text = re.sub(r'\bs[\s\-]*(\d+)',
-                  lambda m: f"s{int(m.group(1)):02d}", text)
-
-    # episode → e01
-    text = re.sub(r'episode[\s\-]*(\d+)',
-                  lambda m: f"e{int(m.group(1)):02d}", text)
-
-    # ep → e01
-    text = re.sub(r'\bep[\s\-]*(\d+)',
-                  lambda m: f"e{int(m.group(1)):02d}", text)
-
-    # e1 → e01
-    text = re.sub(r'\be[\s\-]*(\d+)',
-                  lambda m: f"e{int(m.group(1)):02d}", text)
-
-    # s1e2 → s01 e02
-    text = re.sub(r's(\d+)e(\d+)',
-                  lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}",
-                  text)
-
-    text = re.sub(r"\s+", " ", text).strip()
-    return text
-
+    text = re.sub(r'(\d+)[xX](\d+)', lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}", text)
+    text = re.sub(r'\b(?:season|s)[\s\-]*(\d+)', lambda m: f"s{int(m.group(1)):02d}", text)
+    text = re.sub(r'\b(?:episode|ep|e)[\s\-]*(\d+)', lambda m: f"e{int(m.group(1)):02d}", text)
+    text = re.sub(r'\bs(\d+)e(\d+)', lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}", text)
+    return re.sub(r"\s+", " ", text).strip()
 
 def expand_query(query):
     query = query.lower()
-    patterns = []
-    
-    # Title nikalne ke liye season/episode part ko hatayein
-    # Jaise "money heist s01" se "money heist" alag karein
-    title = re.sub(r'(s\d+|e\d+|season\s*\d+|episode\s*\d+|ep\s*\d+)', '', query).strip()
-    
-    s_match = re.search(r"s(\d{1,2})|season\s*(\d{1,2})", query)
-    e_match = re.search(r"e(\d{1,2})|episode\s*(\d{1,2})|ep\s*(\d{1,2})", query)
+    patterns = [query]
 
-    s_num = None
-    if s_match:
-        s_num = int(s_match.group(1) or s_match.group(2))
-        
-    e_num = None
-    if e_match:
-        e_num = int(e_match.group(1) or e_match.group(2) or e_match.group(3))
+    title = re.sub(r'\b(s\d+|e\d+|season[\s-]*\d+|episode[\s-]*\d+|ep[\s-]*\d+)\b', '', query)
+    title = re.sub(r'[\s._-]+', ' ', title).strip()
 
-    # 1. Agar sirf Title ho (Koi S ya E na ho)
-    if not s_num and not e_num:
-        return [query]
+    s_match = re.search(r"\bs(\d{1,2})|season[\s-]*(\d{1,2})", query)
+    e_match = re.search(r"\be(\d{1,2})|episode[\s-]*(\d{1,2})|ep[\s-]*(\d{1,2})", query)
 
-    # 2. Agar Season aur Episode dono hon
+    s_num = int(s_match.group(1) or s_match.group(2)) if s_match else None
+    e_num = int(e_match.group(1) or e_match.group(2) or e_match.group(3)) if e_match else None
+
+    # S10E09 और S10 E09 दोनों तरह के वेरिएशन्स डेटाबेस सर्च के लिए तैयार करना
     if s_num and e_num:
         variations = [
-            f"s{s_num}e{e_num}", f"s{s_num:02d}e{e_num:02d}",
-            f"s{s_num} e{e_num}", f"s{s_num:02d} e{e_num:02d}",
-            f"season {s_num} episode {e_num}",
-            f"{s_num}x{e_num:02d}"
+            f"s{s_num:02d}e{e_num:02d}",   # s10e09
+            f"s{s_num:02d} e{e_num:02d}",  # s10 e09
+            f"s{s_num}e{e_num}",           # s10e9
+            f"s{s_num:02d}",               # s10
+            f"e{e_num:02d}"                # e09
         ]
-        for v in variations:
-            patterns.append(f"{title} {v}".strip())
-
-    # 3. Agar sirf Season ho
+        patterns.extend([f"{title} {v}".strip() for v in variations])
     elif s_num:
-        variations = [f"s{s_num}", f"s{s_num:02d}", f"season {s_num}", f"season{s_num}"]
-        for v in variations:
-            patterns.append(f"{title} {v}".strip())
-
-    # 4. Agar sirf Episode ho
+        variations = [f"s{s_num:02d}", f"s{s_num}", f"season {s_num}"]
+        patterns.extend([f"{title} {v}".strip() for v in variations])
     elif e_num:
-        variations = [f"e{e_num}", f"e{e_num:02d}", f"ep{e_num}", f"episode {e_num}"]
-        for v in variations:
-            patterns.append(f"{title} {v}".strip())
+        variations = [f"e{e_num:02d}", f"e{e_num}", f"episode {e_num}"]
+        patterns.extend([f"{title} {v}".strip() for v in variations])
 
-    # Original query ko bhi add karein
-    patterns.append(query)
-    
     return list(set(patterns))
 
-# ---------------- EXTRACT SEASON/EPISODE ----------------
-def extract_season_episode(name):
-    name = name.lower()
-    s = re.search(r"s(\d{1,2})", name)
-    e = re.search(r"e(\d{1,2})", name)
-
-    season = int(s.group(1)) if s else 0
-    episode = int(e.group(1)) if e else 0
-
-    return season, episode
-#_________________________________
+# ----------------- 4. मुख्य सर्च और सॉर्टिंग फंक्शन -----------------
 
 async def get_search_results(chat_id, query, file_type=None, max_results=10, offset=0, filter=False):
-    # ---------------- SETTINGS ----------------
     if chat_id:
         settings = await get_settings(int(chat_id))
         max_results = 10 if settings.get("max_btn") else int(MAX_B_TN)
 
-    # ---------------- NORMALIZE + EXPAND ----------------
+    # 💾 यूज़र की मूल सर्च क्वेरी को डायनामिक मैचिंग के लिए सुरक्षित रखना
+    original_query = str(query).lower().strip()
+
     if not isinstance(query, list):
         query = normalize_for_search(query)
-        query = expand_query(query)[:10]  # 🔥 limit for speed
+        query = expand_query(query)[:5]
 
-    # ---------------- REGEX BUILD ----------------
     regex_list = []
     for q in query:
         q = q.strip()
-        if not q:
-            continue
-
-        pattern = re.escape(q).replace(r"\ ", r".*[\s\.\+\-_()\[\]]")
-
+        if not q: continue
+        pattern = re.escape(q).replace(r'\ ', r'[\s\.\+\-_()\[\]]+')
         try:
             regex_list.append(re.compile(pattern, re.IGNORECASE))
         except re.error:
             continue
 
-    # ---------------- FILTER ----------------
     conditions = []
     for r in regex_list:
         conditions.append({"file_name": r})
@@ -646,78 +568,66 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
             conditions.append({"caption": r})
 
     filter_mongo = {"$or": conditions}
-
     if file_type:
         filter_mongo["file_type"] = file_type
 
-    # ---------------- FETCH DATA ----------------
     total_results = await Media.count_documents(filter_mongo)
     if MULTIPLE_DB:
         total_results += await Media2.count_documents(filter_mongo)
 
-    files = await Media.find(filter_mongo)\
-        .sort("$natural", -1)\
-        .skip(offset)\
-        .limit(max_results)\
-        .to_list(length=max_results)
-
-    if MULTIPLE_DB and len(files) < max_results:
-        remaining = max_results - len(files)
-        files2 = await Media2.find(filter_mongo)\
-            .sort("$natural", -1)\
-            .skip(offset)\
-            .limit(remaining)\
-            .to_list(length=remaining)
-
+    fetch_limit = max(100, offset + max_results) 
+    
+    files = await Media.find(filter_mongo).sort("$natural", -1).limit(fetch_limit).to_list(length=fetch_limit)
+    if MULTIPLE_DB and len(files) < fetch_limit:
+        remaining = fetch_limit - len(files)
+        files2 = await Media2.find(filter_mongo).sort("$natural", -1).limit(remaining).to_list(length=remaining)
         files.extend(files2)
 
-    # ---------------- 🔥 SMART SERIES DETECTION ----------------
-    is_series = any(
-        re.search(r"s\d{1,2}.*e\d{1,2}", str(file.file_name).lower())
-        for file in files
-    )
+    is_series = any(re.search(r"s\d{1,2}.*e\d{1,2}", str(file.file_name).lower()) for file in files)
 
-    # ---------------- SORT HELPERS ----------------
-    def extract_season_episode(name):
-        name = name.lower()
-        s = re.search(r"s(\d{1,2})", name)
-        e = re.search(r"e(\d{1,2})", name)
-        season = int(s.group(1)) if s else 0
-        episode = int(e.group(1)) if e else 0
-        return season, episode
-
-    # ---------------- SORTING ----------------
+    # 🎯 यूनिवर्सल स्मार्ट सॉर्टिंग लॉजिक (Universal Smart Sorting Logic)
     if is_series:
-        # 📺 SERIES → Season → Episode → Quality → Source
         files = sorted(
             files,
             key=lambda x: (
-                extract_season_episode(x.file_name)[0],
-                extract_season_episode(x.file_name)[1],
-                extract_quality(x.file_name),
-                extract_source(x.file_name),
+                # ⭐ नियम 1: क्या फाइल का नाम यूज़र की क्वेरी से शुरू होता है? (चाहे आगे [, ( या . ही क्यों न हो)
+                not (re.match(rf"^[\s._\-\[\(]*{re.escape(original_query)}", x.file_name.lower())),
+
+                # नियम 2: न्यूमेरिकल रेटिंग (लेटेस्ट सीज़न/एपिसोड हमेशा ऊपर, जैसे S10E09 पहले S10E08 बाद में)
+                -extract_season_episode(x.file_name)[0],      
+                -extract_season_episode(x.file_name)[1],      
+
+                # नियम 3: टेक्स्ट पैटर्न मैचिंग (साफ स्ट्रिंग्स S10E09 को बिना स्पेस के प्राथमिकता देने के लिए)
+                not (re.search(r'\bs\d{1,2}e\d{1,2}\b', x.file_name.lower())), 
+                not (re.search(r'\bs\d{1,2}\s*e\d{1,2}\b', x.file_name.lower())), 
+
+                # नियम 4: क्वालिटी और सोर्स रेटिंग
+                -extract_quality(x.file_name),                
+                -extract_source(x.file_name),                 
                 x.file_id
-            ),
-            reverse=True
+            )
         )
     else:
-        # 🎬 MOVIE → Quality → Source → Latest
         files = sorted(
             files,
             key=lambda x: (
-                extract_quality(x.file_name),
-                extract_source(x.file_name),
+                # ⭐ नियम 1: मूवीज के लिए भी - क्या फाइल का नाम यूज़र की सर्च क्वेरी से शुरू होता है?
+                not (re.match(rf"^[\s._\-\[\(]*{re.escape(original_query)}", x.file_name.lower())),
+
+                # नियम 2: क्वालिटी और सोर्स रेटिंग (हाइगेस्ट क्वालिटी पहले)
+                -extract_quality(x.file_name),
+                -extract_source(x.file_name),
                 x.file_id
-            ),
-            reverse=True
+            )
         )
 
-    # ---------------- OFFSET ----------------
-    next_offset = offset + len(files)
-    if next_offset >= total_results:
+    paginated_files = files[offset:offset + max_results]
+
+    next_offset = offset + len(paginated_files)
+    if next_offset >= total_results or len(paginated_files) == 0:
         next_offset = ""
 
-    return files, next_offset, total_results
+    return paginated_files, next_offset, total_results
 
 
 #_________________________________
