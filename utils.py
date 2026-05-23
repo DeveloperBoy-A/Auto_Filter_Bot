@@ -356,14 +356,18 @@ async def get_poster(query, bulk=False, id=False, file=None):
         else:
             filtered = movie_list
 
+        # --- यहाँ सबसे बड़ा सुधार है ---
+        # केवल मूवी और टीवी शोज़ को ही अनुमति दें
         kind_filter = ['movie', 'tv series', 'tvSeries', 'tvMiniSeries', 'tvMovie']
-        filtered_kind = [m for m in filtered if m.kind and m.kind in kind_filter]
+        filtered_kind = [m for m in filtered if getattr(m, 'kind', None) in kind_filter]
+
+        # अगर बल्क मोड ऑन है, तो सिर्फ़ सही कैटेगरी (Movie/Series) वाले रिजल्ट्स ही भेजें
+        if bulk:
+            return filtered_kind[:MAX_LIST_ELM] if filtered_kind else filtered[:MAX_LIST_ELM]
 
         if not filtered_kind:
             filtered_kind = filtered
 
-        if bulk:
-            return filtered_kind[:MAX_LIST_ELM]
         if not filtered_kind:
             return None   
         movie_brief = filtered_kind[0]
@@ -388,6 +392,7 @@ async def get_poster(query, bulk=False, id=False, file=None):
     imdb_id = movie.imdb_id
     if not imdb_id.startswith("tt"):
         imdb_id = f"tt{imdb_id}"
+        
     return {
         'title': movie.title,
         'votes': movie.votes,
@@ -422,6 +427,7 @@ async def get_poster(query, bulk=False, id=False, file=None):
         'rating': str(movie.rating),
         "url": movie.url or f"https://www.imdb.com/title/{imdb_id}"
     }
+
 
 
 
