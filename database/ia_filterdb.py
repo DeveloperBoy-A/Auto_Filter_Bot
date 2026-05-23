@@ -165,16 +165,16 @@ OTT_MAP = {
 def extract_pure_title(original_name):
     # 1. Shuruati brackets [...] ko saaf karo
     clean_name = re.sub(r'^\[.*?\]', '', original_name).strip() 
-    
-    # 🔥 TELEGRAM HANDLES FIXED: 
+
+    # TELEGRAM HANDLES FIXED: 
     # Agar shuruat mein @channels aur uske sath wale symbols (- ya _) hon, toh unhe uda do
     clean_name = re.sub(r'^@\w+[\s_\-–]*', '', clean_name).strip()
-    
+
     # Baki bache symbols ko spaces mein badlo
     clean_name = re.sub(r'[@\[\]\(\)_]+', ' ', clean_name)
     clean_name = re.sub(r"[._\-]+", " ", clean_name)
-    
-    # 2. Strictly technical anchors (Sirf inke aane par hi title piche se katega)
+
+    # Strictly technical anchors (Ismein se leakage/dub keywords hata diye taaki title safe rahe)
     stop_anchors = [
         r'\bS\d{2}\s?E\d{2}\b', r'\bS\d{1,2}\b', r'\bE\d{1,2}\b', 
         r'\b(19|20)\d{2}\b',                                      
@@ -183,21 +183,21 @@ def extract_pure_title(original_name):
         r'\bx264\b', r'\bx265\b', r'\bhevc\b', r'\b10bit\b',      
         r'\bhdcam\b', r'\bcamrip\b', r'\bcam\b'                    
     ]
-            
+
     lower_name = clean_name.lower()
     first_match_index = len(clean_name)
-    
+
     for anchor in stop_anchors:
         match = re.search(anchor, lower_name)
         if match and match.start() < first_match_index:
             if match.start() > 2: 
                 first_match_index = match.start()
-                
+
     if first_match_index < len(clean_name):
         pure_title = clean_name[:first_match_index].strip()
     else:
         pure_title = clean_name.strip()
-        
+
     # 3. Agar title ke aakhiri mein bhasha ka naam chipka reh gaya hai, toh use hatao
     for lang, aliases in LANGUAGE_ALIASES.items():
         for alias in aliases:
@@ -211,10 +211,10 @@ def extract_pure_title(original_name):
 # =========================================================
 def normalize_season_episode(text):
     text = text.lower()
-    
-    # 1. Ep (01 08) ya Ep (01-08) jaise formats ko handle karne ke liye (Aapki file ke liye khas)
+
+    # 1. Ep (01 08) ya Ep (01-08) jaise formats ko handle karne ke liye
     text = re.sub(r'\bep[\s\-]*\(?(\d+)[\s\-–]+(\d+)\)?', lambda m: f"E{int(m.group(1)):02d}-{int(m.group(2)):02d}", text)
-    
+
     # 2. Baki standard formats
     text = re.sub(r'(\d+)[xX](\d+)', lambda m: f"S{int(m.group(1)):02d} E{int(m.group(2)):02d}", text)
     text = re.sub(r'season[\s\-]*(\d+)', lambda m: f"S{int(m.group(1)):02d}", text)
@@ -223,7 +223,7 @@ def normalize_season_episode(text):
     text = re.sub(r'\bep[\s\-]*(\d+)', lambda m: f"E{int(m.group(1)):02d}", text)
     text = re.sub(r'\be[\s\-]*(\d+)', lambda m: f"E{int(m.group(1)):02d}", text)
     text = re.sub(r's(\d+)e(\d+)', lambda m: f"S{int(m.group(1)):02d} E{int(m.group(2)):02d}", text)
-    
+
     return re.sub(r'\s+', ' ', text).strip()
 
 
@@ -236,11 +236,9 @@ def extract_languages_quality(text_to_scan):
     year_match = re.search(r'\b(19\d{2}|20[0-2]\d)\b', text_to_scan)
     year = year_match.group(1) if year_match else None
 
-    # UPDATED REGEX: Ab yeh Season aur Episode Dono ko Saath Me Target Karega
     normalized_se = normalize_season_episode(text_to_scan)
     se_match = re.search(r'\b(S\d{2}\s?E\d{2}(?:-\d{2})?|S\d{2}|E\d{2}(?:-\d{2})?)\b', normalized_se, re.IGNORECASE)
-    
-    # Agar alag se Season aur Episode dono milte hain toh unhe jod do
+
     if not se_match:
         s_match = re.search(r'\b(S\d{2})\b', normalized_se, re.IGNORECASE)
         e_match = re.search(r'\b(E\d{2}(?:-\d{2})?)\b', normalized_se, re.IGNORECASE)
@@ -267,8 +265,8 @@ def extract_languages_quality(text_to_scan):
         "DVDScr": ["dvdscr", "scr", "dvd-scr"],
         "REMUX": ["remux"],
         "Digital": ["digital"],
-        "HDTC": ["hdtc", "hd-tc", "telecine"],       # 🔥 Naya: Alag se HDTC add kar diya
-        "HDTS": ["hdts", "hd-ts", "ts", "telesync"], # 🔥 Naya: TS aur HDTS dono ko sahi se pakadne ke liye
+        "HDTC": ["hdtc", "hd-tc", "telecine"],       
+        "HDTS": ["hdts", "hd-ts", "ts", "telesync"], 
         "HDCAM": ["hdcam", "hd-cam", "hd cam"],
         "CAMRip": ["cam", "camrip", "cinema"],
         "PreDVD": ["predvd", "pre dvd"]
@@ -276,7 +274,7 @@ def extract_languages_quality(text_to_scan):
     for src, aliases in SOURCES.items():
         for a in aliases:
             if a in scan_lower:
-                source = src  # Same to same left-side jaisa output dikhega
+                source = src  
                 break
         if source:
             break
@@ -308,6 +306,45 @@ def extract_languages_quality(text_to_scan):
                 extra_tags.append(tag)
                 break
 
+        # 🔥 NEW: IMPORTANT CUSTOM MODIFIERS DETECTION (EXACT MATCH & PERFECT ORDER)
+    # File mein jis order mein words likhe hain, strictly usi order mein uth kar aayenge
+    custom_qualifiers = []
+    
+    # Jin keywords ko hamein dhoodna hai unki list
+    target_keywords = [
+        r'\bweb\b', r'\bleak\b', r'\bstudio\b', r'\bdub\b', r'\bdubbed\b',
+        r'\bunofficial\b', r'\bre[\s\-]?dub(?:bed)?\b', r'\bfan[\s\-]?dub(?:bed)?\b', 
+        r'\bhq[\s\-]?dub(?:bed)?\b', r'\bstudio[\s\-]?dub(?:bed)?\b', r'\bclean[\s\-]?audio\b',
+        r'\boriginal[\s\-]?audio\b', r'\bline[\s\-]?audio\b', r'\bmultiplex\b',
+        r'\bextended\b', r'\bextendded\b', r'\buncut\b', r'\bdirector\'s[\s\-]?cut\b', 
+        r'\bdc\b', r'\bimax\b', r'\bremastered\b', r'\bremaster\b', r'\bproper\b', 
+        r'\bpre[\s\-]?release\b', r'\bprerelease\b', r'\bworkprint\b', r'\bwp\b', 
+        r'\bspecial[\s\-]?edition\b', r'\btheatrical\b', r'\banniversary\b',
+        r'\bhq\b', r'\bhdr\b', r'\bdolby[\s\-]?vision\b', r'\bdv\b', r'\bsdr\b', 
+        r'\bhybrid\b', r'\bpatched\b', r'\bcorrected\b', r'\bsoftsub\b'
+    ]
+
+    # Ek temporary list banayenge matches aur unki position (index) ko track karne ke liye
+    found_matches = []
+
+    for pattern in target_keywords:
+        for match in re.finditer(pattern, scan_lower):
+            raw_word = match.group(0)
+            formatted_word = " ".join([w.capitalize() for w in raw_word.split()])
+            
+            # Match ka word aur uski starting position save kar lo
+            found_matches.append((match.start(), formatted_word))
+
+    # 🔥 MAGIC CODE: File mein unki position (index) ke hisab se sort karo
+    # Isse order bilkul wahi rahega jo file ke naam mein tha!
+    found_matches.sort(key=lambda x: x[0])
+
+    # Final list mein daal do bina duplicates ke
+    for position, word in found_matches:
+        if word not in custom_qualifiers:
+            custom_qualifiers.append(word)
+
+
     languages = []
     for lang, aliases in LANGUAGE_ALIASES.items():
         for a in aliases:
@@ -322,7 +359,9 @@ def extract_languages_quality(text_to_scan):
 
     return {
         "year": year, "season_episode": season_episode, "languages": languages,
-        "resolution": resolution, "source": source, "ott": ott_tag, "extra_tags": extra_tags, "kbps": kbps_tag
+        "resolution": resolution, "source": source, "ott": ott_tag, 
+        "extra_tags": extra_tags, "kbps": kbps_tag, 
+        "custom_qualifiers": custom_qualifiers  # 🔥 Output dictionary me append kiya
     }
 
 # =========================================================
@@ -335,10 +374,8 @@ async def save_file(media):
         base_name, ext = os.path.splitext(original_name)
 
         text_to_scan = f"{original_name} {getattr(media, 'caption', '') or ''}"
-        
-        # Naye naam se call kiya gaya hai yahan bhi
-        extracted = extract_languages_quality(text_to_scan)
 
+        extracted = extract_languages_quality(text_to_scan)
         cleaned_title = extract_pure_title(base_name)
 
         formatted_words = []
@@ -385,6 +422,11 @@ async def save_file(media):
         # [8] Source Type
         if extracted["source"]:
             add_unique(extracted["source"])
+
+        # 🔥 [8.5] NEW: IMPORTANT QUALIFIERS PLACEMENT
+        # Resolution/Languages ke thik baad aur codecs se pehle standard look ke liye
+        for qual in extracted["custom_qualifiers"]:
+            add_unique(qual)
 
         # [9] Video Codec
         for vcodec in ["HEVC X265", "AVC X264"]:
@@ -434,7 +476,6 @@ async def save_file(media):
     except Exception as e:
         logger.exception(f"[ERROR] {e}")
         return False, 3
-
 
 
 
