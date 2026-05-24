@@ -1679,9 +1679,240 @@ def normalize_for_search(text):
 
     text = re.sub(r"\s+", " ", text).strip()
     return text
-    #______________________________________________________AUTO_FILTER____________________________________________________________
+   
+
 
 async def auto_filter(client, msg, spoll=False):
+    # -------------------------------------------------------------------------
+    # PART 1: MESSAGE VALIDATION (Message ko check karna ki chalana hai ya nahi)
+    # -------------------------------------------------------------------------
+    if not spoll:
+        message = msg
+        
+        # 🛑 STOP SEARCH IF IT'S A REQUEST (Fix for @botusername /request)
+        if message.text:
+            msg_text_lower = message.text.lower()
+            if "/request" in msg_text_lower or "#request" in msg_text_lower:
+                return  # रिक्वेस्ट मैसेज है, यहीं से सर्च बंद और बॉट शांत रहेगा
+            
+            if message.text.startswith("/"):
+                return  # Agar koi aur command hai toh return ho jaye
+                
+            # Check for specific command prefixes (, . !) or emojis at start
+            if re.findall(r"((^\/|^,|^!|^\.|^[\U0001F600-\U000E007F]).*)", message.text):
+                return
+        else:
+            return  # Agar message me text nahi hai (jaise sirf photo/video) toh return
+
+        # -------------------------------------------------------------------------
+        # PART 2: TEXT CLEANING & FILTERING (Movie ka naam saaf karna)
+        # -------------------------------------------------------------------------
+        if len(message.text) < 100:
+            search = message.text.lower()
+            
+            # ✅ Unicode normalize (Very Important: Special fonts ko normal text me badalna)
+            search = unicodedata.normalize('NFKD', search)
+            search = search.encode('ascii', 'ignore').decode('ascii')
+            
+            # Remove emojis and pictographs (Saare emojis ko saaf karna)
+            search = re.sub(
+                r"[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF"
+                r"\U0001F1E0-\U0001F1FF\U00002700-\U000027BF\U000024C2-\U0001F251]+",
+                "",
+                search
+            )
+            
+            # Faltu words ki list jo movie ke naam ke sath log bhejte hain
+            find = search.split(" ")
+            removes = ["in", "upload", "series", "full", "horror", "thriller", "mystery", 
+                       "print", "file", "pls", "please", "send", "give", "movie", "movies", 
+                       "new", "latest", "bro", "bruh", "link", "dubbed", "download", 
+                       "subtitle", "subtitles", "anyone", "any", "venum", "iruka", 
+                       "pannunga", "anuppunga", "film", "undo", "kitti", "kitty", "tharu", "&"]
+            
+            # List comprehension se faltu words ko remove karna
+            search = " ".join([x for x in find if x not in removes])
+            
+            # Regex cleanup (Bache-kuche text variations aur please/bro ko saaf karna)
+            search = re.sub(r"\b(pl(i|e)*?(s|z+|ease|se|ese|(e+)s(e)?)|((send|snd|giv(e)?|gib)(\sme)?)|movie(s)?|new|latest|bro|bruh|broh|helo|that|find|dubbed|link|venum|iruka|pannunga|pannungga|anuppunga|anupunga|anuppungga|anupungga|film|undo|kitti|kitty|tharu|kittumo|kittum|movie|any(one)|download\ssubtitle(s)?)", "", search, flags=re.IGNORECASE)
+            search = re.sub(r"\s+", " ", search).strip()
+            search = normalize_for_search(search)
+            
+            # Formatting and punctuation stripping (Yahan ab ',' comma bhi replace ho jayega)
+            search = search.replace("-", " ").replace(":", "").replace(".", " ").replace("'", " ").replace("&", " ").replace(",", " ")
+            
+            # 🔥 REMOVE EXTRA SYMBOLS
+            search = re.sub(r"[!@#$%^*()_+=\[\]{};\"<>?/\\|]", "", search)
+            search = re.sub(r"\s+", " ", search).strip()
+            
+            # Security Check: Agar sirf emoji ya signs thhe aur ab search text khali ho gaya toh return
+            if not search:
+                return
+
+            # -------------------------------------------------------------------------
+            # PART 3: DATABASE SEARCH & SPELL CHECK (Files dhoondna aur spelling janchalna)
+            # -------------------------------------------------------------------------
+            m = await message.reply_text(f'**•『 🔍 ɪ ᴀᴍ ꜱᴇᴀʀᴄʜɪɴɢ 』•** `{search}`', reply_to_message_id=message.id)
+            files, offset, total_results = await get_search_results(message.chat.id, search, offset=0, filter=True)
+            settings = await get_settings(message.chat.id)
+            
+            if not files:
+                if settings.get("spell_check"):
+                    ai_sts = await m.edit('🤖 ᴘʟᴇᴀꜱᴇ ᴡᴀɪᴛ, ᴀɪ ɪꜱ ᴄʜᴇᴄᴋɪɴɢ ʏᴏᴜʀ ꜱᴘᴇʟʟɪɴɢ...')
+                    is_misspelled = await ai_spell_check(chat_id=message.chat.id, wrong_name=search)
+                    if is_misspelled:
+                        await ai_sts.edit(f'✅ Aɪ Sᴜɢɢᴇsᴛᴇᴅ: <code>{is_misspelled}</code>\n🔍 Searching for it...')
+                        message.text = is_misspelled
+                        await ai_sts.delete()
+                        return await auto_filter(client, message) # Sahi spelling ke sath dobara filter chalu
+                    await ai_sts.delete()
+                else:
+                    await m.delete()
+                return await advantage_spell_chok(client, message)
+        else:
+            return
+    else:
+        # Agar user ne Spell Check ke button par click kiya thha (spoll=True)
+        message = msg.message.reply_to_message
+        search, files, offset, total_results = spoll
+        m = await message.reply_text(f'**•『 🔍 ɪ ᴀᴍ ꜱᴇᴀʀᴄʜɪɴɢ 』•** `{search}`', reply_to_message_id=message.id)
+        settings = await get_settings(message.chat.id)
+        await msg.message.delete()
+
+    # Callback data handle karne ke liye keys banana
+    key = f"{message.chat.id}-{message.id}"
+    FRESH[key] = search
+    temp.GETALL[key] = files
+    temp.SHORT[message.from_user.id] = message.chat.id
+    
+    # -------------------------------------------------------------------------
+    # PART 4: BUTTON GENERATION (Inline buttons taiyar karna)
+    # -------------------------------------------------------------------------
+    btn = []
+    if settings.get('button'):
+        btn = [
+            [InlineKeyboardButton(text=f"🔗 {get_size(file.file_size)} ≽ " + clean_filename(file.file_name), callback_data=f'file#{file.file_id}')]
+            for file in files
+        ]
+        
+    # Common Headers Jo Dono Modes Me Dikhenge (Code short kiya gaya)
+    btn.insert(0, [
+        InlineKeyboardButton('Qᴜᴀʟɪᴛʏ', callback_data=f"qualities#{key}"),
+        InlineKeyboardButton("Lᴀɴɢᴜᴀɢะ", callback_data=f"languages#{key}"),
+        InlineKeyboardButton("Sᴇᴀsᴏɴ",  callback_data=f"seasons#{key}")
+    ])
+    btn.insert(0, [
+        InlineKeyboardButton("⚜️ 𝐑𝐞𝐦𝐨𝐯𝐞 𝐚𝐝𝐬 ⚜️", url=f"https://t.me/{temp.U_NAME}?start=premium"),
+        InlineKeyboardButton("Sᴇɴᴅ Aʟʟ", callback_data=f"sendfiles#{key}")
+    ])
+
+    # Pagination logic (Next/Page counter lagana)
+    if offset != "":
+        req = message.from_user.id if message.from_user else 0
+        try:
+            max_btn_val = 10 if settings.get('max_btn') else int(MAX_B_TN)
+        except (KeyError, NameError, ValueError):
+            await save_group_settings(message.chat.id, 'max_btn', True)
+            max_btn_val = 10
+            
+        btn.append([
+            InlineKeyboardButton("ᴘᴀɢᴇ", callback_data="pages"), 
+            InlineKeyboardButton(text=f"1/{math.ceil(int(total_results)/max_btn_val)}", callback_data="pages"), 
+            InlineKeyboardButton(text="ɴᴇxᴛ ⋟", callback_data=f"next_{req}_{key}_{offset}")
+        ])
+    else:
+        btn.append([InlineKeyboardButton(text="↭ ɴᴏ ᴍᴏʀᴇ ᴘᴀɢᴇꜱ ᴀᴠᴀɪʟᴀʙʟे ↭", callback_data="pages")])
+
+    # IMDb Poster check karna
+    imdb = await get_poster(search, file=(files[0]).file_name) if settings.get("imdb") else None
+
+    # -------------------------------------------------------------------------
+    # PART 5: TIME DIFFERENCE & CAPTION (Time aur text message banana)
+    # -------------------------------------------------------------------------
+    # ⏰ FIX: Purana timedelta math hata kar simple accurate time system lagaya
+    cur_time = datetime.now(pytz.timezone('Asia/Kolkata'))
+    curr_datetime = cur_time.replace(hour=msg.date.hour, minute=msg.date.minute, second=msg.date.second) if hasattr(msg, 'date') else cur_time
+    remaining_seconds = "{:.2f}".format((cur_time - curr_datetime).total_seconds())
+    if float(remaining_seconds) < 0: 
+        remaining_seconds = "0.10"  # Midnight crossover error handler
+
+    TEMPLATE = settings.get('template', script.IMDB_TEMPLATE_TXT)
+
+    if imdb:
+        cap = TEMPLATE.format(
+            query=search, title=imdb['title'], votes=imdb['votes'], aka=imdb["aka"],
+            seasons=imdb["seasons"], box_office=imdb['box_office'], localized_title=imdb['localized_title'],
+            kind=imdb['kind'], imdb_id=imdb["imdb_id"], cast=imdb["cast"], runtime=imdb["runtime"],
+            countries=imdb["countries"], certificates=imdb["certificates"], languages=imdb["languages"],
+            director=imdb["director"], writer=imdb["writer"], producer=imdb["producer"],
+            composer=imdb["composer"], cinematographer=imdb["cinematographer"], music_team=imdb["music_team"],
+            distributors=imdb["distributors"], release_date=imdb['release_date'], year=imdb['year'],
+            genres=imdb['genres'], poster=imdb['poster'], plot=imdb['plot'], rating=imdb['rating'],
+            url=imdb['url'], **locals()
+        )
+        Temp.IMDB_CAP[message.from_user.id] = cap
+        
+        if not settings.get('button'):
+            cap += "\n📂 <b><u>𝒀𝒐𝒖𝒓 𝑭𝒊𝒍𝒆𝒔 𝑨𝒓𝒆 𝑹𝒆𝒂𝒅𝒚</u></b> 👇\n\n"
+            for idx, file in enumerate(files, start=1):
+                cap += f"<b>{idx}. <a href='https://telegram.me/{temp.U_NAME}?start=file_{message.chat.id}_{file.file_id}'>[{get_size(file.file_size)}] {clean_filename(file.file_name)}</a></b>\n\n"
+            cap = cap.strip() + f"\n\n───────────────────\n\n<b>{script.DEL_MSG_2.format(get_time(DELETE_TIME)).lstrip()}</b>"    
+    else:
+        # NoneType handle karne ke liye variable safety check
+        mention_user = message.from_user.mention if message.from_user else "User"
+        chat_title = message.chat.title or getattr(temp, 'B_LINK', None) or 'ᴅʀᴇᴀᴍxʙᴏᴛᴢ'
+        
+        cap = f"<b>🏷 ᴛɪᴛʟᴇ : <code>{search}</code>\n🧱 ᴛᴏᴛᴀʟ ꜰɪʟᴇꜱ : <code>{total_results}</code>\n⏰ ʀᴇsᴜʟᴛ ɪɴ : <code>{remaining_seconds} sᴇᴄᴏɴᴅs</code>\n<blockquote>🌿 ᴍᴀɪɴᴛᴀɪɴᴇᴅ ʙʏ : ᴅᴇᴠᴇʟᴏᴘᴇʀ_ʙᴏʏ™(𝓐𝓷𝓴𝓲𝓽_𝓜𝓮𝓮𝓷𝓪😝)</blockquote>\n📝 ʀᴇǫᴜᴇsᴛᴇᴅ ʙʏ : {mention_user}\n⚜️ ᴘᴏᴡᴇʀᴇᴅ ʙʏ : ⚡ {chat_title} \n\n📂 <b><u>𝒀𝒐𝒖𝒓 𝑭𝒊𝒍𝒆𝒔 𝑨𝒓𝒆 𝑹𝒆𝒂𝒅𝒚</u></b> 👇 \n\n</b>"
+
+        if not settings.get('button'):
+            for idx, file in enumerate(files, start=1):
+                cap += f"<b>{idx}. <a href='https://telegram.me/{temp.U_NAME}?start=file_{message.chat.id}_{file.file_id}'>[{get_size(file.file_size)}] {clean_filename(file.file_name)}</a></b>\n\n"
+            cap = cap.strip() + f"\n\n───────────────────\n<b>{script.DEL_MSG_2.format(get_time(DELETE_TIME)).lstrip()}</b>"
+
+    # -------------------------------------------------------------------------
+    # PART 6: AUTO DELETE & SENDING (Message bhejna aur automatic delete karna)
+    # -------------------------------------------------------------------------
+    # 🛠 REUSABLE FUNCTION: Faltu line-copy paste ko hatakar single block banaya
+    async def handle_auto_delete(sent_msg):
+        try:
+            if settings.get('auto_delete', True):
+                await asyncio.sleep(DELETE_TIME)
+                await sent_msg.delete()
+                await message.delete()
+        except Exception:
+            await save_group_settings(message.chat.id, 'auto_delete', True)
+            await asyncio.sleep(DELETE_TIME)
+            await sent_msg.delete()
+            await message.delete()
+
+    # Final Execution (Photo ya Text deliver karna group me)
+    if imdb and imdb.get('poster'):
+        try:
+            hehe = await message.reply_photo(photo=imdb.get('poster'), caption=cap, reply_markup=InlineKeyboardMarkup(btn), parse_mode=enums.ParseMode.HTML)
+            await m.delete()
+            await handle_auto_delete(hehe)
+        except (MediaEmpty, PhotoInvalidDimensions, WebpageMediaEmpty):
+            poster = imdb.get('poster').replace('.jpg', "._V1_UX360.jpg")
+            try:
+                hmm = await message.reply_photo(photo=poster, caption=cap, reply_markup=InlineKeyboardMarkup(btn), parse_mode=enums.ParseMode.HTML)
+                await m.delete()
+                await handle_auto_delete(hmm)
+            except Exception:
+                dxb = await message.reply_text(text=cap, reply_markup=InlineKeyboardMarkup(btn), parse_mode=enums.ParseMode.HTML)
+                await m.delete()
+                await handle_auto_delete(dxb)
+        except Exception as e:
+            logger.exception(e)
+            dxb = await message.reply_text(text=cap, reply_markup=InlineKeyboardMarkup(btn), parse_mode=enums.ParseMode.HTML)
+            await m.delete()
+            await handle_auto_delete(dxb)
+    else:
+        dxb = await message.reply_text(text=cap, reply_markup=InlineKeyboardMarkup(btn), disable_web_page_preview=True, parse_mode=enums.ParseMode.HTML)
+        await m.delete()
+        await handle_auto_delete(dxb)
+ #______________________________________________________AUTO_FILTER____________________________________________________________
+
+async def old_auto_filter(client, msg, spoll=False):
     curr_time = datetime.now(pytz.timezone('Asia/Kolkata')).time()
     if not spoll:
         message = msg
