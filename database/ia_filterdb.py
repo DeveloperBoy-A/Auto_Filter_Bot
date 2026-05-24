@@ -125,6 +125,13 @@ def unpack_new_file_id(new_file_id):
 
 
 
+import os
+import re
+import logging
+from pymongo.errors import DuplicateKeyError
+
+logger = logging.getLogger(__name__)
+
 # =========================================================
 # 1. GLOBAL CONFIGURATIONS & CLEAN MAPS
 # =========================================================
@@ -160,28 +167,24 @@ OTT_MAP = {
 }
 
 # =========================================================
-# 2. SMART DYNAMIC TITLE EXTRACTOR (FIXED: Front & Back Cutting)
+# 2. SMART DYNAMIC TITLE EXTRACTOR (FIXED: Anchor Collision)
 # =========================================================
 def extract_pure_title(original_name):
     # 1. Shuruati brackets [...] ko saaf karo
     clean_name = re.sub(r'^\[.*?\]', '', original_name).strip() 
 
     # TELEGRAM HANDLES FIXED: 
-    # Agar shuruat mein @channels aur uske sath wale symbols (- ya _) hon, toh unhe uda do
     clean_name = re.sub(r'^@\w+[\s_\-–]*', '', clean_name).strip()
 
     # Baki bache symbols ko spaces mein badlo
     clean_name = re.sub(r'[@\[\]\(\)_]+', ' ', clean_name)
     clean_name = re.sub(r"[._\-]+", " ", clean_name)
 
-    # Strictly technical anchors (Ismein se leakage/dub keywords hata diye taaki title safe rahe)
+    # FIXED: Codecs/Sources anchors se hata diye taaki unke baad wale custom keywords (LiNE, V1 etc.) leak na hon
     stop_anchors = [
         r'\bS\d{2}\s?E\d{2}\b', r'\bS\d{1,2}\b', r'\bE\d{1,2}\b', 
         r'\b(19|20)\d{2}\b',                                      
-        r'\b\d{3,4}p\b', r'\b4k\b',                               
-        r'\bweb[\s\-]?dl\b', r'\bwebrip\b', r'\bhdrip\b', r'\bbluray\b', 
-        r'\bx264\b', r'\bx265\b', r'\bhevc\b', r'\b10bit\b',      
-        r'\bhdcam\b', r'\bcamrip\b', r'\bcam\b'                    
+        r'\b\d{3,4}p\b', r'\b4k\b'
     ]
 
     lower_name = clean_name.lower()
@@ -207,12 +210,12 @@ def extract_pure_title(original_name):
 
 
 # =========================================================
-# 3. AAPKA CUSTOM SEASON & EPISODE NORMALIZER
+# 3. CUSTOM SEASON & EPISODE NORMALIZER
 # =========================================================
 def normalize_season_episode(text):
     text = text.lower()
 
-    # 1. Ep (01 08) ya Ep (01-08) jaise formats ko handle karne ke liye
+    # 1. Ep (01 08) ya Ep (01-08) jaise formats
     text = re.sub(r'\bep[\s\-]*\(?(\d+)[\s\-–]+(\d+)\)?', lambda m: f"E{int(m.group(1)):02d}-{int(m.group(2)):02d}", text)
 
     # 2. Baki standard formats
@@ -228,7 +231,7 @@ def normalize_season_episode(text):
 
 
 # =========================================================
-# 4. UPDATED NAME FUNCTION FOR COMMANDS.PY IMPORT
+# 4. UPDATED DATA EXTRACTOR (FIXED: As-Is Case for Qualifiers & ESubs)
 # =========================================================
 def extract_languages_quality(text_to_scan):
     scan_lower = text_to_scan.lower()
@@ -296,9 +299,10 @@ def extract_languages_quality(text_to_scan):
         "AAC": ["aac"],
         "Dolby 5.1": ["5.1", "6ch", "dd+", "eac3", "dts"], 
         "Atmos 7.1": ["atmos", "truehd", "7.1", "8ch"],
-        "(Eng-Sub)": ["esub", "esubs"], 
-        "(Hardsub)": ["hsub", "hsubs"],
-        "(Msub)": ["msub", "msubs"]
+        # FIXED: Brackets hata kar clean scene formatting
+        "ESubs": ["esub", "esubs"], 
+        "HardSubs": ["hsub", "hsubs"],
+        "MSubs": ["msub", "msubs"]
     }
     for tag, aliases in TAGS_MAP.items():
         for a in aliases:
@@ -306,37 +310,58 @@ def extract_languages_quality(text_to_scan):
                 extra_tags.append(tag)
                 break
 
-        # 🔥 NAYA ORDER-BASED MODIFIERS DETECTION LOGIC (STRICTLY FILE ORDER & FULL CAPITAL)
+    # === PERFECT ORDER FIX: SINGLE PATTERN SCAN + EXACT CASING ===
     custom_qualifiers = []
     target_keywords = [
         r'\bweb\b', r'\bleak\b', r'\bstudio\b', r'\bdub\b', r'\bdubbed\b',
         r'\bunofficial\b', r'\bre[\s\-]?dub(?:bed)?\b', r'\bfan[\s\-]?dub(?:bed)?\b', 
         r'\bhq[\s\-]?dub(?:bed)?\b', r'\bstudio[\s\-]?dub(?:bed)?\b', r'\bclean[\s\-]?audio\b',
-        r'\boriginal[\s\-]?audio\b', r'\bline[\s\-]?audio\b', r'\bmultiplex\b',
+        r'\boriginal[\s\-]?audio\b', r'\bline[\s\-]?audios?\b', r'\bline\b', r'\bmultiplex\b',
         r'\bextended\b', r'\bextendded\b', r'\buncut\b', r'\bdirector\'s[\s\-]?cut\b', 
         r'\bdc\b', r'\bimax\b', r'\bremastered\b', r'\bremaster\b', r'\bproper\b', 
         r'\bpre[\s\-]?release\b', r'\bprerelease\b', r'\bworkprint\b', r'\bwp\b', 
         r'\bspecial[\s\-]?edition\b', r'\btheatrical\b', r'\banniversary\b',
         r'\bhq\b', r'\bhdr\b', r'\bdolby[\s\-]?vision\b', r'\bdv\b', r'\bsdr\b', 
-        r'\bhybrid\b', r'\bpatched\b', r'\bcorrected\b', r'\bsoftsub\b'
+        r'\bhybrid\b', r'\bpatched\b', r'\bcorrected\b', r'\bsoftsub\b',
+        r'\bv[1-4]\b' 
     ]
 
+    # Saare patterns ko ek single regex mein combine kiya taaki string Left-to-Right ek hi baar mein scan ho
+    combined_pattern = re.compile('|'.join(target_keywords), re.IGNORECASE)
+    
     found_matches = []
-    for pattern in target_keywords:
-        for match in re.finditer(pattern, scan_lower):
-            raw_word = match.group(0)
-            
-            # 🔥 YAHA BADLAV KIYA H: Pura word capital (UPPERCASE) ho jayega
-            formatted_word = raw_word.upper()
-            
-            found_matches.append((match.start(), formatted_word))
+    
+    # Pure text par single pass scan
+    for match in combined_pattern.finditer(scan_lower):
+        start_pos = match.start()
+        end_pos = match.end()
+        
+        # Original text se case uthaya
+        original_string = text_to_scan[start_pos:end_pos].strip()
+        
+        # Words ko split kiya aur unki exact string position dhoondi
+        words = re.split(r'[@\[\]\(\)_\.\-\s]+', original_string)
+        
+        current_offset = 0
+        for word in words:
+            word_clean = word.strip()
+            if word_clean:
+                # File ke andar is sub-word ki exact location nikali
+                exact_word_pos = original_string.find(word_clean, current_offset)
+                actual_index = start_pos + exact_word_pos
+                
+                found_matches.append((actual_index, word_clean))
+                current_offset = exact_word_pos + len(word_clean)
 
-    # File me jonsa word pehle aaya h, use pehle rkhne ke liye sort kiya
+    # Ab sort karne par order 100% wahi rahega jo file name mein left to right hai
     found_matches.sort(key=lambda x: x[0])
 
+    # Case-insensitive duplicate check taaki order lock rahe
+    seen_lower = set()
     for position, word in found_matches:
-        if word not in custom_qualifiers:
+        if word.lower() not in seen_lower:
             custom_qualifiers.append(word)
+            seen_lower.add(word.lower())
 
 
     languages = []
@@ -355,11 +380,11 @@ def extract_languages_quality(text_to_scan):
         "year": year, "season_episode": season_episode, "languages": languages,
         "resolution": resolution, "source": source, "ott": ott_tag, 
         "extra_tags": extra_tags, "kbps": kbps_tag, 
-        "custom_qualifiers": custom_qualifiers  # 🔥 Output dictionary me append kiya
+        "custom_qualifiers": custom_qualifiers  
     }
 
 # =========================================================
-# 5. MAIN ASYNC SAVE PIPELINE
+# 5. MAIN ASYNC SAVE PIPELINE (FIXED: Standard Order Design)
 # =========================================================
 async def save_file(media):
     try:
@@ -385,6 +410,8 @@ async def save_file(media):
             if value and str(value).lower() not in " ".join(map(str, parts)).lower():
                 parts.append(value)
 
+        # === FIXED SEQUENCE ASSEMBLER ===
+        
         # [1] Title
         if final_title:
             add_unique(final_title)
@@ -397,51 +424,50 @@ async def save_file(media):
         if extracted["year"]:
             add_unique(extracted["year"])
 
-        # [4] Audio Languages
-        for lang in extracted["languages"]:
-            add_unique(lang)
-
-        # [5] Video Resolution
+        # [4] Video Resolution (FIXED: Moved up before languages)
         if extracted["resolution"]:
             add_unique(extracted["resolution"])
 
-        # [6] Color Depth
-        if "10BIT" in extracted["extra_tags"]:
-            add_unique("10BIT")
+        # [5] Audio Languages
+        for lang in extracted["languages"]:
+            add_unique(lang)
 
-        # [7] OTT Platform Tag
-        if extracted["ott"]:
-            add_unique(extracted["ott"])
-
-        # [8] Source Type
-        if extracted["source"]:
-            add_unique(extracted["source"])
-
-        # 🔥 [8.5] NEW: IMPORTANT QUALIFIERS PLACEMENT
-        # Resolution/Languages ke thik baad aur codecs se pehle standard look ke liye
+        # [6] Custom Qualifiers (LiNE, V1, V2 etc. with original case)
         for qual in extracted["custom_qualifiers"]:
             add_unique(qual)
 
-        # [9] Video Codec
+        # [7] Color Depth
+        if "10BIT" in extracted["extra_tags"]:
+            add_unique("10BIT")
+
+        # [8] OTT Platform Tag
+        if extracted["ott"]:
+            add_unique(extracted["ott"])
+
+        # [9] Source Type
+        if extracted["source"]:
+            add_unique(extracted["source"])
+
+        # [10] Video Codec
         for vcodec in ["HEVC X265", "AVC X264"]:
             if vcodec in extracted["extra_tags"]:
                 add_unique(vcodec)
 
-        # [10] Audio Codec & Channels
+        # [11] Audio Codec & Channels
         for acodec in ["Atmos 7.1", "Dolby 5.1", "AAC"]:
             if acodec in extracted["extra_tags"]:
                 add_unique(acodec)
 
-        # [11] Subtitles
-        for sub in ["(Eng-Sub)", "(Hardsub)", "(Msub)"]:
+        # [12] Subtitles (FIXED: Clean ESubs / MSubs without brackets)
+        for sub in ["ESubs", "HardSubs", "MSubs"]:
             if sub in extracted["extra_tags"]:
                 add_unique(sub)
 
-        # [12] Audio Bitrate
+        # [13] Audio Bitrate
         if extracted["kbps"]:
             add_unique(extracted["kbps"])
 
-        # [13] Branding Signature
+        # [14] Branding Signature
         parts = [p for p in parts if p and "Tokyo_Updates" not in str(p)]
         parts.append(RELEASE_TAG)
 
@@ -470,7 +496,6 @@ async def save_file(media):
     except Exception as e:
         logger.exception(f"[ERROR] {e}")
         return False, 3
-
 
 
 
