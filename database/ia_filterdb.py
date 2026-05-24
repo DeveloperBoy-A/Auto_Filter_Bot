@@ -306,11 +306,8 @@ def extract_languages_quality(text_to_scan):
                 extra_tags.append(tag)
                 break
 
-        # 🔥 NEW: IMPORTANT CUSTOM MODIFIERS DETECTION (EXACT MATCH & PERFECT ORDER)
-    # File mein jis order mein words likhe hain, strictly usi order mein uth kar aayenge
+        # 🔥 NAYA ORDER-BASED MODIFIERS DETECTION LOGIC (STRICTLY FILE ORDER & FULL CAPITAL)
     custom_qualifiers = []
-    
-    # Jin keywords ko hamein dhoodna hai unki list
     target_keywords = [
         r'\bweb\b', r'\bleak\b', r'\bstudio\b', r'\bdub\b', r'\bdubbed\b',
         r'\bunofficial\b', r'\bre[\s\-]?dub(?:bed)?\b', r'\bfan[\s\-]?dub(?:bed)?\b', 
@@ -324,22 +321,19 @@ def extract_languages_quality(text_to_scan):
         r'\bhybrid\b', r'\bpatched\b', r'\bcorrected\b', r'\bsoftsub\b'
     ]
 
-    # Ek temporary list banayenge matches aur unki position (index) ko track karne ke liye
     found_matches = []
-
     for pattern in target_keywords:
         for match in re.finditer(pattern, scan_lower):
             raw_word = match.group(0)
-            formatted_word = " ".join([w.capitalize() for w in raw_word.split()])
             
-            # Match ka word aur uski starting position save kar lo
+            # 🔥 YAHA BADLAV KIYA H: Pura word capital (UPPERCASE) ho jayega
+            formatted_word = raw_word.upper()
+            
             found_matches.append((match.start(), formatted_word))
 
-    # 🔥 MAGIC CODE: File mein unki position (index) ke hisab se sort karo
-    # Isse order bilkul wahi rahega jo file ke naam mein tha!
+    # File me jonsa word pehle aaya h, use pehle rkhne ke liye sort kiya
     found_matches.sort(key=lambda x: x[0])
 
-    # Final list mein daal do bina duplicates ke
     for position, word in found_matches:
         if word not in custom_qualifiers:
             custom_qualifiers.append(word)
