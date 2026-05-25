@@ -144,21 +144,21 @@ LANGUAGE_ALIASES = {
     "Marathi": [r'\bmarathi\b'],
     "Korean": [r'\bkorean\b', r'\bkor\b', r'\bk-drama\b'],
     "Japanese": [r'\bjapanese\b', r'\bjap\b'],
-    "Chinese": [r'\bchinese\b', r'\bmandarin\b', r'\bchi\b'],
+    "Chinese": [r'\bchinese\b', r'\bmandarin\b', r'\bchi\b']
     
-    "Dual Audio": [r'\bdual\s?audio\b', r'\bdual\b'],
-    "Multi Audio": [r'\bmulti\s?audio\b', r'\bmulti\b']
+    #"Dual Audio": [r'\bdual\s?audio\b', r'\bdual\b'],
+    #"Multi Audio": [r'\bmulti\s?audio\b', r'\bmulti\b']
 }
 
 OTT_MAP = {
-    "[NF]": ["netflix", "nf"],
-    "[AMZN]": ["amazon", "amzn", "prime"],
-    "[DSNP]": ["hotstar", "disney", "dsnp"],
-    "[JIO]": ["jiocinema", "jio"],
-    "[ZEE5]": ["zee5", "zee"],
-    "[LIV]": ["sonyliv", "liv"],
-    "[HMAX]": ["hbomax", "hbo", "hmax"],
-    "[APTV]": ["apple", "aptv", "apple tv"]
+    "NF": ["netflix", "nf"],
+    "AMZN": ["amazon", "amzn", "prime"],
+    "DSNP": ["hotstar", "disney", "dsnp"],
+    "JIO": ["jiocinema", "jio"],
+    "ZEE5": ["zee5", "zee"],
+    "LIV": ["sonyliv", "liv"],
+    "HMAX": ["hbomax", "hbo", "hmax"],
+    "APTV": ["apple", "aptv", "apple tv"]
 }
 
 # =========================================================
@@ -370,12 +370,20 @@ def extract_languages_quality(text_to_scan):
             custom_qualifiers.append(word)
             seen_lower.add(word.lower())
 
+    # === Language Scan ===
     languages = []
     for lang, aliases in LANGUAGE_ALIASES.items():
         for a in aliases:
             if re.search(a, scan_lower):
                 languages.append(lang)
                 break
+
+    # 🔥 YEH NAYA LOGIC CHIPKAO (Language check hone ke thik baad)
+    if "Dual Audio" not in languages and "Multi Audio" not in languages:
+        if len(languages) == 2 or r'\bdual\b' in scan_lower or r'\bdual\s?audio\b' in scan_lower:
+            languages.append("Dual Audio")
+        elif len(languages) > 2 or r'\bmulti\b' in scan_lower or r'\bmulti\s?audio\b' in scan_lower:
+            languages.append("Multi Audio")
 
     kbps_tag = None
     kbps = re.search(r'(\d{2,4}\s?kbps)', scan_lower)
