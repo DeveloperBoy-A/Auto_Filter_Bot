@@ -122,6 +122,8 @@ def unpack_new_file_id(new_file_id):
         return None, None
 
 
+
+
 # =========================================================
 # 1. GLOBAL CONFIGURATIONS & CLEAN MAPS
 # =========================================================
@@ -142,7 +144,6 @@ LANGUAGE_ALIASES = {
     "Japanese": [r'\bjapanese\b', r'\bjap\b'],
     "Chinese": [r'\bchinese\b', r'\bmandarin\b', r'\bchi\b'],
     
-    # Dual aur Multi ko yahan strictly safe kar diya hai (Hatega nahi)
     "Dual Audio": [r'\bdual\s?audio\b', r'\bdual\b'],
     "Multi Audio": [r'\bmulti\s?audio\b', r'\bmulti\b']
 }
@@ -159,20 +160,14 @@ OTT_MAP = {
 }
 
 # =========================================================
-# 2. SMART DYNAMIC TITLE EXTRACTOR (FIXED: Anchor Collision)
+# 2. SMART DYNAMIC TITLE EXTRACTOR
 # =========================================================
 def extract_pure_title(original_name):
-    # 1. Shuruati brackets [...] ko saaf karo
     clean_name = re.sub(r'^\[.*?\]', '', original_name).strip() 
-
-    # TELEGRAM HANDLES FIXED: 
     clean_name = re.sub(r'^@\w+[\s_\-–]*', '', clean_name).strip()
-
-    # Baki bache symbols ko spaces mein badlo
     clean_name = re.sub(r'[@\[\]\(\)_]+', ' ', clean_name)
     clean_name = re.sub(r"[._\-]+", " ", clean_name)
 
-    # FIXED: Codecs/Sources anchors se hata diye taaki unke baad wale custom keywords (LiNE, V1 etc.) leak na hon
     stop_anchors = [
         r'\bS\d{2}\s?E\d{2}\b', r'\bS\d{1,2}\b', r'\bE\d{1,2}\b', 
         r'\b(19|20)\d{2}\b',                                      
@@ -193,7 +188,6 @@ def extract_pure_title(original_name):
     else:
         pure_title = clean_name.strip()
 
-    # 3. Agar title ke aakhiri mein bhasha ka naam chipka reh gaya hai, toh use hatao
     for lang, aliases in LANGUAGE_ALIASES.items():
         for alias in aliases:
             pure_title = re.sub(rf'\b{re.escape(alias)}\b$', '', pure_title, flags=re.IGNORECASE).strip()
@@ -219,33 +213,30 @@ def normalize_season_episode(text):
     # 4. Ep Brackets Range (e.g., Ep (01-08) ya ep_01-08)
     text = re.sub(r'\bep[\s\-_]*\(?(\d+)[\s\-–]+(\d+)\)?', lambda m: f"e{int(m.group(1)):02d}-{int(m.group(2)):02d}", text)
 
-    # 5. Pure Episode Range Bina Kisi Alphabet Ke (e.g., [01-10] ya h_01-10 - strictly 2 digit ranges)
+    # 5. Pure Episode Range Bina Kisi Alphabet Ke (e.g., [01-10] ya h_01-10)
     text = re.sub(r'\b(\d{2})[\s\-–]+(\d{2})\b', lambda m: f"e{int(m.group(1)):02d}-{int(m.group(2)):02d}" if int(m.group(1)) < 60 and int(m.group(2)) < 60 else m.group(0), text)
 
-    # 6. Part / Pt Formats (e.g., Part 02, Pt.1, pt-2)
+    # 6. Part / Pt Formats (e.g., Part 02, Pt.1)
     text = re.sub(r'\b(part|pt)[\.\-_]*\s?(\d{1,2})\b', lambda m: f"part {int(m.group(2)):02d}", text)
 
     # 7. Standard 1x05 / 01x05 Formats
     text = re.sub(r'\b(\d{1,2})[xX](\d{1,2})\b', lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}", text)
 
-    # 8. Standard Season Keywords (e.g., season 01, season-1, s01, s1)
+    # 8. Standard Season Keywords (e.g., season 01, s1)
     text = re.sub(r'\b(?:season|s)[\s\-_]*(\d{1,2})\b', lambda m: f"s{int(m.group(1)):02d}", text)
 
-    # 9. Standard Episode Keywords (e.g., episode 01, ep-1, e1, ep1)
+    # 9. Standard Episode Keywords (e.g., episode 01, ep1, e1)
     text = re.sub(r'\b(?:episode|ep|e)[\s\-_]*(\d{1,2})\b', lambda m: f"e{int(m.group(1)):02d}", text)
 
-    # 10. Direct S01E01 Merge Fix (e.g., s01e01 -> s01 e01)
+    # 10. Direct S01E01 Merge Fix
     text = re.sub(r'\bs(\d{2})e(\d{2})\b', r's\1 e\2', text)
 
-    # Double spaces clean karein
     text = re.sub(r'\s+', ' ', text).strip()
-    
-    # Poore output ko Standard UpperCase me bhejein
     return text.upper()
 
 
 # =========================================================
-# 4. UPDATED DATA EXTRACTOR (FIXED: OTT & Language Regex Match)
+# 4. UPDATED DATA EXTRACTOR (FIXED: Episode Saving Loop)
 # =========================================================
 def extract_languages_quality(text_to_scan):
     scan_lower = text_to_scan.lower()
@@ -253,18 +244,25 @@ def extract_languages_quality(text_to_scan):
     year_match = re.search(r'\b(19\d{2}|20[0-2]\d)\b', text_to_scan)
     year = year_match.group(1) if year_match else None
 
+    # === 🔥 ULTRA FIX: Pure Episode aur Season Pack Extraction Logic ===
     normalized_se = normalize_season_episode(text_to_scan)
-    se_match = re.search(r'\b(S\d{2}\s?E\d{2}(?:-\d{2})?|S\d{2}|E\d{2}(?:-\d{2})?)\b', normalized_se, re.IGNORECASE)
-
-    if not se_match:
-        s_match = re.search(r'\b(S\d{2})\b', normalized_se, re.IGNORECASE)
-        e_match = re.search(r'\b(E\d{2}(?:-\d{2})?)\b', normalized_se, re.IGNORECASE)
-        if s_match and e_match:
-            season_episode = f"{s_match.group(1).upper()} {e_match.group(1).upper()}"
-        else:
-            season_episode = s_match.group(1).upper() if s_match else (e_match.group(1).upper() if e_match else None)
+    season_episode = None
+    
+    # Sabse pehle complex 'S01 E01-04' ya 'S01 E01' format dhoondo
+    full_match = re.search(r'\b(S\d{2})\s(E\d{2}(?:-\d{2})?)\b', normalized_se)
+    if full_match:
+        season_episode = full_match.group(0)
     else:
-        season_episode = se_match.group(1).upper()
+        # Agar dono sath me nahi hain, toh alag-alag check karo (Sirf Episode ya Sirf Season Pack)
+        s_match = re.search(r'\b(S\d{2}(?:-\d{2})?)\b', normalized_se)
+        e_match = re.search(r'\b(E\d{2}(?:-\d{2})?)\b', normalized_se)
+        
+        if s_match and e_match:
+            season_episode = f"{s_match.group(1)} {e_match.group(1)}"
+        elif e_match:
+            season_episode = e_match.group(1) # Sirf Episode save hoga, block nahi karega!
+        elif s_match:
+            season_episode = s_match.group(1) # Sirf Season pack save hoga
 
     resolution = None
     res = re.search(r'(4320p|2160p|1440p|1080p|720p|480p|360p|240p|4k)', scan_lower)
@@ -296,7 +294,6 @@ def extract_languages_quality(text_to_scan):
         if source:
             break
 
-    # 🔥 FIX 1: OTT Loop me re.search use kiya taaki [NF] ya chipka hua tag na chutte
     ott_tag = None
     for platform, aliases in OTT_MAP.items():
         for a in aliases:
@@ -324,7 +321,6 @@ def extract_languages_quality(text_to_scan):
                 extra_tags.append(tag)
                 break
 
-    # === PERFECT ORDER FIX: SINGLE PATTERN SCAN + EXACT CASING ===
     custom_qualifiers = []
     target_keywords = [
         r'\bleak\b', r'\bstudio\b', r'\bdub\b', r'\bdubbed\b',
@@ -366,7 +362,6 @@ def extract_languages_quality(text_to_scan):
             custom_qualifiers.append(word)
             seen_lower.add(word.lower())
 
-    # 🔥 FIX 2: Bhashayein dhoondte waqt re.search lagaya taaki strict regex aliases kaam karein
     languages = []
     for lang, aliases in LANGUAGE_ALIASES.items():
         for a in aliases:
@@ -387,7 +382,7 @@ def extract_languages_quality(text_to_scan):
     }
 
 # =========================================================
-# 5. MAIN ASYNC SAVE PIPELINE (FIXED: Standard Order Design)
+# 5. MAIN ASYNC SAVE PIPELINE
 # =========================================================
 async def save_file(media):
     try:
@@ -414,64 +409,49 @@ async def save_file(media):
                 parts.append(value)
 
         # === FIXED SEQUENCE ASSEMBLER ===
-
-        # [1] Title
         if final_title:
             add_unique(final_title)
 
-        # [2] Season & Episode
         if extracted["season_episode"]:
             add_unique(extracted["season_episode"])
 
-        # [3] Release Year
         if extracted["year"]:
             add_unique(extracted["year"])
 
-        # [4] Video Resolution
         if extracted["resolution"]:
             add_unique(extracted["resolution"])
 
-        # [5] Audio Languages
         for lang in extracted["languages"]:
             add_unique(lang)
 
-        # [6] Custom Qualifiers
         for qual in extracted["custom_qualifiers"]:
             add_unique(qual)
 
-        # [7] Color Depth
         if "10BIT" in extracted["extra_tags"]:
             add_unique("10BIT")
 
-        # 🔥 FIX 3: OTT platform tag direct list insertion taaki add_unique isko skip na kare
         if extracted["ott"]:
             if extracted["ott"] not in parts:
                 parts.append(extracted["ott"])
 
-        # [9] Source Type
         if extracted["source"]:
             add_unique(extracted["source"])
 
-        # [10] Video Codec
         for vcodec in ["HEVC X265", "AVC X264"]:
             if vcodec in extracted["extra_tags"]:
                 add_unique(vcodec)
 
-        # [11] Audio Codec & Channels
         for acodec in ["Atmos 7.1", "Dolby 5.1", "AAC"]:
             if acodec in extracted["extra_tags"]:
                 add_unique(acodec)
 
-        # [12] Subtitles
         for sub in ["ESubs", "HardSubs", "MSubs"]:
             if sub in extracted["extra_tags"]:
                 add_unique(sub)
 
-        # [13] Audio Bitrate
         if extracted["kbps"]:
             add_unique(extracted["kbps"])
 
-        # [14] Branding Signature
         parts = [p for p in parts if p and "Tokyo_Updates" not in str(p)]
         parts.append(RELEASE_TAG)
 
