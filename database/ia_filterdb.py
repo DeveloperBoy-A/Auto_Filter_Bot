@@ -122,37 +122,29 @@ def unpack_new_file_id(new_file_id):
         return None, None
 
 
-
-
-
-import os
-import re
-import logging
-from pymongo.errors import DuplicateKeyError
-
-logger = logging.getLogger(__name__)
-
 # =========================================================
 # 1. GLOBAL CONFIGURATIONS & CLEAN MAPS
 # =========================================================
 RELEASE_TAG = "~[Tokyo_Updates]"
 
 LANGUAGE_ALIASES = {
-    "Hindi": ["hindi", "hin"],
-    "English": ["english", "eng"],
-    "Tamil": ["tamil", "tam"],
-    "Telugu": ["telugu", "tel"],
-    "Malayalam": ["malayalam", "mal"],
-    "Kannada": ["kannada", "kan"],
-    "Punjabi": ["punjabi", "pan"],
-    "Bengali": ["bengali", "ben"],
-    "Gujarati": ["gujarati", "guj"],
-    "Marathi": ["marathi"],
-    "Korean": ["korean", "kor", "kdrama", "k-drama"],
-    "Japanese": ["japanese", "jap"],
-    "Chinese": ["chinese", "mandarin", "chi"],
-    "Dual Audio": ["dual audio", "dual"],
-    "Multi Audio": ["multi audio", "multi"]
+    "Hindi": [r'\bhindi\b', r'\bhin\b'],
+    "English": [r'\benglish\b', r'\beng\b'],
+    "Tamil": [r'\btamil\b', r'\btam\b'],
+    "Telugu": [r'\btelugu\b', r'\btel\b'],
+    "Malayalam": [r'\bmalayalam\b', r'\bmal\b'],
+    "Kannada": [r'\bkannada\b', r'\bkan\b'],
+    "Punjabi": [r'\bpunjabi\b', r'\bpan\b'],
+    "Bengali": [r'\bbengali\b', r'\bben\b'],
+    "Gujarati": [r'\bgujarati\b', r'\bguj\b'],
+    "Marathi": [r'\bmarathi\b'],
+    "Korean": [r'\bkorean\b', r'\bkor\b', r'\bk-drama\b'],
+    "Japanese": [r'\bjapanese\b', r'\bjap\b'],
+    "Chinese": [r'\bchinese\b', r'\bmandarin\b', r'\bchi\b'],
+    
+    # Dual aur Multi ko yahan strictly safe kar diya hai (Hatega nahi)
+    "Dual Audio": [r'\bdual\s?audio\b', r'\bdual\b'],
+    "Multi Audio": [r'\bmulti\s?audio\b', r'\bmulti\b']
 }
 
 OTT_MAP = {
@@ -214,24 +206,46 @@ def extract_pure_title(original_name):
 # =========================================================
 def normalize_season_episode(text):
     text = text.lower()
+    
+    # 1. Dot Separation Fix (e.g., s01.e01 -> s01 e01)
+    text = re.sub(r'\bs(\d{1,2})\.e(\d{1,2})\b', r's\1 e\2', text)
 
-    # 1. Ep (01 08) ya Ep (01-08) jaise formats
-    text = re.sub(r'\bep[\s\-]*\(?(\d+)[\s\-–]+(\d+)\)?', lambda m: f"E{int(m.group(1)):02d}-{int(m.group(2)):02d}", text)
+    # 2. Multi-Episode Range (e.g., s01e01 04, s01e01-04, s01e01_04)
+    text = re.sub(r'\bs(\d{1,2})e(\d{1,2})[\s\-_]+(\d{1,2})\b', lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}-{int(m.group(3)):02d}", text)
 
-    # 2. Baki standard formats
-    text = re.sub(r'(\d+)[xX](\d+)', lambda m: f"S{int(m.group(1)):02d} E{int(m.group(2)):02d}", text)
-    text = re.sub(r'season[\s\-]*(\d+)', lambda m: f"S{int(m.group(1)):02d}", text)
-    text = re.sub(r'\bs[\s\-]*(\d+)', lambda m: f"S{int(m.group(1)):02d}", text)
-    text = re.sub(r'episode[\s\-]*(\d+)', lambda m: f"E{int(m.group(1)):02d}", text)
-    text = re.sub(r'\bep[\s\-]*(\d+)', lambda m: f"E{int(m.group(1)):02d}", text)
-    text = re.sub(r'\be[\s\-]*(\d+)', lambda m: f"E{int(m.group(1)):02d}", text)
-    text = re.sub(r's(\d+)e(\d+)', lambda m: f"S{int(m.group(1)):02d} E{int(m.group(2)):02d}", text)
+    # 3. Bulk Season Range (e.g., s01-s03 ya s01-03)
+    text = re.sub(r'\bs(\d{1,2})[\s\-]+s?(\d{1,2})\b', lambda m: f"s{int(m.group(1)):02d}-{int(m.group(2)):02d}", text)
 
-    return re.sub(r'\s+', ' ', text).strip()
+    # 4. Ep Brackets Range (e.g., Ep (01-08) ya ep_01-08)
+    text = re.sub(r'\bep[\s\-_]*\(?(\d+)[\s\-–]+(\d+)\)?', lambda m: f"e{int(m.group(1)):02d}-{int(m.group(2)):02d}", text)
+
+    # 5. Pure Episode Range Bina Kisi Alphabet Ke (e.g., [01-10] ya h_01-10 - strictly 2 digit ranges)
+    text = re.sub(r'\b(\d{2})[\s\-–]+(\d{2})\b', lambda m: f"e{int(m.group(1)):02d}-{int(m.group(2)):02d}" if int(m.group(1)) < 60 and int(m.group(2)) < 60 else m.group(0), text)
+
+    # 6. Part / Pt Formats (e.g., Part 02, Pt.1, pt-2)
+    text = re.sub(r'\b(part|pt)[\.\-_]*\s?(\d{1,2})\b', lambda m: f"part {int(m.group(2)):02d}", text)
+
+    # 7. Standard 1x05 / 01x05 Formats
+    text = re.sub(r'\b(\d{1,2})[xX](\d{1,2})\b', lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}", text)
+
+    # 8. Standard Season Keywords (e.g., season 01, season-1, s01, s1)
+    text = re.sub(r'\b(?:season|s)[\s\-_]*(\d{1,2})\b', lambda m: f"s{int(m.group(1)):02d}", text)
+
+    # 9. Standard Episode Keywords (e.g., episode 01, ep-1, e1, ep1)
+    text = re.sub(r'\b(?:episode|ep|e)[\s\-_]*(\d{1,2})\b', lambda m: f"e{int(m.group(1)):02d}", text)
+
+    # 10. Direct S01E01 Merge Fix (e.g., s01e01 -> s01 e01)
+    text = re.sub(r'\bs(\d{2})e(\d{2})\b', r's\1 e\2', text)
+
+    # Double spaces clean karein
+    text = re.sub(r'\s+', ' ', text).strip()
+    
+    # Poore output ko Standard UpperCase me bhejein
+    return text.upper()
 
 
 # =========================================================
-# 4. UPDATED DATA EXTRACTOR (FIXED: As-Is Case for Qualifiers & ESubs)
+# 4. UPDATED DATA EXTRACTOR (FIXED: OTT & Language Regex Match)
 # =========================================================
 def extract_languages_quality(text_to_scan):
     scan_lower = text_to_scan.lower()
@@ -282,10 +296,11 @@ def extract_languages_quality(text_to_scan):
         if source:
             break
 
+    # 🔥 FIX 1: OTT Loop me re.search use kiya taaki [NF] ya chipka hua tag na chutte
     ott_tag = None
     for platform, aliases in OTT_MAP.items():
         for a in aliases:
-            if rf"\b{a}\b" in scan_lower or a in scan_lower:
+            if re.search(r'\b' + re.escape(a) + r'\b', scan_lower) or a in scan_lower:
                 ott_tag = platform
                 break
         if ott_tag:
@@ -299,7 +314,6 @@ def extract_languages_quality(text_to_scan):
         "AAC": ["aac"],
         "Dolby 5.1": ["5.1", "6ch", "dd+", "eac3", "dts"], 
         "Atmos 7.1": ["atmos", "truehd", "7.1", "8ch"],
-        # FIXED: Brackets hata kar clean scene formatting
         "ESubs": ["esub", "esubs"], 
         "HardSubs": ["hsub", "hsubs"],
         "MSubs": ["msub", "msubs"]
@@ -313,7 +327,7 @@ def extract_languages_quality(text_to_scan):
     # === PERFECT ORDER FIX: SINGLE PATTERN SCAN + EXACT CASING ===
     custom_qualifiers = []
     target_keywords = [
-        r'\bweb\b', r'\bleak\b', r'\bstudio\b', r'\bdub\b', r'\bdubbed\b',
+        r'\bleak\b', r'\bstudio\b', r'\bdub\b', r'\bdubbed\b',
         r'\bunofficial\b', r'\bre[\s\-]?dub(?:bed)?\b', r'\bfan[\s\-]?dub(?:bed)?\b', 
         r'\bhq[\s\-]?dub(?:bed)?\b', r'\bstudio[\s\-]?dub(?:bed)?\b', r'\bclean[\s\-]?audio\b',
         r'\boriginal[\s\-]?audio\b', r'\bline[\s\-]?audios?\b', r'\bline\b', r'\bmultiplex\b',
@@ -326,48 +340,37 @@ def extract_languages_quality(text_to_scan):
         r'\bv[1-4]\b' 
     ]
 
-    # Saare patterns ko ek single regex mein combine kiya taaki string Left-to-Right ek hi baar mein scan ho
     combined_pattern = re.compile('|'.join(target_keywords), re.IGNORECASE)
-    
     found_matches = []
-    
-    # Pure text par single pass scan
+
     for match in combined_pattern.finditer(scan_lower):
         start_pos = match.start()
         end_pos = match.end()
-        
-        # Original text se case uthaya
         original_string = text_to_scan[start_pos:end_pos].strip()
-        
-        # Words ko split kiya aur unki exact string position dhoondi
         words = re.split(r'[@\[\]\(\)_\.\-\s]+', original_string)
-        
+
         current_offset = 0
         for word in words:
             word_clean = word.strip()
             if word_clean:
-                # File ke andar is sub-word ki exact location nikali
                 exact_word_pos = original_string.find(word_clean, current_offset)
                 actual_index = start_pos + exact_word_pos
-                
                 found_matches.append((actual_index, word_clean))
                 current_offset = exact_word_pos + len(word_clean)
 
-    # Ab sort karne par order 100% wahi rahega jo file name mein left to right hai
     found_matches.sort(key=lambda x: x[0])
 
-    # Case-insensitive duplicate check taaki order lock rahe
     seen_lower = set()
     for position, word in found_matches:
         if word.lower() not in seen_lower:
             custom_qualifiers.append(word)
             seen_lower.add(word.lower())
 
-
+    # 🔥 FIX 2: Bhashayein dhoondte waqt re.search lagaya taaki strict regex aliases kaam karein
     languages = []
     for lang, aliases in LANGUAGE_ALIASES.items():
         for a in aliases:
-            if a in scan_lower:
+            if re.search(a, scan_lower):
                 languages.append(lang)
                 break
 
@@ -411,7 +414,7 @@ async def save_file(media):
                 parts.append(value)
 
         # === FIXED SEQUENCE ASSEMBLER ===
-        
+
         # [1] Title
         if final_title:
             add_unique(final_title)
@@ -424,7 +427,7 @@ async def save_file(media):
         if extracted["year"]:
             add_unique(extracted["year"])
 
-        # [4] Video Resolution (FIXED: Moved up before languages)
+        # [4] Video Resolution
         if extracted["resolution"]:
             add_unique(extracted["resolution"])
 
@@ -432,7 +435,7 @@ async def save_file(media):
         for lang in extracted["languages"]:
             add_unique(lang)
 
-        # [6] Custom Qualifiers (LiNE, V1, V2 etc. with original case)
+        # [6] Custom Qualifiers
         for qual in extracted["custom_qualifiers"]:
             add_unique(qual)
 
@@ -440,9 +443,10 @@ async def save_file(media):
         if "10BIT" in extracted["extra_tags"]:
             add_unique("10BIT")
 
-        # [8] OTT Platform Tag
+        # 🔥 FIX 3: OTT platform tag direct list insertion taaki add_unique isko skip na kare
         if extracted["ott"]:
-            add_unique(extracted["ott"])
+            if extracted["ott"] not in parts:
+                parts.append(extracted["ott"])
 
         # [9] Source Type
         if extracted["source"]:
@@ -458,7 +462,7 @@ async def save_file(media):
             if acodec in extracted["extra_tags"]:
                 add_unique(acodec)
 
-        # [12] Subtitles (FIXED: Clean ESubs / MSubs without brackets)
+        # [12] Subtitles
         for sub in ["ESubs", "HardSubs", "MSubs"]:
             if sub in extracted["extra_tags"]:
                 add_unique(sub)
