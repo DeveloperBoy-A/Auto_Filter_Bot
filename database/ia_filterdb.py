@@ -171,10 +171,16 @@ def extract_pure_title(original_name):
     clean_name = re.sub(r"[._\-]+", " ", clean_name)
 
     stop_anchors = [
-        r'\bS\d{2}\s?E\d{2}\b', r'\bS\d{1,2}\b', r'\bE\d{1,2}\b', 
+        r'\bs\d{1,2}\s?e\d{1,2}\b', # <-- Yeh ab bina space wale S01E02 ko bhi pakdega
+        r'\bs\d{1,2}\b', 
+        r'\be\d{1,2}\b', 
         r'\b(19|20)\d{2}\b',                                      
-        r'\b\d{3,4}p\b', r'\b4k\b',
-        r'\bweb[\s\-]?dl\b', r'\bwebrip\b', r'\bbluray\b', r'\bhdrip\b'
+        r'\b\d{3,4}p\b', 
+        r'\b4k\b',
+        r'\bweb[\s\-]?dl\b', 
+        r'\bwebrip\b', 
+        r'\bbluray\b', 
+        r'\bhdrip\b'
     ]
 
     lower_name = clean_name.lower()
