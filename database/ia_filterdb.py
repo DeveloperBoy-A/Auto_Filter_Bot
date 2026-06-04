@@ -145,9 +145,6 @@ LANGUAGE_ALIASES = {
     "Korean": [r'\bkorean\b', r'\bkor\b', r'\bk-drama\b'],
     "Japanese": [r'\bjapanese\b', r'\bjap\b'],
     "Chinese": [r'\bchinese\b', r'\bmandarin\b', r'\bchi\b']
-    
-    #"Dual Audio": [r'\bdual\s?audio\b', r'\bdual\b'],
-    #"Multi Audio": [r'\bmulti\s?audio\b', r'\bmulti\b']
 }
 
 OTT_MAP = {
@@ -171,7 +168,7 @@ def extract_pure_title(original_name):
     clean_name = re.sub(r"[._\-]+", " ", clean_name)
 
     stop_anchors = [
-        r'\bs\d{1,2}\s?e\d{1,2}\b', # <-- Yeh ab bina space wale S01E02 ko bhi pakdega
+        r'\bs\d{1,2}\s?e\d{1,2}\b', 
         r'\bs\d{1,2}\b', 
         r'\be\d{1,2}\b', 
         r'\b(19|20)\d{2}\b',                                      
@@ -209,35 +206,27 @@ def extract_pure_title(original_name):
 # =========================================================
 def normalize_season_episode(text):
     text = text.lower()
-    
+
     # 1. Dot Separation Fix
     text = re.sub(r'\bs(\d{1,2})\.e(\d{1,2})\b', r's\1 e\2', text)
-
-    # 2. Multi-Episode Range (e.g., s01e01 04, s01e01-04)
+    # 2. Multi-Episode Range
     text = re.sub(r'\bs(\d{1,2})e(\d{1,2})[\s\-_]+(\d{1,2})\b', lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}-{int(m.group(3)):02d}", text)
-
     # 3. Bulk Season Range
     text = re.sub(r'\bs(\d{1,2})[\s\-]+s?(\d{1,2})\b', lambda m: f"s{int(m.group(1)):02d}-{int(m.group(2)):02d}", text)
-
     # 4. Ep Brackets Range
     text = re.sub(r'\bep[\s\-_]*\(?(\d+)[\s\-–]+(\d+)\)?', lambda m: f"e{int(m.group(1)):02d}-{int(m.group(2)):02d}", text)
-
     # 5. Pure Episode Range
     text = re.sub(r'\b(\d{2})[\s\-–]+(\d{2})\b', lambda m: f"e{int(m.group(1)):02d}-{int(m.group(2)):02d}" if int(m.group(1)) < 60 and int(m.group(2)) < 60 else m.group(0), text)
-
-    # 6. Part / Pt Formats
-    text = re.sub(r'\b(part|pt)[\.\-_]*\s?(\d{1,2})\b', lambda m: f"part {int(m.group(2)):02d}", text)
-
-    # 7. Standard 1x05 Formats
+    
+    # 🔥 Part/Pt Format Removed completely to treat it separate from Season/Episode
+    
+    # 6. Standard 1x05 Formats
     text = re.sub(r'\b(\d{1,2})[xX](\d{1,2})\b', lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}", text)
-
-    # 8. Standard Season Keywords
+    # 7. Standard Season Keywords
     text = re.sub(r'\b(?:season|s)[\s\-_]*(\d{1,2})\b', lambda m: f"s{int(m.group(1)):02d}", text)
-
-    # 9. Standard Episode Keywords
+    # 8. Standard Episode Keywords
     text = re.sub(r'\b(?:episode|ep|e)[\s\-_]*(\d{1,2})\b', lambda m: f"e{int(m.group(1)):02d}", text)
-
-    # 10. Direct S01E01 Merge Fix
+    # 9. Direct S01E01 Merge Fix
     text = re.sub(r'\bs(\d{2})e(\d{2})\b', r's\1 e\2', text)
 
     text = re.sub(r'\s+', ' ', text).strip()
@@ -245,7 +234,7 @@ def normalize_season_episode(text):
 
 
 # =========================================================
-# 4. UPDATED DATA EXTRACTOR (FIXED: Complete/Combined Position Shift)
+# 4. UPDATED DATA EXTRACTOR
 # =========================================================
 def extract_languages_quality(text_to_scan):
     scan_lower = text_to_scan.lower()
@@ -256,14 +245,14 @@ def extract_languages_quality(text_to_scan):
     # Pure Episode aur Season Pack Extraction Logic
     normalized_se = normalize_season_episode(text_to_scan)
     season_episode = None
-    
+
     full_match = re.search(r'\b(S\d{2})\s(E\d{2}(?:-\d{2})?)\b', normalized_se)
     if full_match:
         season_episode = full_match.group(0)
     else:
         s_match = re.search(r'\b(S\d{2}(?:-\d{2})?)\b', normalized_se)
         e_match = re.search(r'\b(E\d{2}(?:-\d{2})?)\b', normalized_se)
-        
+
         if s_match and e_match:
             season_episode = f"{s_match.group(1)} {e_match.group(1)}"
         elif e_match:
@@ -271,7 +260,7 @@ def extract_languages_quality(text_to_scan):
         elif s_match:
             season_episode = s_match.group(1)
 
-    # 🔥 FIX 1: Complete / Combined ko alag se pakda taaki episode ke turant baad chipka sakein
+    # Complete / Combined Check
     series_status = None
     status_match = re.search(r'\b(combined|complete)\b', scan_lower)
     if status_match:
@@ -334,7 +323,7 @@ def extract_languages_quality(text_to_scan):
                 extra_tags.append(tag)
                 break
 
-    # Humne target_keywords se combined aur complete ko hata diya hai kyunki unka order upar set kar diya
+    # 🔥 NAYE TAGS YAHAN ADD HUE HAIN (ORGs, HC, DS4K, Multi)
     custom_qualifiers = []
     target_keywords = [
         r'\bleak\b', r'\bstudio\b', r'\bdub\b', r'\bdubbed\b',
@@ -347,7 +336,8 @@ def extract_languages_quality(text_to_scan):
         r'\bspecial[\s\-]?edition\b', r'\btheatrical\b', r'\banniversary\b',
         r'\bhq\b', r'\bhdr\b', r'\bdolby[\s\-]?vision\b', r'\bdv\b', r'\bsdr\b', 
         r'\bhybrid\b', r'\bpatched\b', r'\bcorrected\b', r'\bsoftsub\b',
-        r'\bv[1-4]\b' 
+        r'\bv[1-4]\b',
+        r'\borgs?\b', r'\bhc\b', r'\bds4k\b', r'\bmulti\b'
     ]
 
     combined_pattern = re.compile('|'.join(target_keywords), re.IGNORECASE)
@@ -384,7 +374,6 @@ def extract_languages_quality(text_to_scan):
                 languages.append(lang)
                 break
 
-    # 🔥 YEH NAYA LOGIC CHIPKAO (Language check hone ke thik baad)
     if "Dual Audio" not in languages and "Multi Audio" not in languages:
         if len(languages) == 2 or r'\bdual\b' in scan_lower or r'\bdual\s?audio\b' in scan_lower:
             languages.append("Dual Audio")
@@ -396,12 +385,19 @@ def extract_languages_quality(text_to_scan):
     if kbps:
         kbps_tag = kbps.group(1).upper().replace(" ", "")
 
+    # 🔥 NEW: Extracting Part at the end (Ignores Season/Episode)
+    file_part = None
+    part_match = re.search(r'\b(?:part|pt)[\.\-_]*\s?(\d{1,4})\b', scan_lower)
+    if part_match:
+        file_part = f"Part {part_match.group(1).zfill(2)}"
+
     return {
         "year": year, "season_episode": season_episode, "languages": languages,
         "resolution": resolution, "source": source, "ott": ott_tag, 
         "extra_tags": extra_tags, "kbps": kbps_tag, 
         "custom_qualifiers": custom_qualifiers,
-        "series_status": series_status  # Yahan status pass kiya
+        "series_status": series_status,
+        "file_part": file_part
     }
 
 # =========================================================
@@ -440,7 +436,7 @@ async def save_file(media):
         if extracted["season_episode"]:
             add_unique(extracted["season_episode"])
 
-        # 🔥 [2.5] Series Status (FIXED POSITION: Episode ke Just Baad)
+        # [2.5] Series Status
         if extracted["series_status"]:
             add_unique(extracted["series_status"])
 
@@ -491,6 +487,10 @@ async def save_file(media):
         # [13] Audio Bitrate
         if extracted["kbps"]:
             add_unique(extracted["kbps"])
+
+        # 🔥 [13.5] File Part (Chunks aakhir mein judenge)
+        if extracted.get("file_part"):
+            add_unique(extracted["file_part"])
 
         # [14] Branding Signature
         parts = [p for p in parts if p and "Tokyo_Updates" not in str(p)]
