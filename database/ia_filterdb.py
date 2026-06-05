@@ -159,13 +159,30 @@ OTT_MAP = {
 }
 
 # =========================================================
-# 2. SMART DYNAMIC TITLE EXTRACTOR
+# 2. SMART DYNAMIC TITLE EXTRACTOR (ULTRA SECURE)
 # =========================================================
 def extract_pure_title(original_name):
     clean_name = re.sub(r'^\[.*?\]', '', original_name).strip() 
     clean_name = re.sub(r'^@\w+[\s_\-–]*', '', clean_name).strip()
     clean_name = re.sub(r'[@\[\]\(\)_]+', ' ', clean_name)
     clean_name = re.sub(r"[._\-]+", " ", clean_name)
+
+    # 🔥 SUPER FIX: Shuru me aane wale har tarah ke faltu tags ko filter karna
+    prefix_tags = [
+        r's\d{1,2}(?:-\d{1,2})?', r'e\d{1,2}(?:-\d{1,2})?', # Season & Episode
+        r'\d{3,4}p', r'4k',                                 # Resolution
+        r'(?:19|20)\d{2}',                                  # Year (Agar saal shuru me ho)
+        r'combined', r'complete',                           # Status
+        r'dual[\s\-]?audio', r'multi[\s\-]?audio',          # Audio Types
+        r'hindi', r'english', r'tamil', r'telugu', r'malayalam', r'kannada', r'bengali', r'marathi', r'korean', r'japanese', r'chinese', # All Languages
+        r'web[\-\s]?dl', r'web[\-\s]?rip', r'hdrip', r'bluray', r'brrip', r'dvdrip', r'camrip', r'hdts', r'hdcam', # Sources
+        r'x264', r'x265', r'hevc', r'10bit', r'aac', r'eac3', r'5\.1', r'7\.1', # Codec & Sound
+        r'download', r'watch', r'full[\s\-]?movie', r'web[\s\-]?series', r'new', r'latest', # Fluff words
+        r'netflix', r'amazon', r'prime', r'hotstar', r'zee5', r'sonyliv', r'jio', r'voot', r'altbalaji' # OTT platforms
+    ]
+    
+    prefix_cleanup = r'^(?:(?:' + '|'.join(prefix_tags) + r')[\s_\-]*)+'
+    clean_name = re.sub(prefix_cleanup, '', clean_name, flags=re.IGNORECASE).strip()
 
     stop_anchors = [
         r'\bs\d{1,2}\s?e\d{1,2}\b', 
