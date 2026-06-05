@@ -260,6 +260,9 @@ def extract_languages_quality(text_to_scan):
     year = year_match.group(1) if year_match else None
 
     # Pure Episode aur Season Pack Extraction Logic
+    normalized_se = normalize_season_episode(text_to_scan) # <-- यह लाइन मिसिंग थी, इसे वापस जोड़ दिया है
+    season_episode = None
+
     full_match = re.search(r'\b(S\d{2})\s(E\d{2}(?:-\d{2})?)\b', normalized_se)
     if full_match:
         season_episode = full_match.group(0)
@@ -273,7 +276,6 @@ def extract_languages_quality(text_to_scan):
             season_episode = e_match.group(1)
         elif s_match:
             season_episode = s_match.group(1)
-
     # Complete / Combined Check
     series_status = None
     status_match = re.search(r'\b(combined|complete)\b', scan_lower)
