@@ -202,31 +202,48 @@ def extract_pure_title(original_name):
 
 
 # =========================================================
-# 3. CUSTOM SEASON & EPISODE NORMALIZER
+# 3. CUSTOM SEASON & EPISODE NORMALIZER (ULTRA PRO MAX)
 # =========================================================
 def normalize_season_episode(text):
     text = text.lower()
 
-    # 1. Dot Separation Fix
+    # 1. Dot Separation Fix (s01.e01 -> s01 e01)
     text = re.sub(r'\bs(\d{1,2})\.e(\d{1,2})\b', r's\1 e\2', text)
-    # 2. Multi-Episode Range
-    text = re.sub(r'\bs(\d{1,2})e(\d{1,2})[\s\-_]+(\d{1,2})\b', lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}-{int(m.group(3)):02d}", text)
-    # 3. Bulk Season Range
+    
+    # 2. [NEW] Chipke hue episodes (S01E01E02 -> S01 E01-02)
+    text = re.sub(r'\bs(\d{1,2})e(\d{1,2})e(\d{1,2})\b', lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}-{int(m.group(3)):02d}", text)
+
+    # 3. [NEW] Text based separators (S01 E01 & E02, S01 E01 to 05, S01 E01 and E02)
+    text = re.sub(r'\bs(\d{1,2})[\s\-]*e(\d{1,2})[\s\-_]*(?:&|and|to)[\s\-_]*e?(\d{1,2})\b', lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}-{int(m.group(3)):02d}", text)
+
+    # 4. Standard Multi-Episode Range (S01E01-02, S01 E01 E02, S01E01-E02)
+    text = re.sub(r'\bs(\d{1,2})[\s\-]*e(\d{1,2})[\s\-_]+e?(\d{1,2})\b', lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}-{int(m.group(3)):02d}", text)
+
+    # 5. [NEW] Multi-Episode in 'X' Format (1x01-02, 1x01-1x02)
+    text = re.sub(r'\b(\d{1,2})[xX](\d{1,2})[\s\-_]+(?:\d{1,2}[xX])?(\d{1,2})\b', lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}-{int(m.group(3)):02d}", text)
+
+    # 6. Bulk Season Range (S01-S02 -> S01-02)
     text = re.sub(r'\bs(\d{1,2})[\s\-]+s?(\d{1,2})\b', lambda m: f"s{int(m.group(1)):02d}-{int(m.group(2)):02d}", text)
-    # 4. Ep Brackets Range
+
+    # 7. Ep Brackets Range (Ep [01-02], Ep 01-02)
     text = re.sub(r'\bep[\s\-_]*\(?(\d+)[\s\-–]+(\d+)\)?', lambda m: f"e{int(m.group(1)):02d}-{int(m.group(2)):02d}", text)
-    # 5. Pure Episode Range
+    
+    # 8. [NEW] Pure E01-E02 Range Fix (e01-e02 -> e01-02)
+    text = re.sub(r'\be(\d{1,2})[\s\-–]+e(\d{1,2})\b', lambda m: f"e{int(m.group(1)):02d}-{int(m.group(2)):02d}", text)
+
+    # 9. Pure Number Episode Range (01-02) if both under 60
     text = re.sub(r'\b(\d{2})[\s\-–]+(\d{2})\b', lambda m: f"e{int(m.group(1)):02d}-{int(m.group(2)):02d}" if int(m.group(1)) < 60 and int(m.group(2)) < 60 else m.group(0), text)
-    
-    # 🔥 Part/Pt Format Removed completely to treat it separate from Season/Episode
-    
-    # 6. Standard 1x05 Formats
+
+    # 10. Standard 1x05 Formats
     text = re.sub(r'\b(\d{1,2})[xX](\d{1,2})\b', lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}", text)
-    # 7. Standard Season Keywords
+
+    # 11. Standard Season Keywords
     text = re.sub(r'\b(?:season|s)[\s\-_]*(\d{1,2})\b', lambda m: f"s{int(m.group(1)):02d}", text)
-    # 8. Standard Episode Keywords
+
+    # 12. Standard Episode Keywords
     text = re.sub(r'\b(?:episode|ep|e)[\s\-_]*(\d{1,2})\b', lambda m: f"e{int(m.group(1)):02d}", text)
-    # 9. Direct S01E01 Merge Fix
+
+    # 13. Direct S01E01 Merge Fix
     text = re.sub(r'\bs(\d{2})e(\d{2})\b', r's\1 e\2', text)
 
     text = re.sub(r'\s+', ' ', text).strip()
@@ -243,9 +260,6 @@ def extract_languages_quality(text_to_scan):
     year = year_match.group(1) if year_match else None
 
     # Pure Episode aur Season Pack Extraction Logic
-    normalized_se = normalize_season_episode(text_to_scan)
-    season_episode = None
-
     full_match = re.search(r'\b(S\d{2})\s(E\d{2}(?:-\d{2})?)\b', normalized_se)
     if full_match:
         season_episode = full_match.group(0)
