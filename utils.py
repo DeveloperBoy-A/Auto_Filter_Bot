@@ -737,28 +737,68 @@ async def save_group_settings(group_id, key, value):
 
 
 #CLEAN_FILENAME____🅰️NKIT_Ⓜ️EENA______
+#CLEAN_FILENAME____🅰️NKIT_Ⓜ️EENA______
 
 def clean_filename(file_name):
+
+    # 🔥 NAYA FIX: "Join Us BoBFiles" ya "Us BoBFiles" ko start se hatane ke liye
+    file_name = re.sub(r'^(?:join\s+)?us\s+bobfiles\s*', '', file_name, flags=re.IGNORECASE)
+
+    # Remove ~[Tokyo_Updates]
+    #file_name = re.sub(r'~\[[^\]]*\]', '', file_name)
+
+    # Remove # and $
+    file_name = re.sub(r'[#$]', '', file_name)
+
     # Standard prefixes to remove
-    prefixes = ('[', '@', 'www.', 'ClipmateZone', 'NewMoviesOnTG', 'moviehub4uupdate', 'moviehub4u', 'update', 'New', 'Movies', 'OnTG', 'FILMSCLUB04', 'PremiumHub')
+    prefixes = (
+        '[', '@', 'www.', 'ClipmateZone',
+        'NewMoviesOnTG', 'moviehub4uupdate',
+        'moviehub4u', 'update', 'New',
+        'Movies', 'OnTG', 'FILMSCLUB04',
+        'PremiumHub'
+    )
+
     unwanted = {word.lower() for word in BAD_WORDS}
 
     # Split and Clean
     words = file_name.split()
+
     cleaned_words = [
-        word for word in words 
-        if not (word.startswith(prefixes) or word.lower() in unwanted)
+        word for word in words
+        if not (
+            word.startswith(prefixes)
+            or word.lower() in unwanted
+        )
     ]
-    
-    # .strip() lagane se extra spaces hat jayenge jo italic font trigger kar sakte hain
-    return ' '.join(cleaned_words).strip()
+
+    # Remove extra spaces
+    file_name = ' '.join(cleaned_words).strip()
+
+    # Fix space before extension
+    file_name = re.sub(r'\s+\.', '.', file_name)
+
+    return file_name
+
 
 def remove_prefix_garbage(file_name):
+
+    file_name = re.sub(r'^(?:join\s+)?us\s+bobfiles\s*', '', file_name, flags=re.IGNORECASE)
+
+    # Remove ~[Tokyo_Updates]
+    file_name = re.sub(r'~\[[^\]]*\]', '', file_name)
+
+    # Remove # and $
+    file_name = re.sub(r'[#$]', '', file_name)
+
     prefixes = (
         '[', '@', 'www.', 't.me/', 'telegram.me/',
-        '#', 'ClipmateZone', 'New', 'Movies', 'OnTG', 'moviehub4uupdate', 
-        'moviehub4u', 'update', '@TGCinemaworld -', 'BackupByJaggii'
+        '#', 'ClipmateZone', 'New', 'Movies',
+        'OnTG', 'moviehub4uupdate', 'moviehub4u',
+        'update', '@TGCinemaworld -',
+        'BackupByJaggii'
     )
+
     unwanted = {word.lower() for word in BAD_WORDS}
 
     words = file_name.split()
@@ -766,15 +806,22 @@ def remove_prefix_garbage(file_name):
     cleaned = []
 
     for word in words:
+
         if not start:
             # Check if current word is a prefix or bad word
             if any(word.startswith(p) for p in prefixes) or word.lower() in unwanted:
                 continue
+
             start = True  # Pehla valid title word mil gaya
+
         cleaned.append(word)
 
-    return ' '.join(cleaned).strip()
+    file_name = ' '.join(cleaned).strip()
 
+    # Fix space before extension
+    file_name = re.sub(r'\s+\.', '.', file_name)
+
+    return file_name
 
 def get_size(size):
     units = ["Bytes", "KB", "MB", "GB", "TB", "PB", "EB"]
