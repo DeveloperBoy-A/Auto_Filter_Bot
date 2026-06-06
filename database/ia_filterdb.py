@@ -167,6 +167,10 @@ def extract_pure_title(original_name):
     clean_name = re.sub(r'^@\w+[\s_\-–]*', '', clean_name).strip()
     clean_name = re.sub(r'[@\[\]\(\)_]+', ' ', clean_name)
     clean_name = re.sub(r"[._\-]+", " ", clean_name)
+    # 🔥 NEW FIX: "Us BoBFiles" ya aise aur uploader tags ko shuru se remove karna
+    uploader_tags = [r'(?:join\s+)?us\s*bobfiles'] # Aap yahan aur bhi naam add kar sakte hain comma lagakar
+    uploader_cleanup = r'^(?:(?:' + '|'.join(uploader_tags) + r')[\s]*)+'
+    clean_name = re.sub(uploader_cleanup, '', clean_name, flags=re.IGNORECASE).strip()
 
     # 🔥 SUPER FIX: Shuru me aane wale har tarah ke faltu tags ko filter karna
     prefix_tags = [
