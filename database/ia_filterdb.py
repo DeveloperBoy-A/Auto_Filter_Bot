@@ -158,16 +158,30 @@ OTT_MAP = {
     "APTV": ["apple", "aptv", "apple tv"]
 }
 
+
 # =========================================================
-# 2. SMART DYNAMIC TITLE EXTRACTOR (ULTRA SECURE)
+# 2. SMART DYNAMIC TITLE EXTRACTOR (WITH AUTO-JUNK CLEANER)
 # =========================================================
 def extract_pure_title(original_name):
-    clean_name = re.sub(r'^\[.*?\]', '', original_name).strip() 
-    clean_name = re.sub(r'^@\w+[\s_\-–]*', '', clean_name).strip()
-    clean_name = re.sub(r'[@\[\]\(\)_]+', ' ', clean_name)
-    clean_name = re.sub(r"[._\-]+", " ", clean_name)
+    clean_name = str(original_name).strip()
 
-    # 🔥 SUPER FIX: Shuru me aane wale har tarah ke faltu tags ko filter karna
+    # 🧹 [STEP 1] AUTO-JUNK CLEANER (URLs, Handles, Brackets, Promos)
+    # 1. Websites aur URLs ko hatana (e.g., www.xyz.com, vegamovies.nl)
+    clean_name = re.sub(r'(?i)\b(?:www\.)?[a-zA-Z0-9\-]+\.(?:com|net|org|in|site|sbs|xyz|nl|cc|biz|info|me|tv|run)\b', ' ', clean_name)
+    
+    # 2. Telegram Handles ko hatana (@ChannelName)
+    clean_name = re.sub(r'@[a-zA-Z0-9_]+', ' ', clean_name)
+    
+    # 3. Sabhi brackets aur unke andar ka kachra hatana [1XBET], {Promo}, (Sub)
+    clean_name = re.sub(r'\[.*?\]|\{.*?\}|\(.*?\)', ' ', clean_name)
+    
+    # 4. Chipke hue promo words ko hatana (e.g., MOVIE1, HD2, VIP) jo shuru me aate hain
+    clean_name = re.sub(r'(?i)^(?:movie|hd|vip|top|best|latest|new)\d*[\s_\-]*', '', clean_name)
+
+    # 5. Faltu symbols ko space me convert karna (underscore, dots, dashes)
+    clean_name = re.sub(r'[@\[\]\(\)_\.\-\+]+', ' ', clean_name)
+
+    # 🧹 [STEP 2] PREFIX CLEANER (Shuru ke tags hatana)
     prefix_tags = [
         r's\d{1,2}(?:-\d{1,2})?', r'e\d{1,2}(?:-\d{1,2})?', # Season & Episode
         r'\d{3,4}p', r'4k',                                 # Resolution
@@ -184,6 +198,7 @@ def extract_pure_title(original_name):
     prefix_cleanup = r'^(?:(?:' + '|'.join(prefix_tags) + r')[\s_\-]*)+'
     clean_name = re.sub(prefix_cleanup, '', clean_name, flags=re.IGNORECASE).strip()
 
+    # ✂️ [STEP 3] STOP ANCHORS (Jahan se title katna hai)
     stop_anchors = [
         r'\bs\d{1,2}\s?e\d{1,2}\b', 
         r'\bs\d{1,2}\b', 
@@ -211,6 +226,7 @@ def extract_pure_title(original_name):
     else:
         pure_title = clean_name.strip()
 
+    # 🗣️ [STEP 4] LANGUAGE REMOVAL FROM TITLE END
     for lang, aliases in LANGUAGE_ALIASES.items():
         for alias in aliases:
             pure_title = re.sub(rf'\b{re.escape(alias)}\b$', '', pure_title, flags=re.IGNORECASE).strip()
