@@ -1604,7 +1604,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
             await query.message.edit_reply_markup(reply_markup)
     await query.answer(MSG_ALRT)
 
-#__________________________________
+#___________________________________#___________________________________
 
 def normalize_season(search):
     import re
@@ -1798,7 +1798,7 @@ async def auto_filter(client, msg, spoll=False):
     # Common Headers Jo Dono Modes Me Dikhenge (Code short kiya gaya)
     btn.insert(0, [
         InlineKeyboardButton('Qᴜᴀʟɪᴛʏ', callback_data=f"qualities#{key}"),
-        InlineKeyboardButton("Lᴀɴɢᴜᴀɢะ", callback_data=f"languages#{key}"),
+        InlineKeyboardButton("Lᴀɴɢᴜᴀɢᴇ", callback_data=f"languages#{key}"),
         InlineKeyboardButton("Sᴇᴀsᴏɴ",  callback_data=f"seasons#{key}")
     ])
     btn.insert(0, [
