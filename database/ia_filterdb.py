@@ -14,6 +14,24 @@ from info import *
 from utils import get_settings, save_group_settings, remove_prefix_garbage
 from datetime import datetime, timedelta
 
+# Cover fetch karne ke liye (lazy import to avoid circular imports)
+async def _fetch_cover_url(title: str) -> str | None:
+    """File name se TMDB/IMDB poster URL fetch karo aur return karo."""
+    try:
+        from plugins.Dreamxfutures.Imdbposter import get_movie_detailsx, get_movie_details
+        if TMDB_POSTER and TMDB_API_KEY:
+            details = await get_movie_detailsx(title)
+        else:
+            details = await get_movie_details(title)
+        if not details:
+            return None
+        if LANDSCAPE_POSTER and details.get("backdrop_url"):
+            return details["backdrop_url"]
+        return details.get("poster_url") or details.get("backdrop_url")
+    except Exception as e:
+        logger.warning(f"[COVER] Fetch failed for '{title}': {e}")
+        return None
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -539,6 +557,30 @@ async def save_file(media):
         file_name = file_name + ext.lower()
         file_name = re.sub(r'\s+\.', '.', file_name)
 
+        # ============================================================
+        # 🖼️ COVER IMAGE FETCH
+        # File ka clean title use karke TMDB/IMDB se poster URL fetch karo
+        # Pehle dekho DB mein same title ka cover already hai kya (duplicate fetch se bachne ke liye)
+        # ============================================================
+        cover_url = None
+        if COVERX:
+            try:
+                # Same title ke kisi bhi existing file ka cover check karo
+                existing = await Media.find_one({"file_name": {"$regex": re.escape(final_title), "$options": "i"}, "cover": {"$ne": None}})
+                if not existing:
+                    existing = await Media2.find_one({"file_name": {"$regex": re.escape(final_title), "$options": "i"}, "cover": {"$ne": None}})
+                if existing and existing.cover:
+                    cover_url = existing.cover
+                    logger.info(f"[COVER] Reused existing cover for '{final_title}'")
+                else:
+                    cover_url = await _fetch_cover_url(final_title)
+                    if cover_url:
+                        logger.info(f"[COVER] Fetched new cover for '{final_title}'")
+                    else:
+                        logger.info(f"[COVER] No cover found for '{final_title}'")
+            except Exception as e:
+                logger.warning(f"[COVER] Error during cover lookup: {e}")
+
         # DB Commits
         record = Media(
             file_id=file_id,
@@ -547,10 +589,11 @@ async def save_file(media):
             file_size=media.file_size,
             file_type=media.file_type,
             mime_type=media.mime_type,
-            caption=getattr(media.caption, "html", None) if media.caption else None
+            caption=getattr(media.caption, "html", None) if media.caption else None,
+            cover=cover_url  # 🖼️ Cover URL save ho raha hai
         )
         await record.commit()
-        logger.info(f"[SAVED] {file_name}")
+        logger.info(f"[SAVED] {file_name} | cover={'yes' if cover_url else 'no'}")
         return True, 1
 
     except DuplicateKeyError:
@@ -558,6 +601,7 @@ async def save_file(media):
     except Exception as e:
         logger.exception(f"[ERROR] {e}")
         return False, 3
+
 
 
 
@@ -784,6 +828,43 @@ async def get_bad_files(query, file_type=None):
         files = files1
     total_results = len(files)
     return files, total_results
+
+async def update_cover_url(file_id: str, cover_url: str) -> bool:
+    """
+    Kisi existing file ka cover URL manually update karo.
+    Admin command ya bulk update ke liye useful hai.
+    """
+    try:
+        result = await Media.collection.update_one(
+            {"_id": file_id},
+            {"$set": {"cover": cover_url}}
+        )
+        if result.modified_count:
+            return True
+        result2 = await Media2.collection.update_one(
+            {"_id": file_id},
+            {"$set": {"cover": cover_url}}
+        )
+        return bool(result2.modified_count)
+    except Exception as e:
+        logger.error(f"[COVER] update_cover_url error: {e}")
+        return False
+
+
+async def get_cover_url(file_id: str) -> str | None:
+    """
+    File ID se cover URL fetch karo DB mein se.
+    File send karte waqt use ho sakta hai.
+    """
+    try:
+        details = await get_file_details(file_id)
+        if details:
+            return getattr(details[0], 'cover', None) or details[0].get('cover', None)
+        return None
+    except Exception as e:
+        logger.error(f"[COVER] get_cover_url error: {e}")
+        return None
+
 
 async def get_file_details(query):
     filter = {"file_id": query}
