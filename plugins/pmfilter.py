@@ -1726,15 +1726,15 @@ async def auto_filter(client, msg, spoll=False):
             find = search.split(" ")
             removes = ["in", "upload", "series", "full", "horror", "thriller", "mystery", 
                        "print", "file", "pls", "please", "send", "give", "movie", "movies", 
-                       "new", "latest", "bro", "bruh", "link", "dubbed", "download", 
-                       "subtitle", "subtitles", "anyone", "any", "venum", "iruka", 
+                       "new", "latest", "download in", "bruh", "link", "dubbed", "download", 
+                       "subtitle", "subtitles", ":", "any", "()", "iruka", 
                        "pannunga", "anuppunga", "film", "undo", "kitti", "kitty", "tharu", "&"]
             
             # List comprehension se faltu words ko remove karna
             search = " ".join([x for x in find if x not in removes])
             
             # Regex cleanup (Bache-kuche text variations aur please/bro ko saaf karna)
-            search = re.sub(r"\b(pl(i|e)*?(s|z+|ease|se|ese|(e+)s(e)?)|((send|snd|giv(e)?|gib)(\sme)?)|movie(s)?|new|latest|bro|bruh|broh|helo|that|find|dubbed|link|venum|iruka|pannunga|pannungga|anuppunga|anupunga|anuppungga|anupungga|film|undo|kitti|kitty|tharu|kittumo|kittum|movie|any(one)|download\ssubtitle(s)?)", "", search, flags=re.IGNORECASE)
+            search = re.sub(r"\b(pl(i|e)*?(s|z+|ease|se|ese|(e+)s(e)?)|((send|snd|giv(e)?|gib)(\sme)?)|movie(s)?|new|latest|,|bruh|broh|helo|that|find|dubbed|link|'|iruka|pannunga|pannungga|anuppunga|anupunga|anuppungga|anupungga|film|undo|kitti|kitty|tharu|kittumo|kittum|movie|any(one)|download\ssubtitle(s)?)", "", search, flags=re.IGNORECASE)
             search = re.sub(r"\s+", " ", search).strip()
             search = normalize_for_search(search)
             
