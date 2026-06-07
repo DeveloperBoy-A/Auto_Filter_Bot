@@ -18,12 +18,29 @@ from datetime import datetime, timedelta
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
+# ---------------- Watermark Config ----------------
+WATERMARK_TEXT = "[@Tokyo_Updates]"
+
+# Random color palettes — (text_color, box_color_RGBA)
+WATERMARK_STYLES = [
+    {"text": (255, 255, 255), "box": (101,  67,  33, 210)},   # Dark brown (original)
+    {"text": (255, 255, 255), "box": ( 20,  20,  20, 200)},   # Near black
+    {"text": (255, 255, 255), "box": (139,   0,   0, 210)},   # Dark red
+    {"text": (255, 255, 255), "box": (  0,  70, 127, 210)},   # Dark blue
+    {"text": (255, 255, 255), "box": ( 34, 100,  34, 210)},   # Dark green
+    {"text": (255, 255, 255), "box": ( 80,   0, 120, 210)},   # Dark purple
+    {"text": (255, 255, 255), "box": (180,  90,   0, 210)},   # Dark orange
+    {"text": (  0,   0,   0), "box": (255, 215,   0, 210)},   # Gold box, black text
+]
+
+# Random corner positions
+WATERMARK_POSITIONS = ["bottom_right", "bottom_left", "top_right", "top_left"]
+
 # ---------------- Cover Image Fetcher ----------------
 async def _fetch_cover_url(title: str) -> str | None:
     """
     File ke clean title se poster URL fetch karo.
     Pehle TMDB free public API try hogi, phir IMDB fallback.
-    TMDB_API_KEY na ho toh bhi kaam karta hai.
     """
     import aiohttp
 
@@ -44,7 +61,6 @@ async def _fetch_cover_url(title: str) -> str | None:
                     poster_url = data.get("poster_url")
                     backdrop_url = data.get("backdrop_url")
 
-                    # poster_url images dict se bhi try karo
                     if not poster_url:
                         posters = data.get("images", {}).get("posters", {})
                         for key in ("en", "xx"):
@@ -59,13 +75,20 @@ async def _fetch_cover_url(title: str) -> str | None:
                                 break
 
                     if poster_url or backdrop_url:
-                        # /original/ → /w1280/ for faster load
-                        if poster_url:
-                            poster_url = poster_url.replace("/original/", "/w1280/")
-                        if backdrop_url:
-                            backdrop_url = backdrop_url.replace("/original/", "/w1280/")
-                        details = {"poster_url": poster_url, "backdrop_url": backdrop_url}
-                        logger.info(f"[COVER] TMDB success | poster={poster_url} | backdrop={backdrop_url}")
+                        # ✅ Title match check — galat movie reject karo
+                        result_title = str(data.get("title", "")).lower().strip()
+                        search_words = title.lower().split()
+                        # Search ke pehle 2 main words result mein hone chahiye
+                        main_words = [w for w in search_words if len(w) > 2][:2]
+                        if main_words and not any(w in result_title for w in main_words):
+                            logger.warning(f"[COVER] TMDB title mismatch: searched='{title}' got='{result_title}' — skipping")
+                        else:
+                            if poster_url:
+                                poster_url = poster_url.replace("/original/", "/w1280/")
+                            if backdrop_url:
+                                backdrop_url = backdrop_url.replace("/original/", "/w1280/")
+                            details = {"poster_url": poster_url, "backdrop_url": backdrop_url}
+                            logger.info(f"[COVER] TMDB success | poster={poster_url} | backdrop={backdrop_url}")
                 else:
                     logger.warning(f"[COVER] TMDB status {resp.status} for '{title}'")
     except Exception as e:
@@ -98,6 +121,108 @@ async def _fetch_cover_url(title: str) -> str | None:
     if LANDSCAPE_POSTER and backdrop:
         return backdrop
     return poster or backdrop
+
+
+async def _add_watermark(image_url: str) -> "io.BytesIO | None":
+    """
+    Poster download karo, random position + random color mein
+    [@Tokyo_Updates] watermark lagao, BytesIO return karo.
+    """
+    import io
+    import random
+    import aiohttp
+    from PIL import Image, ImageDraw, ImageFont
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(image_url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                if resp.status != 200:
+                    return None
+                data = await resp.read()
+
+        img = Image.open(io.BytesIO(data)).convert("RGBA")
+        W, H = img.size
+
+        # Random style & position
+        style    = random.choice(WATERMARK_STYLES)
+        position = random.choice(WATERMARK_POSITIONS)
+        text_color = style["text"]
+        box_color  = style["box"]
+
+        # Font size — ~3.5% of image width, min 18px
+        font_size = max(18, int(W * 0.035))
+        try:
+            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf", font_size)
+        except Exception:
+            font = ImageFont.load_default()
+
+        # Text size
+        dummy = ImageDraw.Draw(img)
+        bbox  = dummy.textbbox((0, 0), WATERMARK_TEXT, font=font)
+        tw    = bbox[2] - bbox[0]
+        th    = bbox[3] - bbox[1]
+
+        pad_x, pad_y = int(font_size * 0.6), int(font_size * 0.35)
+        margin       = int(W * 0.025)   # edge margin
+
+        box_w = tw + pad_x * 2
+        box_h = th + pad_y * 2
+
+        # Corner coords
+        corners = {
+            "bottom_right": (W - box_w - margin, H - box_h - margin),
+            "bottom_left":  (margin,              H - box_h - margin),
+            "top_right":    (W - box_w - margin,  margin),
+            "top_left":     (margin,              margin),
+        }
+        x0, y0 = corners[position]
+        x1, y1 = x0 + box_w, y0 + box_h
+
+        # Rounded rectangle on separate RGBA layer (for transparency)
+        overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
+        draw    = ImageDraw.Draw(overlay)
+        radius  = int(box_h * 0.35)
+        draw.rounded_rectangle([x0, y0, x1, y1], radius=radius, fill=box_color)
+
+        # Text centred in box
+        tx = x0 + pad_x
+        ty = y0 + pad_y
+        draw.text((tx, ty), WATERMARK_TEXT, font=font, fill=text_color)
+
+        # Merge
+        img = Image.alpha_composite(img, overlay).convert("RGB")
+
+        out = io.BytesIO()
+        img.save(out, format="JPEG", quality=92)
+        out.seek(0)
+        out.name = "cover.jpg"
+        return out
+
+    except Exception as e:
+        logger.warning(f"[WATERMARK] Failed: {e}")
+        return None
+
+
+async def _upload_cover(bot, image_url: str) -> str | None:
+    """
+    Watermarked poster Telegram ke BIN_CHANNEL mein upload karo,
+    returned file_id cover ke roop mein save ho.
+    """
+    try:
+        wm_image = await _add_watermark(image_url)
+        if not wm_image:
+            # Watermark fail — plain URL hi return karo
+            return image_url
+
+        msg = await bot.send_photo(chat_id=BIN_CHANNEL, photo=wm_image)
+        file_id = msg.photo.file_id
+        logger.info(f"[COVER] Watermarked cover uploaded | file_id={file_id}")
+        return file_id
+    except Exception as e:
+        logger.warning(f"[COVER] Upload failed: {e}")
+        return image_url  # fallback to plain URL
+
+
 
 # ---------------- Global DB cache ----------------
 _db_stats_cache = {"timestamp": None, "primary_size": 0.0}
@@ -202,7 +327,6 @@ def unpack_new_file_id(new_file_id):
     except Exception as e:
         logger.error(f"Failed to unpack file_id: {e}")
         return None, None
-
 
 
 
@@ -522,7 +646,7 @@ def extract_languages_quality(text_to_scan):
 # =========================================================
 # 5. MAIN ASYNC SAVE PIPELINE
 # =========================================================
-async def save_file(media):
+async def save_file(media, bot=None):
     try:
         file_id, file_ref = unpack_new_file_id(media.file_id)
         original_name = str(media.file_name or "Unnamed File")
@@ -622,23 +746,30 @@ async def save_file(media):
         file_name = re.sub(r'\s+\.', '.', file_name)
 
         # ============================================================
-        # 🖼️ COVER IMAGE FETCH
-        # File ka clean title use karke TMDB/IMDB se poster URL fetch karo
-        # Pehle dekho DB mein same title ka cover already hai kya (duplicate fetch se bachne ke liye)
+        # 🖼️ COVER IMAGE — fetch + watermark + upload
         # ============================================================
         cover_url = None
         if COVERX:
             try:
-                # Same title ke kisi bhi existing file ka cover check karo
+                # Same title ki existing cover check karo (reuse)
                 existing = await Media.find_one({"file_name": {"$regex": re.escape(final_title), "$options": "i"}, "cover": {"$ne": None}})
                 if not existing:
                     existing = await Media2.find_one({"file_name": {"$regex": re.escape(final_title), "$options": "i"}, "cover": {"$ne": None}})
+
                 if existing and existing.cover:
                     cover_url = existing.cover
                     logger.info(f"[COVER] Reused existing cover for '{final_title}'")
                 else:
-                    cover_url = await _fetch_cover_url(final_title)
-                    if cover_url:
+                    # Year bhi saath pass karo accurate match ke liye
+                    search_query = f"{final_title} {extracted['year']}" if extracted.get("year") else final_title
+                    raw_url = await _fetch_cover_url(search_query)
+                    if raw_url:
+                        if bot:
+                            # Watermark lagao aur Telegram pe upload karo
+                            cover_url = await _upload_cover(bot, raw_url)
+                        else:
+                            # bot nahi mila toh plain URL hi save karo
+                            cover_url = raw_url
                         logger.info(f"[COVER] Fetched new cover for '{final_title}'")
                     else:
                         logger.info(f"[COVER] No cover found for '{final_title}'")
@@ -665,8 +796,6 @@ async def save_file(media):
     except Exception as e:
         logger.exception(f"[ERROR] {e}")
         return False, 3
-
-
 
 
 
