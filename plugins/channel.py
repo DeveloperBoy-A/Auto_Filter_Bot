@@ -260,7 +260,7 @@ async def media_handler(bot, message):
 
     media.file_type = next(ft for ft in ("document", "video", "audio") if hasattr(message, ft))
     media.caption = message.caption or ""
-    success, info = await save_file(media)
+    success, info = await save_file(media, bot=bot)
     if not success:
         return
 
