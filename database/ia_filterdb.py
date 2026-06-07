@@ -21,33 +21,79 @@ logger.setLevel(logging.INFO)
 # ---------------- Cover Image Fetcher ----------------
 async def _fetch_cover_url(title: str) -> str | None:
     """
-    File ke clean title se TMDB/IMDB poster URL fetch karo.
-    TMDB_API_KEY available hai toh TMDB use hoga, warna IMDB fallback.
+    File ke clean title se poster URL fetch karo.
+    Pehle TMDB free public API try hogi, phir IMDB fallback.
+    TMDB_API_KEY na ho toh bhi kaam karta hai.
     """
-    from plugins.Dreamxfutures.Imdbposter import get_movie_detailsx, get_movie_details
+    import aiohttp
+
     details = None
+
+    # --- Step 1: TMDB (free public worker endpoint, no API key needed) ---
     try:
+        logger.info(f"[COVER] Trying TMDB for: '{title}'")
+        base_url = "https://tmdb.blazeposters.workers.dev/api/movie-posters"
+        params = {"query": title.strip()}
         if TMDB_API_KEY:
-            logger.info(f"[COVER] Trying TMDB for: '{title}'")
-            details = await get_movie_detailsx(title)
-            if details:
-                logger.info(f"[COVER] TMDB response keys: {list(details.keys())}")
-        if not details:
-            logger.info(f"[COVER] Trying IMDB for: '{title}'")
-            details = await get_movie_details(title)
-            if details:
-                logger.info(f"[COVER] IMDB response keys: {list(details.keys())}")
+            params["api_key"] = TMDB_API_KEY
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(base_url, params=params, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    poster_url = data.get("poster_url")
+                    backdrop_url = data.get("backdrop_url")
+
+                    # poster_url images dict se bhi try karo
+                    if not poster_url:
+                        posters = data.get("images", {}).get("posters", {})
+                        for key in ("en", "xx"):
+                            if posters.get(key):
+                                poster_url = posters[key][0]
+                                break
+                    if not backdrop_url:
+                        backdrops = data.get("images", {}).get("backdrops", {})
+                        for key in ("en", "xx"):
+                            if backdrops.get(key):
+                                backdrop_url = backdrops[key][0]
+                                break
+
+                    if poster_url or backdrop_url:
+                        # /original/ → /w1280/ for faster load
+                        if poster_url:
+                            poster_url = poster_url.replace("/original/", "/w1280/")
+                        if backdrop_url:
+                            backdrop_url = backdrop_url.replace("/original/", "/w1280/")
+                        details = {"poster_url": poster_url, "backdrop_url": backdrop_url}
+                        logger.info(f"[COVER] TMDB success | poster={poster_url} | backdrop={backdrop_url}")
+                else:
+                    logger.warning(f"[COVER] TMDB status {resp.status} for '{title}'")
     except Exception as e:
-        logger.warning(f"[COVER] API error for '{title}': {e}")
-        return None
+        logger.warning(f"[COVER] TMDB error for '{title}': {e}")
+
+    # --- Step 2: IMDB fallback ---
+    if not details:
+        try:
+            logger.info(f"[COVER] Trying IMDB for: '{title}'")
+            from plugins.Dreamxfutures.Imdbposter import get_movie_details
+            imdb_data = await get_movie_details(title)
+            if imdb_data and imdb_data.get("poster_url"):
+                details = {
+                    "poster_url": imdb_data.get("poster_url"),
+                    "backdrop_url": None
+                }
+                logger.info(f"[COVER] IMDB success | poster={details['poster_url']}")
+            else:
+                logger.warning(f"[COVER] IMDB also returned nothing for '{title}'")
+        except Exception as e:
+            logger.warning(f"[COVER] IMDB error for '{title}': {e}")
 
     if not details:
-        logger.warning(f"[COVER] Both TMDB & IMDB returned nothing for '{title}'")
+        logger.warning(f"[COVER] No cover found from any source for '{title}'")
         return None
 
     poster = details.get("poster_url")
     backdrop = details.get("backdrop_url")
-    logger.info(f"[COVER] poster_url={poster} | backdrop_url={backdrop}")
 
     if LANDSCAPE_POSTER and backdrop:
         return backdrop
@@ -619,6 +665,8 @@ async def save_file(media):
     except Exception as e:
         logger.exception(f"[ERROR] {e}")
         return False, 3
+
+
 
 
 
