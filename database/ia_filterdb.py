@@ -35,7 +35,7 @@ WATERMARK_STYLES = [
 ]
 
 # Random corner positions
-WATERMARK_POSITIONS = ["bottom_right", "bottom_left", "top_right", "top_left"]
+WATERMARK_POSITIONS = ["bottom_right", "bottom_left", "top_right", "bottom_center"]
 
 # ---------------- Cover Image Fetcher ----------------
 async def _fetch_cover_url(title: str) -> str | None:
