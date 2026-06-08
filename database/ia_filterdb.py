@@ -1,6 +1,7 @@
 import logging
 import os
 import re
+import asyncio
 import base64
 from struct import pack
 from pyrogram.file_id import FileId
@@ -11,7 +12,7 @@ from umongo import Instance, Document, fields
 from motor.motor_asyncio import AsyncIOMotorClient
 from marshmallow import ValidationError
 from info import *
-from utils import get_settings, save_group_settings, remove_prefix_garbage
+from utils import get_settings, save_group_settings, remove_prefix_garbage, temp
 from datetime import datetime, timedelta
 
 # Cover fetch karne ke liye (lazy import to avoid circular imports)
@@ -45,8 +46,9 @@ async def _fetch_cover_url(title: str) -> str | None:
     import aiohttp
 
     details = None
+    session = await _get_session()
 
-    # --- Step 1: TMDB (free public worker endpoint, no API key needed) ---
+    # --- Step 1: TMDB ---
     try:
         logger.info(f"[COVER] Trying TMDB for: '{title}'")
         base_url = "https://tmdb.blazeposters.workers.dev/api/movie-posters"
@@ -54,8 +56,7 @@ async def _fetch_cover_url(title: str) -> str | None:
         if TMDB_API_KEY:
             params["api_key"] = TMDB_API_KEY
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(base_url, params=params, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+        async with session.get(base_url, params=params, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     poster_url = data.get("poster_url")
@@ -135,11 +136,11 @@ async def _add_watermark(image_url: str) -> "io.BytesIO | None":
     from PIL import Image, ImageDraw, ImageFont
 
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(image_url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
-                if resp.status != 200:
-                    return None
-                data = await resp.read()
+        session = await _get_session()
+        async with session.get(image_url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+            if resp.status != 200:
+                return None
+            data = await resp.read()
 
         original = Image.open(io.BytesIO(data)).convert("RGBA")
 
@@ -645,6 +646,51 @@ def extract_languages_quality(text_to_scan):
 # =========================================================
 # 5. MAIN ASYNC SAVE PIPELINE
 # =========================================================
+async def _get_session() -> "aiohttp.ClientSession":
+    """Shared aiohttp session — baar baar naya session banana slow karta hai."""
+    import aiohttp
+    if temp.AIOHTTP_SESSION is None or temp.AIOHTTP_SESSION.closed:
+        temp.AIOHTTP_SESSION = aiohttp.ClientSession()
+    return temp.AIOHTTP_SESSION
+
+
+async def _fetch_and_save_cover(file_id: str, final_title: str, year: str | None, bot=None):
+    """
+    Background task — file save hone ke baad cover fetch + watermark + DB update.
+    Main thread block nahi hota.
+    """
+    try:
+        # Same title ki existing cover check karo (reuse)
+        existing = await Media.find_one(
+            {"file_name": {"$regex": re.escape(final_title), "$options": "i"}, "cover": {"$ne": None}}
+        )
+        if not existing and MULTIPLE_DB:
+            existing = await Media2.find_one(
+                {"file_name": {"$regex": re.escape(final_title), "$options": "i"}, "cover": {"$ne": None}}
+            )
+
+        if existing and existing.cover:
+            cover_url = existing.cover
+            logger.info(f"[COVER] Reused existing cover for '{final_title}'")
+        else:
+            search_query = f"{final_title} {year}" if year else final_title
+            raw_url = await _fetch_cover_url(search_query)
+            if not raw_url:
+                logger.info(f"[COVER] No cover found for '{final_title}'")
+                return
+            cover_url = await _upload_cover(bot, raw_url) if bot else raw_url
+            logger.info(f"[COVER] Fetched new cover for '{final_title}'")
+
+        # DB update
+        await Media.collection.update_one({"_id": file_id}, {"$set": {"cover": cover_url}})
+        if MULTIPLE_DB:
+            await Media2.collection.update_one({"_id": file_id}, {"$set": {"cover": cover_url}})
+        logger.info(f"[COVER] DB updated | file_id={file_id}")
+
+    except Exception as e:
+        logger.warning(f"[COVER] Background task error: {e}")
+
+
 async def save_file(media, bot=None):
     try:
         file_id, file_ref = unpack_new_file_id(media.file_id)
@@ -745,37 +791,18 @@ async def save_file(media, bot=None):
         file_name = re.sub(r'\s+\.', '.', file_name)
 
         # ============================================================
-        # 🖼️ COVER IMAGE — fetch + watermark + upload
+        # 🖼️ COVER IMAGE — background task mein fetch + watermark + upload
+        # save_file instantly return karega, cover baad mein DB update hoga
         # ============================================================
-        cover_url = None
         if COVERX:
-            try:
-                # Same title ki existing cover check karo (reuse)
-                existing = await Media.find_one({"file_name": {"$regex": re.escape(final_title), "$options": "i"}, "cover": {"$ne": None}})
-                if not existing:
-                    existing = await Media2.find_one({"file_name": {"$regex": re.escape(final_title), "$options": "i"}, "cover": {"$ne": None}})
+            asyncio.ensure_future(_fetch_and_save_cover(
+                file_id=file_id,
+                final_title=final_title,
+                year=extracted.get("year"),
+                bot=bot
+            ))
 
-                if existing and existing.cover:
-                    cover_url = existing.cover
-                    logger.info(f"[COVER] Reused existing cover for '{final_title}'")
-                else:
-                    # Year bhi saath pass karo accurate match ke liye
-                    search_query = f"{final_title} {extracted['year']}" if extracted.get("year") else final_title
-                    raw_url = await _fetch_cover_url(search_query)
-                    if raw_url:
-                        if bot:
-                            # Watermark lagao aur Telegram pe upload karo
-                            cover_url = await _upload_cover(bot, raw_url)
-                        else:
-                            # bot nahi mila toh plain URL hi save karo
-                            cover_url = raw_url
-                        logger.info(f"[COVER] Fetched new cover for '{final_title}'")
-                    else:
-                        logger.info(f"[COVER] No cover found for '{final_title}'")
-            except Exception as e:
-                logger.warning(f"[COVER] Error during cover lookup: {e}")
-
-        # DB Commits
+        # DB Commit — cover background mein update hoga
         record = Media(
             file_id=file_id,
             file_ref=file_ref,
@@ -784,10 +811,10 @@ async def save_file(media, bot=None):
             file_type=media.file_type,
             mime_type=media.mime_type,
             caption=getattr(media.caption, "html", None) if media.caption else None,
-            cover=cover_url  # 🖼️ Cover URL save ho raha hai
+            cover=None
         )
         await record.commit()
-        logger.info(f"[SAVED] {file_name} | cover={'yes' if cover_url else 'no'}")
+        logger.info(f"[SAVED] {file_name}")
         return True, 1
 
     except DuplicateKeyError:
@@ -923,17 +950,25 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
     if file_type:
         filter_mongo["file_type"] = file_type
 
-    total_results = await Media.count_documents(filter_mongo)
-    if MULTIPLE_DB:
-        total_results += await Media2.count_documents(filter_mongo)
+    fetch_limit = max(100, offset + max_results)
 
-    fetch_limit = max(100, offset + max_results) 
-    
-    files = await Media.find(filter_mongo).sort("$natural", -1).limit(fetch_limit).to_list(length=fetch_limit)
-    if MULTIPLE_DB and len(files) < fetch_limit:
-        remaining = fetch_limit - len(files)
-        files2 = await Media2.find(filter_mongo).sort("$natural", -1).limit(remaining).to_list(length=remaining)
-        files.extend(files2)
+    # count + find parallel mein — do alag awaits ki jagah ek saath
+    if MULTIPLE_DB:
+        count1, count2, files = await asyncio.gather(
+            Media.count_documents(filter_mongo),
+            Media2.count_documents(filter_mongo),
+            Media.find(filter_mongo).sort("$natural", -1).limit(fetch_limit).to_list(length=fetch_limit)
+        )
+        total_results = count1 + count2
+        if len(files) < fetch_limit:
+            remaining = fetch_limit - len(files)
+            files2 = await Media2.find(filter_mongo).sort("$natural", -1).limit(remaining).to_list(length=remaining)
+            files.extend(files2)
+    else:
+        total_results, files = await asyncio.gather(
+            Media.count_documents(filter_mongo),
+            Media.find(filter_mongo).sort("$natural", -1).limit(fetch_limit).to_list(length=fetch_limit)
+        )
 
     is_series = any(re.search(r"s\d{1,2}.*e\d{1,2}", str(file.file_name).lower()) for file in files)
 
