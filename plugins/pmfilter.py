@@ -2182,246 +2182,148 @@ async def old_auto_filter(client, msg, spoll=False):
 
 #_______________________________________________________ai_spell_check________________________________________________________
 
-async def old_ai_spell_check(chat_id, wrong_name):
-    async def search_movie(wrong_name):
-        search_results = imdb.search_movie(wrong_name)
-        movie_list = [movie['title'] for movie in search_results]
-        return movie_list
-    movie_list = await search_movie(wrong_name)
-    if not movie_list:
-        return
-    for _ in range(4):
-        closest_match = process.extractOne(wrong_name, movie_list)
-        if not closest_match or closest_match[1] <= 70:
-            return
-        movie = closest_match[0]
-        files, _, _ = await get_search_results(chat_id=chat_id, query=movie)
-        if files:
-            return movie
-        movie_list.remove(movie)
-#-----------------------------------#-----------------------------------
 
 async def ai_spell_check(chat_id, wrong_name):
-    async def search_movie(wrong_name):
-        search_results = imdb.search_movie(wrong_name)
-        if not search_results or not hasattr(search_results, "titles"):
-            return []
-        movie_list = [movie.title for movie in search_results.titles]
-        return movie_list
-    movie_list = await search_movie(wrong_name)
+    """
+    Wrong search query ko IMDB mein dhundho aur DB mein match karo.
+    Sabse accurate result return karo.
+    """
+    try:
+        search_results = await asyncio.to_thread(imdb.search_movie, wrong_name.lower())
+        if not search_results or not search_results.titles:
+            return None
+        movie_list = [m.title for m in search_results.titles if m.title]
+    except Exception as e:
+        logger.warning(f"[SPELL] ai_spell_check IMDB error: {e}")
+        return None
+
     if not movie_list:
-        return
-    for _ in range(3):
-        closest_match = process.extractOne(wrong_name, movie_list)
-        if not closest_match or closest_match[1] <= 85:
-            return
-        movie = closest_match[0]
+        return None
+
+    for _ in range(4):
+        result = process.extractOne(wrong_name, movie_list, score_cutoff=70)
+        if not result:
+            return None
+        movie = result[0]
         files, _, _ = await get_search_results(chat_id=chat_id, query=movie)
         if files:
             return movie
         movie_list.remove(movie)
 
+    return None
+
+
 async def advantage_spell_chok(client, message):
-    mv_id = message.id
-    search = message.text
+    """
+    No results mila toh IMDB se similar movies suggest karo buttons mein.
+    Button click pe spol# callback handler search karega.
+    """
+    search = message.text.strip()
     chat_id = message.chat.id
-    settings = await get_settings(chat_id)
-    query = re.sub(
-        r"\b(pl(i|e)*?(s|z+|ease|se|ese|(e+)s(e)?)|((send|snd|giv(e)?|gib)(\sme)?)|movie(s)?|new|latest|br((o|u)h?)*|^h(e|a)?(l)*(o)*|mal(ayalam)?|t(h)?amil|file|that|find|und(o)*|kit(t(i|y)?)?o(w)?|thar(u)?(o)*w?|kittum(o)*|aya(k)*(um(o)*)?|full\smovie|any(one)|with\ssubtitle(s)?)",
-        "", message.text, flags=re.IGNORECASE)
-    query = query.strip() + " movie"
+
+    # Faltu words hatao query se
+    clean_query = re.sub(
+        r"\b(pl(i|e)*?(s|z+|ease|se|ese|(e+)s(e)?)|((send|snd|giv(e)?|gib)(\sme)?)"
+        r"|movie(s)?|new|latest|br((o|u)h?)*|^h(e|a)?(l)*(o)*|mal(ayalam)?"
+        r"|t(h)?amil|file|that|find|und(o)*|kit(t(i|y)?)?o(w)?|thar(u)?(o)*w?"
+        r"|kittum(o)*|aya(k)*(um(o)*)?|full\smovie|any(one)|with\ssubtitle(s)?)\b",
+        "", search, flags=re.IGNORECASE
+    ).strip()
+
+    if not clean_query:
+        clean_query = search
+
     try:
-        movies = await get_poster(search, bulk=True)
+        search_results = await asyncio.to_thread(imdb.search_movie, clean_query.lower())
     except Exception as e:
-        logger.exception("get_poster failed for query=%s: %s", query, e)
-        try:
-            k = await message.reply(script.I_CUDNT.format(message.from_user.mention))
-            await asyncio.sleep(60)
-            try:
-                await k.delete()
-            except Exception:
-                pass
-        except Exception:
-            pass
-        try:
-            await message.delete()
-        except Exception:
-            pass
-        return
-    if not movies:
+        logger.warning(f"[SPELL] advantage_spell_chok IMDB error: {e}")
+        search_results = None
+
+    if not search_results or not search_results.titles:
         google = quote_plus(search)
-        button = [[InlineKeyboardButton(
-            "🔍 ᴄʜᴇᴄᴋ sᴘᴇʟʟɪɴɢ ᴏɴ ɢᴏᴏɢʟᴇ 🔍", url=f"https://www.google.com/search?q={google}")]]
-        k = await message.reply_text(text=script.I_CUDNT.format(search), reply_markup=InlineKeyboardMarkup(button))
+        btn = [[InlineKeyboardButton("🔍 ᴄʜᴇᴄᴋ ꜱᴘᴇʟʟɪɴɢ ᴏɴ ɢᴏᴏɢʟᴇ 🔍",
+                                     url=f"https://www.google.com/search?q={google}")]]
+        k = await message.reply_text(
+            text=script.I_CUDNT.format(search),
+            reply_markup=InlineKeyboardMarkup(btn)
+        )
         await asyncio.sleep(60)
-        await k.delete()
-        try:
-            await message.delete()
-        except:
-            pass
-        return
-    user = message.from_user.id if message.from_user else 0
-    buttons = [
-        [InlineKeyboardButton(text=movie.title, callback_data=f"spol#{movie.imdb_id}#{user}")
-         ] for movie in movies]
-
-    buttons.append([InlineKeyboardButton(
-        text="🚫 ᴄʟᴏsᴇ 🚫", callback_data='close_data')])
-    d = await message.reply_text(text=script.CUDNT_FND.format(message.from_user.mention), reply_markup=InlineKeyboardMarkup(buttons), reply_to_message_id=message.id)
-    await asyncio.sleep(60)
-    await d.delete()
-    try:
-        await message.delete()
-    except:
-        pass
-
-
-async def old_advantage_spell_chok(client, message):
-    mv_id = message.id
-    search = message.text
-    chat_id = message.chat.id
-    settings = await get_settings(chat_id)
-    query = re.sub(
-        r"\b(pl(i|e)*?(s|z+|ease|se|ese|(e+)s(e)?)|((send|snd|giv(e)?|gib)(\sme)?)|movie(s)?|new|latest|br((o|u)h?)*|^h(e|a)?(l)*(o)*|mal(ayalam)?|t(h)?amil|file|that|find|und(o)*|kit(t(i|y)?)?o(w)?|thar(u)?(o)*w?|kittum(o)*|aya(k)*(um(o)*)?|full\smovie|any(one)|with\ssubtitle(s)?)",
-        "", message.text, flags=re.IGNORECASE)
-    query = query.strip() + " movie"
-    try:
-        movies = await get_poster(search, bulk=True)
-    except:
-        k = await message.reply(script.I_CUDNT.format(message.from_user.mention))
-        await asyncio.sleep(60)
-        await k.delete()
-        try:
-            await message.delete()
-        except:
-            pass
-        return
-    if not movies:
-        google = search.replace(" ", "+")
-        button = [[InlineKeyboardButton(
-            "🔍 ᴄʜᴇᴄᴋ sᴘᴇʟʟɪɴɢ ᴏɴ ɢᴏᴏɢʟᴇ 🔍", url=f"https://www.google.com/search?q={google}")]]
-        k = await message.reply_text(text=script.I_CUDNT.format(search), reply_markup=InlineKeyboardMarkup(button))
-        await asyncio.sleep(60)
-        await k.delete()
-        try:
-            await message.delete()
-        except:
-            pass
-        return
-    user = message.from_user.id if message.from_user else 0
-    buttons = [
-        [InlineKeyboardButton(text=movie.get('title'), callback_data=f"spol#{movie.movieID}#{user}")
-         ] for movie in movies]
-
-    buttons.append([InlineKeyboardButton(
-        text="🚫 ᴄʟᴏsᴇ 🚫", callback_data='close_data')])
-    d = await message.reply_text(text=script.CUDNT_FND.format(message.from_user.mention), reply_markup=InlineKeyboardMarkup(buttons), reply_to_message_id=message.id)
-    await asyncio.sleep(60)
-    await d.delete()
-    try:
-        await message.delete()
-    except:
-        pass
-
-
-
-# --- ADVANTAGE SPELL CHECK FUNCTION ---
-
-async def old_advantage_spell_chok(client, message):
-    mv_id = message.id
-    search = message.text
-    chat_id = message.chat.id
-    
-    # Settings handle karne ke liye (agar get_settings fail ho jaye toh error na aaye)
-    try:
-        settings = await get_settings(chat_id)
-    except:
-        settings = {}
-
-    # Cleaning the query (Faltu words nikalne ke liye)
-    query = re.sub(
-        r"\b(pl(i|e)*?(s|z+|ease|se|ese|(e+)s(e)?)|((send|snd|giv(e)?|gib)(\sme)?)|movie(s)?|new|latest|br((o|u)h?)*|^h(e|a)?(l)*(o)*|mal(ayalam)?|t(h)?amil|file|that|find|und(o)*|kit(t(i|y)?)?o(w)?|thar(u)?(o)*w?|kittum(o)*|aya(k)*(um(o)*)?|full\smovie|any(one)|with\ssubtitle(s)?)",
-        "", message.text, flags=re.IGNORECASE)
-    query = query.strip()
-
-    try:
-        # Search ke liye cleaned 'query' use karna behtar hai
-        movies = await get_poster(query, bulk=True)
-    except Exception as e:
-        print(f"Error fetching posters: {e}")
-        k = await message.reply(script.I_CUDNT.format(message.from_user.mention))
-        await asyncio.sleep(60)
-        await k.delete()
+        try: await k.delete()
+        except: pass
+        try: await message.delete()
+        except: pass
         return
 
-    # Agar koi result na mile
-    if not movies:
-        google = search.replace(" ", "+")
-        button = [[InlineKeyboardButton(
-            "🔍 ᴄʜᴇᴄᴋ sᴘᴇʟʟɪɴɢ ᴏɴ ɢᴏᴏɢʟᴇ 🔍", url=f"https://www.google.com/search?q={google}")]]
-        k = await message.reply_text(text=script.I_CUDNT.format(search), reply_markup=InlineKeyboardMarkup(button))
-        await asyncio.sleep(60)
-        await k.delete()
-        return
+    user_id = message.from_user.id if message.from_user else 0
+    current_year = datetime.now().year
 
-    user = message.from_user.id if message.from_user else 0
-    
-    # SAHI LOGIC: datetime.now().year use karein kyunki aapka import 'from datetime import datetime' hai
-    current_year = datetime.now().year 
+    # Filter — sirf movie/series, garbage types nahi
+    allowed_kinds = {'movie', 'tv series', 'tvSeries', 'tvMiniSeries', 'tvMovie', 'series', 'web series'}
     buttons = []
 
-    for movie in movies:
-        # Movie ka type check karein
-        # IMDb aksar ye types bhejta hai: 'movie', 'tv series', 'tv mini series', 'video game', 'podcast'
-        m_kind = getattr(movie, 'kind', movie.get('kind', 'movie')).lower()
-        
-        # --- FILTER LOGIC ---
-        # Sirf movie aur series ko allow karein, baki sab skip (ignore) karein
-        allowed_kinds = ['movie', 'tv series', 'tv mini series', 'series', 'web series']
+    for movie in search_results.titles[:10]:
+        m_kind = str(getattr(movie, 'kind', 'movie')).lower()
         if m_kind not in allowed_kinds:
-            continue  # Agar podcast ya news hai to loop agli movie par chala jayega
+            continue
 
-        m_title = movie.get('title')
-        m_year_raw = str(movie.get('year', '')).strip()
-        m_id = getattr(movie, 'movieID', None) or movie.get('id')
+        m_title = getattr(movie, 'title', None)
+        if not m_title:
+            continue
 
-        # Year nikalne ka logic (Regex se)
-        year_int = None
-        clean_year = re.sub(r"\D", "", m_year_raw)[:4]
-        if clean_year:
-            year_int = int(clean_year)
+        m_year = getattr(movie, 'year', None)
+        # imdb_id — always "tt" prefix ensure karo
+        raw_id = getattr(movie, 'imdb_id', None) or getattr(movie, 'movieID', None)
+        if not raw_id:
+            continue
+        m_id = str(raw_id)
+        if not m_id.startswith("tt"):
+            m_id = f"tt{m_id}"
 
-        # 'Expected' aur 'Coming Soon' logic
-        # 2026 current year hai, isliye >= current_year use kiya hai
-        if "expected" in m_year_raw.lower() or (year_int and year_int >= current_year):
-            btn_text = f"•✅ {m_title} 🕒 Coming Soon ({year_int if year_int else 'TBA'})"
-        elif year_int:
-            btn_text = f"•✅ {m_title} ({year_int})"
+        # Button text with year
+        if m_year:
+            try:
+                yr = int(str(m_year)[:4])
+                if yr >= current_year:
+                    btn_text = f"• {m_title} 🕒 Coming Soon ({yr})"
+                else:
+                    btn_text = f"• {m_title} ({yr})"
+            except:
+                btn_text = f"• {m_title}"
         else:
-            btn_text = f"•✅ {m_title}"
+            btn_text = f"• {m_title}"
 
-        buttons.append([InlineKeyboardButton(text=btn_text, callback_data=f"spol#{m_id}#{user}")])
+        # callback_data max 64 bytes — trim karo
+        cb = f"spol#{m_id}#{user_id}"
+        if len(cb.encode()) > 64:
+            continue
 
-    # Close button
+        buttons.append([InlineKeyboardButton(text=btn_text, callback_data=cb)])
+
+    if not buttons:
+        google = quote_plus(search)
+        btn = [[InlineKeyboardButton("🔍 ᴄʜᴇᴄᴋ ꜱᴘᴇʟʟɪɴɢ ᴏɴ ɢᴏᴏɢʟᴇ 🔍",
+                                     url=f"https://www.google.com/search?q={google}")]]
+        k = await message.reply_text(
+            text=script.I_CUDNT.format(search),
+            reply_markup=InlineKeyboardMarkup(btn)
+        )
+        await asyncio.sleep(60)
+        try: await k.delete()
+        except: pass
+        return
+
     buttons.append([InlineKeyboardButton(text="🚫 ᴄʟᴏsᴇ 🚫", callback_data='close_data')])
 
     try:
         d = await message.reply_text(
-            text=script.CUDNT_FND.format(message.from_user.mention), 
-            reply_markup=InlineKeyboardMarkup(buttons), 
+            text=script.CUDNT_FND.format(message.from_user.mention),
+            reply_markup=InlineKeyboardMarkup(buttons),
             reply_to_message_id=message.id
         )
-        
-        # 60 seconds baad delete karne ka logic
         await asyncio.sleep(60)
-        await d.delete()
-        try:
-            await message.delete()
-        except:
-            pass
+        try: await d.delete()
+        except: pass
+        try: await message.delete()
+        except: pass
     except Exception as e:
-        print(f"Error sending buttons: {e}")
-
-
-
-
+        logger.warning(f"[SPELL] Error sending suggestion buttons: {e}")
