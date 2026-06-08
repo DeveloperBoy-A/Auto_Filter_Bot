@@ -172,10 +172,11 @@ async def _add_watermark(image_url: str) -> "io.BytesIO | None":
         box_h = th + pad_y * 2
 
         corners = {
-            "bottom_right": (W - box_w - margin, H - box_h - margin),
-            "bottom_left":  (margin,              H - box_h - margin),
-            "top_right":    (W - box_w - margin,  margin),
-            "top_left":     (margin,              margin),
+            "bottom_right":  (W - box_w - margin,          H - box_h - margin),
+            "bottom_left":   (margin,                       H - box_h - margin),
+            "top_right":     (W - box_w - margin,           margin),
+            "top_left":      (margin,                       margin),
+            "bottom_center": ((W - box_w) // 2,             H - box_h - margin),
         }
         x0, y0 = corners[position]
         x1, y1 = x0 + box_w, y0 + box_h
@@ -391,7 +392,7 @@ def extract_pure_title(original_name):
         r'download', r'watch', r'full[\s\-]?movie', r'web[\s\-]?series', r'new', r'latest', # Fluff words
         r'netflix', r'amazon', r'prime', r'hotstar', r'zee5', r'sonyliv', r'jio', r'voot', r'altbalaji' # OTT platforms
     ]
-    
+
     prefix_cleanup = r'^(?:(?:' + '|'.join(prefix_tags) + r')[\s_\-]*)+'
     clean_name = re.sub(prefix_cleanup, '', clean_name, flags=re.IGNORECASE).strip()
 
@@ -436,7 +437,7 @@ def normalize_season_episode(text):
 
     # 1. Dot Separation Fix (s01.e01 -> s01 e01)
     text = re.sub(r'\bs(\d{1,2})\.e(\d{1,2})\b', r's\1 e\2', text)
-    
+
     # 2. [NEW] Chipke hue episodes (S01E01E02 -> S01 E01-02)
     text = re.sub(r'\bs(\d{1,2})e(\d{1,2})e(\d{1,2})\b', lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}-{int(m.group(3)):02d}", text)
 
@@ -454,7 +455,7 @@ def normalize_season_episode(text):
 
     # 7. Ep Brackets Range (Ep [01-02], Ep 01-02)
     text = re.sub(r'\bep[\s\-_]*\(?(\d+)[\s\-–]+(\d+)\)?', lambda m: f"e{int(m.group(1)):02d}-{int(m.group(2)):02d}", text)
-    
+
     # 8. [NEW] Pure E01-E02 Range Fix (e01-e02 -> e01-02)
     text = re.sub(r'\be(\d{1,2})[\s\-–]+e(\d{1,2})\b', lambda m: f"e{int(m.group(1)):02d}-{int(m.group(2)):02d}", text)
 
@@ -864,7 +865,7 @@ def extract_season_episode(name):
     name = name.lower()
     s = re.search(r"\bs(?:eason)?[\s._-]*(\d{1,2})", name)
     e = re.search(r"\be(?:pisode|p)?[\s._-]*(\d{1,2})", name)
-    
+
     season = int(s.group(1)) if s else 0
     episode = int(e.group(1)) if e else 0
     return season, episode
@@ -929,12 +930,12 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
     for q in query:
         q = q.strip()
         if not q: continue
-        
+
         # 🔥 यहाँ सुधार है: शब्दों को अलग करके उनके बीच वाइल्डकार्ड (.*) लगा रहे हैं।
         # इससे "jana", "nayagan" और "hindi" के बीच में कुछ भी लिखा हो (जैसे साल या क्वालिटी), मोंगोडीबी उसे ढूँढ लेगा।
         words = q.split()
         pattern = r'.*'.join(re.escape(w) for w in words)
-        
+
         try:
             regex_list.append(re.compile(pattern, re.IGNORECASE))
         except re.error:
@@ -982,7 +983,7 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
             key=lambda x: (
                 # 1. क्या फ़ाइल का नाम यूज़र की पूरी क्वेरी से शुरू होता है?
                 not (re.match(rf"^[\s._\-\[\(]*{re.escape(original_query)}", x.file_name.lower())),
-                
+
                 # 1b. बैकअप: क्या फ़ाइल का नाम कम से कम पहले शब्द से शुरू होता है?
                 not (re.match(rf"^[\s._\-\[\(]*{re.escape(first_word)}", x.file_name.lower())),
 
@@ -1006,7 +1007,7 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
             key=lambda x: (
                 # 1. क्या फ़ाइल का नाम यूज़र की पूरी क्वेरी से शुरू होता है?
                 not (re.match(rf"^[\s._\-\[\(]*{re.escape(original_query)}", x.file_name.lower())),
-                
+
                 # 1b. बैकअप: क्या फ़ाइल का नाम कम से कम पहले शब्द से शुरू होता है?
                 not (re.match(rf"^[\s._\-\[\(]*{re.escape(first_word)}", x.file_name.lower())),
 
