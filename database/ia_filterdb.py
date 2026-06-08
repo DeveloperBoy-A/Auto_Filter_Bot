@@ -118,15 +118,16 @@ async def _fetch_cover_url(title: str) -> str | None:
     poster = details.get("poster_url")
     backdrop = details.get("backdrop_url")
 
-    if LANDSCAPE_POSTER and backdrop:
+    # Hamesha landscape (backdrop) prefer karo — portrait convert se better quality
+    if backdrop:
         return backdrop
-    return poster or backdrop
+    return poster
 
 
 async def _add_watermark(image_url: str) -> "io.BytesIO | None":
     """
-    Poster download karo, random position + random color mein
-    [@Tokyo_Updates] watermark lagao, BytesIO return karo.
+    Landscape poster download karo aur watermark lagao.
+    TMDB se hamesha backdrop (landscape) fetch hoga.
     """
     import io
     import random
@@ -140,35 +141,35 @@ async def _add_watermark(image_url: str) -> "io.BytesIO | None":
                     return None
                 data = await resp.read()
 
-        img = Image.open(io.BytesIO(data)).convert("RGBA")
+        original = Image.open(io.BytesIO(data)).convert("RGBA")
+
+        # Resize to 1280x720 (16:9 landscape)
+        TARGET_W, TARGET_H = 1280, 720
+        img = original.resize((TARGET_W, TARGET_H), Image.LANCZOS)
         W, H = img.size
 
-        # Random style & position
-        style    = random.choice(WATERMARK_STYLES)
-        position = random.choice(WATERMARK_POSITIONS)
+        # ── Watermark ────────────────────────────────────────────────────
+        style      = random.choice(WATERMARK_STYLES)
+        position   = random.choice(WATERMARK_POSITIONS)
         text_color = style["text"]
         box_color  = style["box"]
 
-        # Font size — ~3.5% of image width, min 18px
-        font_size = max(18, int(W * 0.035))
+        font_size = max(22, int(W * 0.042))
         try:
             font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf", font_size)
         except Exception:
             font = ImageFont.load_default()
 
-        # Text size
         dummy = ImageDraw.Draw(img)
         bbox  = dummy.textbbox((0, 0), WATERMARK_TEXT, font=font)
         tw    = bbox[2] - bbox[0]
         th    = bbox[3] - bbox[1]
 
         pad_x, pad_y = int(font_size * 0.6), int(font_size * 0.35)
-        margin       = int(W * 0.025)   # edge margin
-
+        margin       = int(W * 0.025)
         box_w = tw + pad_x * 2
         box_h = th + pad_y * 2
 
-        # Corner coords
         corners = {
             "bottom_right": (W - box_w - margin, H - box_h - margin),
             "bottom_left":  (margin,              H - box_h - margin),
@@ -178,19 +179,13 @@ async def _add_watermark(image_url: str) -> "io.BytesIO | None":
         x0, y0 = corners[position]
         x1, y1 = x0 + box_w, y0 + box_h
 
-        # Rounded rectangle on separate RGBA layer (for transparency)
         overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
         draw    = ImageDraw.Draw(overlay)
         radius  = int(box_h * 0.35)
         draw.rounded_rectangle([x0, y0, x1, y1], radius=radius, fill=box_color)
+        draw.text((x0 + pad_x, y0 + pad_y), WATERMARK_TEXT, font=font, fill=text_color)
 
-        # Text centred in box
-        tx = x0 + pad_x
-        ty = y0 + pad_y
-        draw.text((tx, ty), WATERMARK_TEXT, font=font, fill=text_color)
-
-        # Merge
-        img = Image.alpha_composite(img, overlay).convert("RGB")
+        img = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
 
         out = io.BytesIO()
         img.save(out, format="JPEG", quality=92)
@@ -327,6 +322,7 @@ def unpack_new_file_id(new_file_id):
     except Exception as e:
         logger.error(f"Failed to unpack file_id: {e}")
         return None, None
+
 
 
 
