@@ -76,10 +76,9 @@ async def _fetch_cover_url(title: str) -> str | None:
                                 break
 
                     if poster_url or backdrop_url:
-                        # ✅ Title match check — galat movie reject karo
+                        # Title match check
                         result_title = str(data.get("title", "")).lower().strip()
                         search_words = title.lower().split()
-                        # Search ke pehle 2 main words result mein hone chahiye
                         main_words = [w for w in search_words if len(w) > 2][:2]
                         if main_words and not any(w in result_title for w in main_words):
                             logger.warning(f"[COVER] TMDB title mismatch: searched='{title}' got='{result_title}' — skipping")
@@ -119,17 +118,12 @@ async def _fetch_cover_url(title: str) -> str | None:
     poster = details.get("poster_url")
     backdrop = details.get("backdrop_url")
 
-    # Hamesha landscape (backdrop) prefer karo — portrait convert se better quality
     if backdrop:
         return backdrop
     return poster
 
 
 async def _add_watermark(image_url: str) -> "io.BytesIO | None":
-    """
-    Landscape poster download karo aur watermark lagao.
-    TMDB se hamesha backdrop (landscape) fetch hoga.
-    """
     import io
     import random
     import aiohttp
@@ -144,12 +138,10 @@ async def _add_watermark(image_url: str) -> "io.BytesIO | None":
 
         original = Image.open(io.BytesIO(data)).convert("RGBA")
 
-        # Resize to 1280x720 (16:9 landscape)
         TARGET_W, TARGET_H = 1280, 720
         img = original.resize((TARGET_W, TARGET_H), Image.LANCZOS)
         W, H = img.size
 
-        # ── Watermark ────────────────────────────────────────────────────
         style      = random.choice(WATERMARK_STYLES)
         position   = random.choice(WATERMARK_POSITIONS)
         text_color = style["text"]
@@ -201,10 +193,6 @@ async def _add_watermark(image_url: str) -> "io.BytesIO | None":
 
 
 async def _upload_cover(bot, image_url: str) -> str | None:
-    """
-    COVER_WATERMARK=True  → watermark lagao aur Telegram pe upload karo
-    COVER_WATERMARK=False → plain URL hi save karo
-    """
     try:
         if not COVER_WATERMARK:
             logger.info(f"[COVER] Watermark OFF — plain URL save ho raha hai")
@@ -223,17 +211,14 @@ async def _upload_cover(bot, image_url: str) -> str | None:
         return image_url
 
 
-
 # ---------------- Global DB cache ----------------
 _db_stats_cache = {"timestamp": None, "primary_size": 0.0}
 
 # ---------------- DB Setup ----------------
-# Primary DB
 client = AsyncIOMotorClient(DATABASE_URI)
 db = client[DATABASE_NAME]
 instance = Instance.from_db(db)
 
-# Secondary DB
 client2 = AsyncIOMotorClient(DATABASE_URI2)
 db2 = client2[DATABASE_NAME]
 instance2 = Instance.from_db(db2)
@@ -329,10 +314,6 @@ def unpack_new_file_id(new_file_id):
         return None, None
 
 
-
-
-
-
 # =========================================================
 # 1. GLOBAL CONFIGURATIONS & CLEAN MAPS
 # =========================================================
@@ -345,24 +326,38 @@ LANGUAGE_ALIASES = {
     "Telugu": [r'\btelugu\b', r'\btel\b'],
     "Malayalam": [r'\bmalayalam\b', r'\bmal\b'],
     "Kannada": [r'\bkannada\b', r'\bkan\b'],
-    "Punjabi": [r'\bpunjabi\b', r'\bpan\b'],
+    "Punjabi": [r'\bpunjabi\b', r'\bpan\b', r'\bpbi\b'],
     "Bengali": [r'\bbengali\b', r'\bben\b'],
-    "Gujarati": [r'\bgujarati\b', r'\bguj\b'],
-    "Marathi": [r'\bmarathi\b'],
-    "Korean": [r'\bkorean\b', r'\bkor\b', r'\bk-drama\b'],
+    "Gujarati": [r'\bgujarati\b', r'\bguj\b', r'\bgujrat\b', r'\bgujrati\b'],
+    "Marathi": [r'\bmarathi\b', r'\bmar\b'],
+    "Korean": [r'\bkorean\b', r'\bkor\b', r'\bk-drama\b', r'\bkdrama\b'],
     "Japanese": [r'\bjapanese\b', r'\bjap\b'],
-    "Chinese": [r'\bchinese\b', r'\bmandarin\b', r'\bchi\b']
+    "Chinese": [r'\bchinese\b', r'\bmandarin\b', r'\bchi\b'],
+    "Spanish": [r'\bspanish\b', r'\besp\b', r'\bspa\b'],
+    "Russian": [r'\brussian\b', r'\brus\b'],
+    "French": [r'\bfrench\b', r'\bfre\b', r'\bfra\b'],
+    "Urdu": [r'\burdu\b'],
+    "Bhojpuri": [r'\bbhojpuri\b', r'\bbho\b']
 }
 
 OTT_MAP = {
     "NF": ["netflix", "nf"],
     "AMZN": ["amazon", "amzn", "prime"],
     "DSNP": ["hotstar", "disney", "dsnp"],
-    "JIO": ["jiocinema", "jio"],
+    "JIO": ["jiocinema", "jio", "jc"],
     "ZEE5": ["zee5", "zee"],
     "LIV": ["sonyliv", "liv"],
-    "HMAX": ["hbomax", "hbo", "hmax"],
-    "APTV": ["apple", "aptv", "apple tv"]
+    "HMAX": ["hbomax", "hbo", "hmax", "max"],
+    "APTV": ["apple", "aptv", "apple tv"],
+    "HULU": ["hulu"],
+    "PMNT": ["paramount", "pmnt", "paramount+"],
+    "PEACOCK": ["peacock", "pcok"],
+    "AHA": ["aha", "aha video"],
+    "SUNNXT": ["sunnxt", "sun nxt"],
+    "MX": ["mx player", "mxplayer", "mx"],
+    "ALTB": ["altbalaji", "alt"],
+    "VOOT": ["voot"],
+    "LIONSGATE": ["lionsgate", "lions gate", "lionsgateplay"]
 }
 
 
@@ -374,35 +369,42 @@ def extract_pure_title(original_name):
     clean_name = re.sub(r'^@\w+[\s_\-–]*', '', clean_name).strip()
     clean_name = re.sub(r'[@\[\]\(\)_]+', ' ', clean_name)
     clean_name = re.sub(r"[._\-]+", " ", clean_name)
-    # 🔥 NEW FIX: "Us BoBFiles" ya aise aur uploader tags ko shuru se remove karna
-    uploader_tags = [r'(?:join\s+)?us\s*bobfiles'] # Aap yahan aur bhi naam add kar sakte hain comma lagakar
+    
+    # URL aur Telegram links ko udana
+    clean_name = re.sub(r'(?:https?://)?(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*)', '', clean_name, flags=re.IGNORECASE)
+    clean_name = re.sub(r't\.me/[a-zA-Z0-9_]+', '', clean_name, flags=re.IGNORECASE)
+    
+    # Bewajah ke "Movie" ya "Video" words udana
+    clean_name = re.sub(r'\b(full|hindi|tamil|english|telugu|malayalam|kannada|bengali|new|latest|hd|mp4)\s+(movie|video)\b', '', clean_name, flags=re.IGNORECASE).strip()
+    clean_name = re.sub(r'\b(web[\s\-]?series|tv[\s\-]?series)\b', '', clean_name, flags=re.IGNORECASE).strip()
+
+    uploader_tags = [r'(?:join\s+)?us\s*bobfiles']
     uploader_cleanup = r'^(?:(?:' + '|'.join(uploader_tags) + r')[\s]*)+'
     clean_name = re.sub(uploader_cleanup, '', clean_name, flags=re.IGNORECASE).strip()
 
-    # 🔥 SUPER FIX: Shuru me aane wale har tarah ke faltu tags ko filter karna
     prefix_tags = [
-        r's\d{1,2}(?:-\d{1,2})?', r'e\d{1,2}(?:-\d{1,2})?', # Season & Episode
-        r'\d{3,4}p', r'4k',                                 # Resolution
-        r'(?:19|20)\d{2}',                                  # Year (Agar saal shuru me ho)
-        r'combined', r'complete',                           # Status
-        r'dual[\s\-]?audio', r'multi[\s\-]?audio',          # Audio Types
-        r'hindi', r'english', r'tamil', r'telugu', r'malayalam', r'kannada', r'bengali', r'marathi', r'korean', r'japanese', r'chinese', # All Languages
-        r'web[\-\s]?dl', r'web[\-\s]?rip', r'hdrip', r'bluray', r'brrip', r'dvdrip', r'camrip', r'hdts', r'hdcam', # Sources
-        r'x264', r'x265', r'hevc', r'10bit', r'aac', r'eac3', r'5\.1', r'7\.1', # Codec & Sound
-        r'download', r'watch', r'full[\s\-]?movie', r'web[\s\-]?series', r'new', r'latest', # Fluff words
-        r'netflix', r'amazon', r'prime', r'hotstar', r'zee5', r'sonyliv', r'jio', r'voot', r'altbalaji' # OTT platforms
+        r's\d{1,2}(?:-\d{1,2})?', r'e\d{1,4}(?:-\d{1,4})?', 
+        r'\d{3,4}[pi]', r'4k', r'8k',                                 
+        r'(?:19|20)\d{2}',                                  
+        r'combined', r'complete',                           
+        r'dual[\s\-]?audio', r'multi[\s\-]?audio',          
+        r'hindi', r'english', r'tamil', r'telugu', r'malayalam', r'kannada', r'bengali', r'marathi', r'korean', r'japanese', r'chinese', r'spanish', r'russian', r'french',
+        r'web[\-\s]?dl', r'web[\-\s]?rip', r'hdrip', r'bluray', r'brrip', r'dvdrip', r'camrip', r'hdts', r'hdcam', 
+        r'av1', r'x264', r'x265', r'hevc', r'10bit', r'aac', r'eac3', r'ac3', r'ddp[\s\-]?7\.1', r'ddp[\s\-]?5\.1', r'dd[\s\-]?5\.1', r'dd[\s\-]?2\.0', r'ddp', r'5\.1', r'7\.1', r'2\.0', r'2ch', r'stereo',
+        r'download', r'watch', r'full[\s\-]?movie', r'web[\s\-]?series', r'new', r'latest', 
+        r'netflix', r'amazon', r'prime', r'hotstar', r'zee5', r'sonyliv', r'jio', r'jiocinema', r'voot', r'altbalaji' 
     ]
 
     prefix_cleanup = r'^(?:(?:' + '|'.join(prefix_tags) + r')[\s_\-]*)+'
     clean_name = re.sub(prefix_cleanup, '', clean_name, flags=re.IGNORECASE).strip()
 
     stop_anchors = [
-        r'\bs\d{1,2}\s?e\d{1,2}\b', 
+        r'\bs\d{1,2}\s?e\d{1,4}\b', 
         r'\bs\d{1,2}\b', 
-        r'\be\d{1,2}\b', 
+        r'\be\d{1,4}\b', 
         r'\b(19|20)\d{2}\b',                                      
-        r'\b\d{3,4}p\b', 
-        r'\b4k\b',
+        r'\b\d{3,4}[pi]\b', 
+        r'\b4k\b', r'\b8k\b',
         r'\bweb[\s\-]?dl\b', 
         r'\bwebrip\b', 
         r'\bbluray\b', 
@@ -429,50 +431,26 @@ def extract_pure_title(original_name):
 
     return re.sub(r'\s+', ' ', pure_title).strip()
 
+
 # =========================================================
 # 3. CUSTOM SEASON & EPISODE NORMALIZER (ULTRA PRO MAX)
 # =========================================================
 def normalize_season_episode(text):
     text = text.lower()
 
-    # 1. Dot Separation Fix (s01.e01 -> s01 e01)
-    text = re.sub(r'\bs(\d{1,2})\.e(\d{1,2})\b', r's\1 e\2', text)
-
-    # 2. [NEW] Chipke hue episodes (S01E01E02 -> S01 E01-02)
-    text = re.sub(r'\bs(\d{1,2})e(\d{1,2})e(\d{1,2})\b', lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}-{int(m.group(3)):02d}", text)
-
-    # 3. [NEW] Text based separators (S01 E01 & E02, S01 E01 to 05, S01 E01 and E02)
-    text = re.sub(r'\bs(\d{1,2})[\s\-]*e(\d{1,2})[\s\-_]*(?:&|and|to)[\s\-_]*e?(\d{1,2})\b', lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}-{int(m.group(3)):02d}", text)
-
-    # 4. Standard Multi-Episode Range (S01E01-02, S01 E01 E02, S01E01-E02)
-    text = re.sub(r'\bs(\d{1,2})[\s\-]*e(\d{1,2})[\s\-_]+e?(\d{1,2})\b', lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}-{int(m.group(3)):02d}", text)
-
-    # 5. [NEW] Multi-Episode in 'X' Format (1x01-02, 1x01-1x02)
-    text = re.sub(r'\b(\d{1,2})[xX](\d{1,2})[\s\-_]+(?:\d{1,2}[xX])?(\d{1,2})\b', lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}-{int(m.group(3)):02d}", text)
-
-    # 6. Bulk Season Range (S01-S02 -> S01-02)
+    text = re.sub(r'\bs(\d{1,2})\.e(\d{1,4})\b', r's\1 e\2', text)
+    text = re.sub(r'\bs(\d{1,2})e(\d{1,4})e(\d{1,4})\b', lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}-{int(m.group(3)):02d}", text)
+    text = re.sub(r'\bs(\d{1,2})[\s\-]*e(\d{1,4})[\s\-_]*(?:&|and|to)[\s\-_]*e?(\d{1,4})\b', lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}-{int(m.group(3)):02d}", text)
+    text = re.sub(r'\bs(\d{1,2})[\s\-]*e(\d{1,4})[\s\-_]+e?(\d{1,4})\b', lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}-{int(m.group(3)):02d}", text)
+    text = re.sub(r'\b(\d{1,2})[xX](\d{1,4})[\s\-_]+(?:\d{1,2}[xX])?(\d{1,4})\b', lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}-{int(m.group(3)):02d}", text)
     text = re.sub(r'\bs(\d{1,2})[\s\-]+s?(\d{1,2})\b', lambda m: f"s{int(m.group(1)):02d}-{int(m.group(2)):02d}", text)
-
-    # 7. Ep Brackets Range (Ep [01-02], Ep 01-02)
     text = re.sub(r'\bep[\s\-_]*\(?(\d+)[\s\-–]+(\d+)\)?', lambda m: f"e{int(m.group(1)):02d}-{int(m.group(2)):02d}", text)
-
-    # 8. [NEW] Pure E01-E02 Range Fix (e01-e02 -> e01-02)
-    text = re.sub(r'\be(\d{1,2})[\s\-–]+e(\d{1,2})\b', lambda m: f"e{int(m.group(1)):02d}-{int(m.group(2)):02d}", text)
-
-    # 9. Pure Number Episode Range (01-02) if both under 60
+    text = re.sub(r'\be(\d{1,4})[\s\-–]+e(\d{1,4})\b', lambda m: f"e{int(m.group(1)):02d}-{int(m.group(2)):02d}", text)
     text = re.sub(r'\b(\d{2})[\s\-–]+(\d{2})\b', lambda m: f"e{int(m.group(1)):02d}-{int(m.group(2)):02d}" if int(m.group(1)) < 60 and int(m.group(2)) < 60 else m.group(0), text)
-
-    # 10. Standard 1x05 Formats
-    text = re.sub(r'\b(\d{1,2})[xX](\d{1,2})\b', lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}", text)
-
-    # 11. Standard Season Keywords
+    text = re.sub(r'\b(\d{1,2})[xX](\d{1,4})\b', lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}", text)
     text = re.sub(r'\b(?:season|s)[\s\-_]*(\d{1,2})\b', lambda m: f"s{int(m.group(1)):02d}", text)
-
-    # 12. Standard Episode Keywords
-    text = re.sub(r'\b(?:episode|ep|e)[\s\-_]*(\d{1,2})\b', lambda m: f"e{int(m.group(1)):02d}", text)
-
-    # 13. Direct S01E01 Merge Fix
-    text = re.sub(r'\bs(\d{2})e(\d{2})\b', r's\1 e\2', text)
+    text = re.sub(r'\b(?:episode|ep|e)[\s\-_]*(\d{1,4})\b', lambda m: f"e{int(m.group(1)):02d}", text)
+    text = re.sub(r'\bs(\d{2})e(\d{2,4})\b', r's\1 e\2', text)
 
     text = re.sub(r'\s+', ' ', text).strip()
     return text.upper()
@@ -488,15 +466,15 @@ def extract_languages_quality(text_to_scan):
     year = year_match.group(1) if year_match else None
 
     # Pure Episode aur Season Pack Extraction Logic
-    normalized_se = normalize_season_episode(text_to_scan) # <-- यह लाइन मिसिंग थी, इसे वापस जोड़ दिया है
+    normalized_se = normalize_season_episode(text_to_scan)
     season_episode = None
 
-    full_match = re.search(r'\b(S\d{2})\s(E\d{2}(?:-\d{2})?)\b', normalized_se)
+    full_match = re.search(r'\b(S\d{2})\s(E\d{2,4}(?:-\d{2,4})?)\b', normalized_se)
     if full_match:
         season_episode = full_match.group(0)
     else:
         s_match = re.search(r'\b(S\d{2}(?:-\d{2})?)\b', normalized_se)
-        e_match = re.search(r'\b(E\d{2}(?:-\d{2})?)\b', normalized_se)
+        e_match = re.search(r'\b(E\d{2,4}(?:-\d{2,4})?)\b', normalized_se)
 
         if s_match and e_match:
             season_episode = f"{s_match.group(1)} {e_match.group(1)}"
@@ -504,6 +482,7 @@ def extract_languages_quality(text_to_scan):
             season_episode = e_match.group(1)
         elif s_match:
             season_episode = s_match.group(1)
+            
     # Complete / Combined Check
     series_status = None
     status_match = re.search(r'\b(combined|complete)\b', scan_lower)
@@ -511,7 +490,7 @@ def extract_languages_quality(text_to_scan):
         series_status = "COMBINED" if status_match.group(1) == "combined" else "COMPLETE"
 
     resolution = None
-    res = re.search(r'(4320p|2160p|1440p|1080p|720p|480p|360p|240p|4k)', scan_lower)
+    res = re.search(r'(4320[pi]|2160[pi]|1440[pi]|1080[pi]|720[pi]|480[pi]|360[pi]|240[pi]|4k|8k)', scan_lower)
     if res:
         resolution = "2160P" if res.group(1) == "4k" else res.group(1).upper()
 
@@ -520,8 +499,7 @@ def extract_languages_quality(text_to_scan):
         "WEB-DL": ["web-dl", "webdl", "web dl"],
         "WEBRip": ["webrip", "web rip"],
         "HDRip": ["hdrip"],
-        "BluRay": ["bluray"],
-        "BRRip": ["brrip", "bdrip"],
+        "BluRay": ["bluray", "bdrip", "brrip", "bdremux"],
         "DVDRip": ["dvdrip"],
         "DVDScr": ["dvdscr", "scr", "dvd-scr"],
         "REMUX": ["remux"],
@@ -551,14 +529,32 @@ def extract_languages_quality(text_to_scan):
 
     extra_tags = []
     TAGS_MAP = {
-        "HEVC X265": ["x265", "hevc"], 
-        "AVC X264": ["x264", "avc"], 
-        "10BIT": ["10bit"], 
-        "AAC": ["aac"],
-        "Dolby 5.1": ["5.1", "6ch", "dd+", "eac3", "dts"], 
-        "Atmos 7.1": ["atmos", "truehd", "7.1", "8ch"],
+        "AV1": ["av1"], 
+        "HEVC X265": ["x265", "hevc", "h265"], 
+        "AVC X264": ["x264", "avc", "h264"], 
+        "10Bit": ["10bit"], 
+        "12Bit": ["12bit"],
+        "SDR": ["sdr"],
+        "HDR": ["hdr", "hdr10", "hdr10+"],
+        "Dolby Vision": ["dolby vision", "dv", "dovi"],
+        "IMAX": ["imax"],
+        "60FPS": ["60fps"],
+        
+        # 🔥 NEW ADVANCED AUDIO TAGS
+        "Dolby Atmos": ["atmos", "dolby atmos"],
+        "Dolby TrueHD": ["truehd", "dolby truehd"],
+        "DDP 7.1": ["ddp7.1", "ddp 7.1", "eac3 7.1", "dd+ 7.1"],
+        "DDP 5.1": ["ddp5.1", "ddp 5.1", "eac3", "dd+", "ddp"],
+        "DD 5.1": ["dd5.1", "dd 5.1", "ac3 5.1", "ac3", "5.1", "6ch"],
+        "DD 2.0": ["dd2.0", "dd 2.0", "ac3 2.0", "2.0", "2ch", "stereo"],
+        "DTS-X": ["dts-x", "dtsx"],
+        "DTS-HD": ["dts-hd", "dtshd", "dts-hd ma"],
+        "DTS 5.1": ["dts 5.1", "dts5.1", "dts"],
+        "AAC 5.1": ["aac 5.1", "aac5.1"],
+        "AAC": ["aac", "aac 2.0"],
+        
         "ESubs": ["esub", "esubs"], 
-        "HardSubs": ["hsub", "hsubs"],
+        "HardSubs": ["hsub", "hsubs", "hc", "hcsub"],
         "MSubs": ["msub", "msubs"]
     }
     for tag, aliases in TAGS_MAP.items():
@@ -567,21 +563,20 @@ def extract_languages_quality(text_to_scan):
                 extra_tags.append(tag)
                 break
 
-    # 🔥 NAYE TAGS YAHAN ADD HUE HAIN (ORGs, HC, DS4K, Multi)
     custom_qualifiers = []
     target_keywords = [
+        r'\bunrated\b', r'\bopen[\s\-]?matte\b', r'\bultimate[\s\-]?edition\b', r'\bchronological\b', r'\bredux\b',
         r'\bleak\b', r'\bstudio\b', r'\bdub\b', r'\bdubbed\b',
         r'\bunofficial\b', r'\bre[\s\-]?dub(?:bed)?\b', r'\bfan[\s\-]?dub(?:bed)?\b', 
         r'\bhq[\s\-]?dub(?:bed)?\b', r'\bstudio[\s\-]?dub(?:bed)?\b', r'\bclean[\s\-]?audio\b',
         r'\boriginal[\s\-]?audio\b', r'\bline[\s\-]?audios?\b', r'\bline\b', r'\bmultiplex\b',
         r'\bextended\b', r'\bextendded\b', r'\buncut\b', r'\bdirector\'s[\s\-]?cut\b', 
-        r'\bdc\b', r'\bimax\b', r'\bremastered\b', r'\bremaster\b', r'\bproper\b', 
+        r'\bdc\b', r'\bremastered\b', r'\bremaster\b', r'\bproper\b', 
         r'\bpre[\s\-]?release\b', r'\bprerelease\b', r'\bworkprint\b', r'\bwp\b', 
         r'\bspecial[\s\-]?edition\b', r'\btheatrical\b', r'\banniversary\b',
-        r'\bhq\b', r'\bhdr\b', r'\bdolby[\s\-]?vision\b', r'\bdv\b', r'\bsdr\b', 
-        r'\bhybrid\b', r'\bpatched\b', r'\bcorrected\b', r'\bsoftsub\b',
+        r'\bhq\b', r'\bhybrid\b', r'\bpatched\b', r'\bcorrected\b', r'\bsoftsub\b',
         r'\bv[1-4]\b',
-        r'\borgs?\b', r'\bhc\b', r'\bds4k\b', r'\bmulti\b'
+        r'\borgs?\b', r'\bds4k\b', r'\bmulti\b'
     ]
 
     combined_pattern = re.compile('|'.join(target_keywords), re.IGNORECASE)
@@ -629,11 +624,20 @@ def extract_languages_quality(text_to_scan):
     if kbps:
         kbps_tag = kbps.group(1).upper().replace(" ", "")
 
-    # 🔥 NEW: Extracting Part at the end (Ignores Season/Episode)
-    file_part = None
-    part_match = re.search(r'\b(?:part|pt)[\.\-_]*\s?(\d{1,4})\b', scan_lower)
-    if part_match:
-        file_part = f"Part {part_match.group(1).zfill(2)}"
+    # 🔥 Title Part / Volume / Chapter (e.g., Part 1, pt 2, Vol 3, Chapter IV)
+    title_part = None
+    tp_match = re.search(r'\b(vol|volume|chapter|part|pt)[\s\.\-_]*(\d{1,2}|[IVX]+)\b(?!\d)', scan_lower)
+    if tp_match:
+        tag_name = tp_match.group(1).capitalize()
+        if tag_name == "Pt": tag_name = "Part"
+        if tag_name == "Volume": tag_name = "Vol"
+        title_part = f"{tag_name} {tp_match.group(2).upper()}"
+
+    # 🔥 File Split Part (e.g., part001, pt.001, .002)
+    split_part = None
+    sp_match = re.search(r'\b(?:part|pt)[\s\.\-_]*(\d{3,4})\b', scan_lower)
+    if sp_match:
+        split_part = f"Part {sp_match.group(1)}"
 
     return {
         "year": year, "season_episode": season_episode, "languages": languages,
@@ -641,55 +645,78 @@ def extract_languages_quality(text_to_scan):
         "extra_tags": extra_tags, "kbps": kbps_tag, 
         "custom_qualifiers": custom_qualifiers,
         "series_status": series_status,
-        "file_part": file_part
+        "title_part": title_part,
+        "split_part": split_part
     }
 
+
 # =========================================================
-# 5. MAIN ASYNC SAVE PIPELINE
+# 5. MAIN ASYNC SAVE PIPELINE (WITH SMART CACHING)
 # =========================================================
 async def _get_session() -> "aiohttp.ClientSession":
-    """Shared aiohttp session — baar baar naya session banana slow karta hai."""
     import aiohttp
     if temp.AIOHTTP_SESSION is None or temp.AIOHTTP_SESSION.closed:
         temp.AIOHTTP_SESSION = aiohttp.ClientSession()
     return temp.AIOHTTP_SESSION
 
 
+_COVER_LOCKS = {}
+_COVER_CACHE = {}
+
 async def _fetch_and_save_cover(file_id: str, final_title: str, year: str | None, bot=None):
     """
-    Background task — file save hone ke baad cover fetch + watermark + DB update.
-    Main thread block nahi hota.
+    Background task — Smart caching ke sath taaki multiple qualities ek sath upload 
+    hone par TMDB par duplicate requests na jaye aur watermark 3-4 baar process na ho.
     """
-    try:
-        # Same title ki existing cover check karo (reuse)
-        existing = await Media.find_one(
-            {"file_name": {"$regex": re.escape(final_title), "$options": "i"}, "cover": {"$ne": None}}
-        )
-        if not existing and MULTIPLE_DB:
-            existing = await Media2.find_one(
-                {"file_name": {"$regex": re.escape(final_title), "$options": "i"}, "cover": {"$ne": None}}
-            )
+    lock_key = final_title.lower().strip()
+    
+    if lock_key not in _COVER_LOCKS:
+        _COVER_LOCKS[lock_key] = asyncio.Lock()
 
-        if existing and existing.cover:
-            cover_url = existing.cover
-            logger.info(f"[COVER] Reused existing cover for '{final_title}'")
-        else:
-            search_query = f"{final_title} {year}" if year else final_title
-            raw_url = await _fetch_cover_url(search_query)
-            if not raw_url:
-                logger.info(f"[COVER] No cover found for '{final_title}'")
-                return
-            cover_url = await _upload_cover(bot, raw_url) if bot else raw_url
-            logger.info(f"[COVER] Fetched new cover for '{final_title}'")
+    async with _COVER_LOCKS[lock_key]:
+        try:
+            # 1. Sabse pehle fast memory cache check karo
+            if lock_key in _COVER_CACHE:
+                cover_url = _COVER_CACHE[lock_key]
+                logger.info(f"[COVER] Reused cover from memory cache for '{final_title}'")
+            else:
+                # 2. Agar cache mein nahi hai, tabhi Database check karo
+                existing = await Media.find_one(
+                    {"file_name": {"$regex": rf"^{re.escape(final_title)}", "$options": "i"}, "cover": {"$ne": None}}
+                )
+                if not existing and MULTIPLE_DB:
+                    existing = await Media2.find_one(
+                        {"file_name": {"$regex": rf"^{re.escape(final_title)}", "$options": "i"}, "cover": {"$ne": None}}
+                    )
 
-        # DB update
-        await Media.collection.update_one({"_id": file_id}, {"$set": {"cover": cover_url}})
-        if MULTIPLE_DB:
-            await Media2.collection.update_one({"_id": file_id}, {"$set": {"cover": cover_url}})
-        logger.info(f"[COVER] DB updated | file_id={file_id}")
+                if existing and existing.cover:
+                    cover_url = existing.cover
+                    _COVER_CACHE[lock_key] = cover_url 
+                    logger.info(f"[COVER] Reused existing cover from DB for '{final_title}'")
+                else:
+                    # 3. DB mein bhi nahi hai, to finally fetch karo
+                    search_query = f"{final_title} {year}" if year else final_title
+                    raw_url = await _fetch_cover_url(search_query)
+                    
+                    if not raw_url:
+                        logger.info(f"[COVER] No cover found for '{final_title}'")
+                        return
+                    
+                    cover_url = await _upload_cover(bot, raw_url) if bot else raw_url
+                    if cover_url:
+                        _COVER_CACHE[lock_key] = cover_url 
+                        logger.info(f"[COVER] Fetched new cover for '{final_title}'")
+                    else:
+                        return
 
-    except Exception as e:
-        logger.warning(f"[COVER] Background task error: {e}")
+            # Sirf is particular file_id ke liye cover DB me update karo
+            await Media.collection.update_one({"_id": file_id}, {"$set": {"cover": cover_url}})
+            if MULTIPLE_DB:
+                await Media2.collection.update_one({"_id": file_id}, {"$set": {"cover": cover_url}})
+            logger.info(f"[COVER] DB updated | file_id={file_id}")
+
+        except Exception as e:
+            logger.warning(f"[COVER] Background task error for '{final_title}': {e}")
 
 
 async def save_file(media, bot=None):
@@ -718,68 +745,70 @@ async def save_file(media, bot=None):
 
         # === STRICT SEQUENCE ASSEMBLER ===
         # [1] Title
-        if final_title:
-            add_unique(final_title)
+        if final_title: add_unique(final_title)
+
+        # [1.5] Title Part / Volume / Chapter
+        if extracted.get("title_part"): add_unique(extracted["title_part"])
 
         # [2] Season & Episode
-        if extracted["season_episode"]:
-            add_unique(extracted["season_episode"])
+        if extracted.get("season_episode"): add_unique(extracted["season_episode"])
 
         # [2.5] Series Status
-        if extracted["series_status"]:
-            add_unique(extracted["series_status"])
+        if extracted.get("series_status"): add_unique(extracted["series_status"])
 
         # [3] Release Year
-        if extracted["year"]:
-            add_unique(extracted["year"])
+        if extracted.get("year"): add_unique(extracted["year"])
 
         # [4] Video Resolution
-        if extracted["resolution"]:
-            add_unique(extracted["resolution"])
+        if extracted.get("resolution"): add_unique(extracted["resolution"])
 
         # [5] Audio Languages
-        for lang in extracted["languages"]:
-            add_unique(lang)
+        for lang in extracted.get("languages", []): add_unique(lang)
 
         # [6] Custom Qualifiers
-        for qual in extracted["custom_qualifiers"]:
-            add_unique(qual)
+        for qual in extracted.get("custom_qualifiers", []): add_unique(qual)
 
-        # [7] Color Depth
-        if "10BIT" in extracted["extra_tags"]:
-            add_unique("10BIT")
+        # [7] Color Depth / HDR
+        for tag in ["10Bit", "12Bit", "SDR", "HDR", "Dolby Vision", "IMAX", "60FPS"]:
+            if tag in extracted.get("extra_tags", []): add_unique(tag)
 
         # [8] OTT Platform Tag
-        if extracted["ott"]:
-            if extracted["ott"] not in parts:
-                parts.append(extracted["ott"])
+        if extracted.get("ott") and extracted["ott"] not in parts:
+            parts.append(extracted["ott"])
 
         # [9] Source Type
-        if extracted["source"]:
-            add_unique(extracted["source"])
+        if extracted.get("source"): add_unique(extracted["source"])
 
         # [10] Video Codec
-        for vcodec in ["HEVC X265", "AVC X264"]:
-            if vcodec in extracted["extra_tags"]:
-                add_unique(vcodec)
+        for vcodec in ["AV1", "HEVC X265", "AVC X264"]:
+            if vcodec in extracted.get("extra_tags", []): add_unique(vcodec)
 
-        # [11] Audio Codec & Channels
-        for acodec in ["Atmos 7.1", "Dolby 5.1", "AAC"]:
-            if acodec in extracted["extra_tags"]:
+        # [11] Audio Codec & Channels (Smart Overlap Handler)
+        audio_tags = extracted.get("extra_tags", [])
+        
+        # Agar DDP 5.1/7.1 mil gaya hai, to bewajah "DD 5.1" (jo '5.1' ki wajah se aa jata hai) ko hata do
+        if "DDP 5.1" in audio_tags and "DD 5.1" in audio_tags:
+            audio_tags.remove("DD 5.1")
+        if "DDP 7.1" in audio_tags and "DD 5.1" in audio_tags:
+            audio_tags.remove("DD 5.1")
+        # Same for AAC 5.1 aur AAC
+        if "AAC 5.1" in audio_tags and "AAC" in audio_tags:
+            audio_tags.remove("AAC")
+
+        # Ab proper priority sequence me audio tags apply karo
+        for acodec in ["Dolby TrueHD", "Dolby Atmos", "DTS-X", "DTS-HD", "DDP 7.1", "DDP 5.1", "DD 5.1", "DD 2.0", "DTS 5.1", "AAC 5.1", "AAC"]:
+            if acodec in audio_tags: 
                 add_unique(acodec)
 
         # [12] Subtitles
         for sub in ["ESubs", "HardSubs", "MSubs"]:
-            if sub in extracted["extra_tags"]:
-                add_unique(sub)
+            if sub in extracted.get("extra_tags", []): add_unique(sub)
 
         # [13] Audio Bitrate
-        if extracted["kbps"]:
-            add_unique(extracted["kbps"])
+        if extracted.get("kbps"): add_unique(extracted["kbps"])
 
-        # 🔥 [13.5] File Part (Chunks aakhir mein judenge)
-        if extracted.get("file_part"):
-            add_unique(extracted["file_part"])
+        # [13.5] File Split Part (e.g. part001)
+        if extracted.get("split_part"): add_unique(extracted["split_part"])
 
         # [14] Branding Signature
         parts = [p for p in parts if p and "Tokyo_Updates" not in str(p)]
@@ -793,7 +822,6 @@ async def save_file(media, bot=None):
 
         # ============================================================
         # 🖼️ COVER IMAGE — background task mein fetch + watermark + upload
-        # save_file instantly return karega, cover baad mein DB update hoga
         # ============================================================
         if COVERX:
             asyncio.ensure_future(_fetch_and_save_cover(
@@ -803,7 +831,7 @@ async def save_file(media, bot=None):
                 bot=bot
             ))
 
-        # DB Commit — cover background mein update hoga
+        # DB Commit
         record = Media(
             file_id=file_id,
             file_ref=file_ref,
@@ -825,7 +853,6 @@ async def save_file(media, bot=None):
         return False, 3
 
 
-
 #__________________________________
 # FOR GET SEARCH RESULT THIS CODE UPDATE BY 🅰️NKIT MEENA 
 #__________________________________
@@ -842,7 +869,7 @@ SOURCE_ORDER = {
 }
 
 QUALITY_ORDER = {
-    "4320p": 8, "8k": 8, "2160p": 7, "4k": 7, "1440p": 6, "1080p": 5, "720p": 4, "480p": 3, "360p": 2, "240p": 1, "144p": 0
+    "4320p": 8, "8k": 8, "2160p": 7, "4k": 7, "1440p": 6, "1080p": 5, "1080i": 5, "720p": 4, "720i": 4, "480p": 3, "360p": 2, "240p": 1, "144p": 0
 }
 
 # ----------------- 2. एक्सट्रैक्शन फंक्शंस -----------------
@@ -864,7 +891,7 @@ def extract_source(name):
 def extract_season_episode(name):
     name = name.lower()
     s = re.search(r"\bs(?:eason)?[\s._-]*(\d{1,2})", name)
-    e = re.search(r"\be(?:pisode|p)?[\s._-]*(\d{1,2})", name)
+    e = re.search(r"\be(?:pisode|p)?[\s._-]*(\d{1,4})", name)
 
     season = int(s.group(1)) if s else 0
     episode = int(e.group(1)) if e else 0
@@ -884,12 +911,11 @@ def expand_query(query):
     query = query.lower()
     patterns = [query]
 
-    # सीज़न/एपिसोड टैग्स को हटाकर साफ़ टाइटल निकालना
     title = re.sub(r'\b(s\d+|e\d+|season[\s-]*\d+|episode[\s-]*\d+|ep[\s-]*\d+)\b', '', query)
     title = re.sub(r'[\s._-]+', ' ', title).strip()
 
     s_match = re.search(r"\bs(\d{1,2})|season[\s-]*(\d{1,2})", query)
-    e_match = re.search(r"\be(\d{1,2})|episode[\s-]*(\d{1,2})|ep[\s-]*(\d{1,2})", query)
+    e_match = re.search(r"\be(\d{1,4})|episode[\s-]*(\d{1,4})|ep[\s-]*(\d{1,4})", query)
 
     s_num = int(s_match.group(1) or s_match.group(2)) if s_match else None
     e_num = int(e_match.group(1) or e_match.group(2) or e_match.group(3)) if e_match else None
@@ -919,7 +945,6 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
         settings = await get_settings(int(chat_id))
         max_results = 10 if settings.get("max_btn") else int(MAX_B_TN)
 
-    # यूज़र की मूल सर्च क्वेरी को संभाल कर रखना
     original_query = str(query).lower().strip()
 
     if not isinstance(query, list):
@@ -931,8 +956,6 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
         q = q.strip()
         if not q: continue
 
-        # 🔥 यहाँ सुधार है: शब्दों को अलग करके उनके बीच वाइल्डकार्ड (.*) लगा रहे हैं।
-        # इससे "jana", "nayagan" और "hindi" के बीच में कुछ भी लिखा हो (जैसे साल या क्वालिटी), मोंगोडीबी उसे ढूँढ लेगा।
         words = q.split()
         pattern = r'.*'.join(re.escape(w) for w in words)
 
@@ -953,7 +976,6 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
 
     fetch_limit = max(100, offset + max_results)
 
-    # count + find parallel mein — do alag awaits ki jagah ek saath
     if MULTIPLE_DB:
         count1, count2, files = await asyncio.gather(
             Media.count_documents(filter_mongo),
@@ -971,31 +993,20 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
             Media.find(filter_mongo).sort("$natural", -1).limit(fetch_limit).to_list(length=fetch_limit)
         )
 
-    is_series = any(re.search(r"s\d{1,2}.*e\d{1,2}", str(file.file_name).lower()) for file in files)
+    is_series = any(re.search(r"s\d{1,2}.*e\d{1,4}", str(file.file_name).lower()) for file in files)
 
-    # 🎯 स्मार्ट सॉर्टिंग लॉजिक (फर्स्ट वर्ड/क्वेरी मैचिंग को सबसे ऊपर रखने के लिए)
-    # हम सिर्फ पहले शब्द को भी चेक करेंगे ताकि "jana nayagan hindi" सर्च करने पर "jana" से शुरू होने वाली ही पहले आए।
     first_word = original_query.split()[0] if original_query.split() else original_query
 
     if is_series:
         files = sorted(
             files,
             key=lambda x: (
-                # 1. क्या फ़ाइल का नाम यूज़र की पूरी क्वेरी से शुरू होता है?
                 not (re.match(rf"^[\s._\-\[\(]*{re.escape(original_query)}", x.file_name.lower())),
-
-                # 1b. बैकअप: क्या फ़ाइल का नाम कम से कम पहले शब्द से शुरू होता है?
                 not (re.match(rf"^[\s._\-\[\(]*{re.escape(first_word)}", x.file_name.lower())),
-
-                # 2. न्यूमेरिकल रेटिंग (लेटेस्ट सीज़न/एपिसोड)
                 -extract_season_episode(x.file_name)[0],      
                 -extract_season_episode(x.file_name)[1],      
-
-                # 3. टेक्स्ट पैटर्न मैचिंग 
-                not (re.search(r'\bs\d{1,2}e\d{1,2}\b', x.file_name.lower())), 
-                not (re.search(r'\bs\d{1,2}\s*e\d{1,2}\b', x.file_name.lower())), 
-
-                # 4. क्वालिटी और सोर्स
+                not (re.search(r'\bs\d{1,2}e\d{1,4}\b', x.file_name.lower())), 
+                not (re.search(r'\bs\d{1,2}\s*e\d{1,4}\b', x.file_name.lower())), 
                 -extract_quality(x.file_name),                
                 -extract_source(x.file_name),                 
                 x.file_id
@@ -1005,13 +1016,8 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
         files = sorted(
             files,
             key=lambda x: (
-                # 1. क्या फ़ाइल का नाम यूज़र की पूरी क्वेरी से शुरू होता है?
                 not (re.match(rf"^[\s._\-\[\(]*{re.escape(original_query)}", x.file_name.lower())),
-
-                # 1b. बैकअप: क्या फ़ाइल का नाम कम से कम पहले शब्द से शुरू होता है?
                 not (re.match(rf"^[\s._\-\[\(]*{re.escape(first_word)}", x.file_name.lower())),
-
-                # बाकी पुराने रूल्स
                 -extract_quality(x.file_name),
                 -extract_source(x.file_name),
                 x.file_id
@@ -1059,10 +1065,6 @@ async def get_bad_files(query, file_type=None):
     return files, total_results
 
 async def update_cover_url(file_id: str, cover_url: str) -> bool:
-    """
-    Kisi existing file ka cover URL manually update karo.
-    Admin command ya bulk update ke liye useful hai.
-    """
     try:
         result = await Media.collection.update_one(
             {"_id": file_id},
@@ -1081,10 +1083,6 @@ async def update_cover_url(file_id: str, cover_url: str) -> bool:
 
 
 async def get_cover_url(file_id: str) -> str | None:
-    """
-    File ID se cover URL fetch karo DB mein se.
-    File send karte waqt use ho sakta hai.
-    """
     try:
         details = await get_file_details(file_id)
         if details:
@@ -1105,52 +1103,8 @@ async def get_file_details(query):
     return filedetails
 
 
-def encode_file_id(s: bytes) -> str:
-    r = b""
-    n = 0
-    for i in s + bytes([22]) + bytes([4]):
-        if i == 0:
-            n += 1
-        else:
-            if n:
-                r += b"\x00" + bytes([n])
-                n = 0
-
-            r += bytes([i])
-    return base64.urlsafe_b64encode(r).decode().rstrip("=")
-
-
-def encode_file_ref(file_ref: bytes) -> str:
-    return base64.urlsafe_b64encode(file_ref).decode().rstrip("=")
-
-
-
-def unpack_new_file_id(new_file_id):
-    try:
-        decoded = FileId.decode(new_file_id)
-        file_id = encode_file_id(
-            pack(
-                "<iiqq",
-                int(decoded.file_type),
-                decoded.dc_id,
-                decoded.media_id,
-                decoded.access_hash,
-            )
-        )
-        file_ref = encode_file_ref(decoded.file_reference)
-        return file_id, file_ref
-    except Exception as e:
-        logger.error(f"Failed to unpack file_id: {e}")
-        return None, None
-
-
 async def dreamxbotz_fetch_media(limit: int) -> list:
-    """
-    Fetch media from primary/secondary DB, clean file names.
-    Returns list of Media objects with cleaned file_name.
-    """
     try:
-        # Decide which DB to use
         if MULTIPLE_DB:
             db_size = await check_db_size(Media)
             if db_size > 407:
@@ -1163,12 +1117,9 @@ async def dreamxbotz_fetch_media(limit: int) -> list:
             cursor = Media.find().sort("$natural", -1).limit(limit)
             files = await cursor.to_list(length=limit)
 
-        # Clean file names
         cleaned_files = []
         for file in files:
-            # Determine if it's series (Sxx/Eyy in name)
             is_series = bool(re.search(r"(S\d{1,2}|Season\s*\d+)", file.file_name, re.IGNORECASE))
-            # Clean title
             file.file_name = await dreamxbotz_clean_title(file.file_name, is_series=is_series)
             cleaned_files.append(file)
 
@@ -1181,20 +1132,15 @@ async def dreamxbotz_fetch_media(limit: int) -> list:
 
 async def dreamxbotz_clean_title(filename: str, is_series: bool = False) -> str:
     try:
-        # ----------------------
-        # Split extension
         parts = filename.rsplit(".", 1)
         name_part = parts[0]
         ext = parts[1] if len(parts) > 1 else ""
 
-        # Replace dots, underscores, hyphens with space
         name_part = re.sub(r"[._\-]+", " ", name_part)
         name_part = re.sub(r"\s+", " ", name_part).strip()
 
         filename_cleaned = name_part
-        # ----------------------
 
-        # Check for year in title
         year_match = re.search(r"^(.*?(\d{4}|\(\d{4}\)))", filename_cleaned, re.IGNORECASE)
         if year_match:
             title = year_match.group(1).replace("(", "").replace(")", "")
@@ -1209,7 +1155,6 @@ async def dreamxbotz_clean_title(filename: str, is_series: bool = False) -> str:
             )
             return f"{title}.{ext}" if ext else title
 
-        # Series handling
         if is_series:
             season_match = re.search(
                 r"(.*?)(?:S(\d{1,2})|Season\s*(\d+)|Season(\d+))(?:\s*Combined)?",
@@ -1230,7 +1175,6 @@ async def dreamxbotz_clean_title(filename: str, is_series: bool = False) -> str:
                 )
                 return f"{title} S{int(season):02}.{ext}" if ext else f"{title} S{int(season):02}"
 
-        # Default cleaning
         title = filename_cleaned
         title = (
             re.sub(
@@ -1250,30 +1194,22 @@ async def dreamxbotz_get_movies(limit: int = 20) -> List[str]:
     try:
         cursor = await dreamxbotz_fetch_media(limit * 2)
         results = set()
-        # Regex to ignore series files
-        pattern = r"(?:s\d{1,2}|season\s*\d+|season\d+)(?:\s*combined)?(?:e\d{1,2}|episode\s*\d+)?\b"
+        pattern = r"(?:s\d{1,2}|season\s*\d+|season\d+)(?:\s*combined)?(?:e\d{1,4}|episode\s*\d+)?\b"
 
         for file in cursor:
             file_name = getattr(file, "file_name", "")
 
-            # ----------------------
-            # Clean file name start
-            parts = file_name.rsplit(".", 1)  # Split extension
+            parts = file_name.rsplit(".", 1)
             name_part = parts[0]
             ext = parts[1] if len(parts) > 1 else ""
 
-            # Replace dots/underscores/hyphens with space
             name_part = re.sub(r"[._\-]+", " ", name_part)
             name_part = re.sub(r"\s+", " ", name_part).strip()
 
             file_name_cleaned = name_part
-            # ----------------------
 
-            # Skip series files
             if not re.search(pattern, file_name_cleaned, re.IGNORECASE):
-                # Clean title using your existing clean_title function
                 title = await dreamxbotz_clean_title(file_name_cleaned)
-                # Add extension back
                 if ext:
                     title = f"{title}.{ext}"
                 results.add(title)
@@ -1291,38 +1227,30 @@ async def dreamxbotz_get_series(limit: int = 30) -> Dict[str, List[int]]:
     try:
         cursor = await dreamxbotz_fetch_media(limit * 5)
         grouped = defaultdict(list)
-        # Regex for series with season/episode
-        pattern = r"(.*?)(?:S(\d{1,2})|Season\s*(\d+)|Season(\d+))(?:\s*Combined)?(?:E(\d{1,2})|Episode\s*(\d+))?\b"
+        pattern = r"(.*?)(?:S(\d{1,2})|Season\s*(\d+)|Season(\d+))(?:\s*Combined)?(?:E(\d{1,4})|Episode\s*(\d+))?\b"
 
         for file in cursor:
             file_name = getattr(file, "file_name", "")
 
-            # ----------------------
-            # Clean file name start
-            parts = file_name.rsplit(".", 1)  # Split extension
+            parts = file_name.rsplit(".", 1)
             name_part = parts[0]
             ext = parts[1] if len(parts) > 1 else ""
 
-            # Replace dots/underscores/hyphens with space
             name_part = re.sub(r"[._\-]+", " ", name_part)
             name_part = re.sub(r"\s+", " ", name_part).strip()
 
             file_name_cleaned = name_part
-            # ----------------------
 
             match = re.search(pattern, file_name_cleaned, re.IGNORECASE)
             if match:
                 title_raw = match.group(1)
-                # Clean title using your existing clean_title function
                 title = await dreamxbotz_clean_title(title_raw, is_series=True)
-                # Add extension if exists
                 if ext:
                     title = f"{title}.{ext}"
 
                 season = int(match.group(2) or match.group(3) or match.group(4))
                 grouped[title].append(season)
 
-        # Limit seasons to 10 per series
         return {
             title: sorted(set(seasons))[:10]
             for title, seasons in grouped.items()
