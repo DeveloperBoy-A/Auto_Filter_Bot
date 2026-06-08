@@ -200,13 +200,16 @@ async def _add_watermark(image_url: str) -> "io.BytesIO | None":
 
 async def _upload_cover(bot, image_url: str) -> str | None:
     """
-    Watermarked poster Telegram ke BIN_CHANNEL mein upload karo,
-    returned file_id cover ke roop mein save ho.
+    COVER_WATERMARK=True  → watermark lagao aur Telegram pe upload karo
+    COVER_WATERMARK=False → plain URL hi save karo
     """
     try:
+        if not COVER_WATERMARK:
+            logger.info(f"[COVER] Watermark OFF — plain URL save ho raha hai")
+            return image_url
+
         wm_image = await _add_watermark(image_url)
         if not wm_image:
-            # Watermark fail — plain URL hi return karo
             return image_url
 
         msg = await bot.send_photo(chat_id=BIN_CHANNEL, photo=wm_image)
@@ -215,7 +218,7 @@ async def _upload_cover(bot, image_url: str) -> str | None:
         return file_id
     except Exception as e:
         logger.warning(f"[COVER] Upload failed: {e}")
-        return image_url  # fallback to plain URL
+        return image_url
 
 
 
