@@ -61,7 +61,7 @@ def build_new_name(doc) -> str | None:
             parts.append(value)
 
     # === STRICT SEQUENCE ASSEMBLER ===
-    
+
     # [1] Title (e.g., Pushpa 2)
     if final_title: 
         add_unique(final_title)
@@ -114,7 +114,7 @@ def build_new_name(doc) -> str | None:
 
     # [13] Audio Codec & Channels (e.g., DD 5.1, Atmos)
     audio_tags = extracted.get("extra_tags", [])
-    
+
     # Smart Overlap Handler (DDP 5.1 aur DD 5.1 ek sath na aaye)
     if "DDP 5.1" in audio_tags and "DD 5.1" in audio_tags:
         audio_tags.remove("DD 5.1")
@@ -156,6 +156,9 @@ def build_new_name(doc) -> str | None:
 # ── Background Process ───────────────────────────────────────────
 async def process_rename_db(client: Client, status_msg: Message, user_id: int, dry_run: bool):
     mode_label = "🔍 DRY-RUN (preview only)" if dry_run else "✏️ LIVE UPDATE"
+    # ✅ Command received log
+    logger.info(f"Command received: /rename_db | Mode: {mode_label} | User: {user_id}")
+    
     updated = 0
     skipped = 0
     errors = 0
@@ -166,6 +169,8 @@ async def process_rename_db(client: Client, status_msg: Message, user_id: int, d
     if MULTIPLE_DB:
         collections_to_process.append(("Secondary DB", Media2.collection))
 
+    # ✅ Process start log
+    logger.info("✅ Process start log: Starting batch processing.")
     last_edit_time = time.time()
 
     for db_label, collection in collections_to_process:
@@ -180,18 +185,22 @@ async def process_rename_db(client: Client, status_msg: Message, user_id: int, d
         cursor = collection.find({}, {"_id": 1, "file_name": 1, "caption": 1})
 
         async for doc in cursor:
-            # Cancel Check
+            # ✅ Cancel requested log (Check)
             if _cancel_flags.get(user_id):
+                logger.warning(f"⚠️ Cancel requested log: Process stopped by user {user_id}")
                 cancelled = True
                 break
 
             total += 1
             try:
+                old_name = doc.get("file_name")
                 new_name = build_new_name(doc)
 
                 if new_name is None:
                     skipped += 1
                 else:
+                    # ✅ OLD → NEW filename log
+                    logger.info(f"🔄 OLD → NEW filename log | DB: {db_label} | OLD: {old_name} → NEW: {new_name}")
                     if not dry_run:
                         await collection.update_one(
                             {"_id": doc["_id"]},
@@ -200,16 +209,21 @@ async def process_rename_db(client: Client, status_msg: Message, user_id: int, d
                     updated += 1
 
             except Exception as e:
+                # ✅ Error log with traceback
                 errors += 1
-                logger.error(f"[RENAME ERROR] _id={doc.get('_id')} | {e}")
+                logger.error(f"❌ Error log with traceback: DB: {db_label} | _id={doc.get('_id')} | {e}", exc_info=True)
 
             # Bot ko background processes sambhalne ke liye thodi der saans lene do
             if total % 100 == 0:
                 await asyncio.sleep(0.05)
 
+            # ✅ Progress log (every 500 files)
+            if total % 500 == 0:
+                logger.info(f"📊 Progress log: {total} files processed. (DB: {db_label} | Updated: {updated}, Skipped: {skipped}, Errors: {errors})")
+
             # FloodWait Protection: Har 5 seconds me hi Telegram API par message update karo
             if time.time() - last_edit_time > 5:
-                percentage = (total / total_docs) * 100
+                percentage = (total / total_docs) * 100 if total_docs > 0 else 0
                 progress_text = (
                     f"<b>{mode_label}</b>\n\n"
                     f"📁 <b>{db_label}</b>\n"
@@ -231,6 +245,8 @@ async def process_rename_db(client: Client, status_msg: Message, user_id: int, d
     _cancel_flags.pop(user_id, None)
 
     if cancelled:
+        # ✅ Cancel completed log
+        logger.info("✅ Cancel completed log: Process aborted successfully.")
         await status_msg.edit_text(
             f"<b>🛑 Cancelled by admin</b>\n\n"
             f"📊 Processed : <b>{total}</b>\n"
@@ -241,6 +257,8 @@ async def process_rename_db(client: Client, status_msg: Message, user_id: int, d
         )
         return
 
+    # ✅ Final completion summary log
+    logger.info(f"✅ Final completion summary log: Total: {total}, Updated: {updated}, Skipped: {skipped}, Errors: {errors}")
     action_word = "Would rename" if dry_run else "Renamed"
     footer = (
         "\n\n⚠️ <i>Ye sirf preview tha. Actual rename karne ke liye\n"
@@ -284,7 +302,7 @@ async def rename_db_files(client: Client, message: Message):
 
     _cancel_flags[user_id] = False
     mode_label = "🔍 DRY-RUN (preview only)" if dry_run else "✏️ LIVE UPDATE"
-    
+
     status_msg = await message.reply_text(
         f"<b>{mode_label}</b>\n\nDB scan shuru ho raha hai background mein... ⏳",
         reply_markup=_cancel_button()
