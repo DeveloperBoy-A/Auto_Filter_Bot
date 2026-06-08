@@ -2213,6 +2213,7 @@ async def ai_spell_check(chat_id, wrong_name):
     return None
 
 
+
 async def advantage_spell_chok(client, message):
     """
     No results mila toh IMDB se similar movies suggest karo buttons mein.
@@ -2279,18 +2280,15 @@ async def advantage_spell_chok(client, message):
         if not m_id.startswith("tt"):
             m_id = f"tt{m_id}"
 
-        # Button text with year
+        # Button text — sirf title aur year, kuch extra nahi
         if m_year:
             try:
                 yr = int(str(m_year)[:4])
-                if yr >= current_year:
-                    btn_text = f"• {m_title} 🕒 Coming Soon ({yr})"
-                else:
-                    btn_text = f"• {m_title} ({yr})"
+                btn_text = f"{m_title} ({yr})"
             except:
-                btn_text = f"• {m_title}"
+                btn_text = m_title
         else:
-            btn_text = f"• {m_title}"
+            btn_text = m_title
 
         # callback_data max 64 bytes — trim karo
         cb = f"spol#{m_id}#{user_id}"
