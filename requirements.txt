@@ -13,14 +13,11 @@ telegraph
 pymediainfo-pyrofork
 
 # Other tools
-opencv-python-headless==4.8.1.78
 python-dotenv==0.21.1
 PyLeaves==1.0.2
 humanize
 Pillow
 psutil
-numpy
-wheel
 ujson
 wget
 aiofiles
@@ -32,8 +29,6 @@ apscheduler
 pyshorteners
 colorama
 rapidfuzz
-fuzzywuzzy
-python-Levenshtein==0.27.1
 
 # Git-based Packages
 https://github.com/NBBotz/IMDBKit/archive/refs/heads/main.zip
