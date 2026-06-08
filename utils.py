@@ -1,5 +1,6 @@
 import re
 import os
+import time
 import datetime
 import logging
 from info import  *
@@ -55,29 +56,49 @@ class temp(object):
     IMDB_CAP = {}
     VERIFICATIONS = {}
     TEMP_INVITE_LINKS = {}
+    # ── Speed caches ──────────────────────────────────────────
+    CHAT_CACHE       = {}   # {chat_id: (title, invite_link, ts)}  — channel info cache
+    FSUB_CACHE       = {}   # {(user_id, ch_id): (is_member, ts)}  — membership cache (TTL 60s)
+    AIOHTTP_SESSION  = None # shared aiohttp session
 
 async def is_req_subscribed(bot, user_id, rqfsub_channels):
     btn = []
+    now = time.time()
     for ch_id in rqfsub_channels:
         if await db.has_joined_channel(user_id, ch_id):
             continue
-        try:
-            member = await bot.get_chat_member(ch_id, user_id)
-            if member.status != enums.ChatMemberStatus.BANNED:
-                await db.add_join_req(user_id, ch_id)
-                continue
-        except UserNotParticipant:
-            pass
-        except Exception as e:
-            logger.error(f"Error checking membership in {ch_id}: {e}")
+        # Cache check (60s TTL)
+        cache_key = (user_id, ch_id)
+        cached = temp.FSUB_CACHE.get(cache_key)
+        if cached and now - cached[1] < 60:
+            is_member = cached[0]
+        else:
+            try:
+                member = await bot.get_chat_member(ch_id, user_id)
+                is_member = member.status != enums.ChatMemberStatus.BANNED
+            except UserNotParticipant:
+                is_member = False
+            except Exception as e:
+                logger.error(f"Error checking membership in {ch_id}: {e}")
+                is_member = False
+            temp.FSUB_CACHE[cache_key] = (is_member, now)
+
+        if is_member:
+            await db.add_join_req(user_id, ch_id)
+            continue
 
         try:
-            chat   = await bot.get_chat(ch_id)
-            invite = await bot.create_chat_invite_link(
-                ch_id,
-                creates_join_request=True
-            )
-            btn.append([InlineKeyboardButton(f"⛔️ Join {chat.title}", url=invite.invite_link)])
+            # Channel info cache (10 min TTL)
+            ch_cached = temp.CHAT_CACHE.get(ch_id)
+            if ch_cached and now - ch_cached[2] < 600:
+                ch_title, invite_link, _ = ch_cached
+            else:
+                chat = await bot.get_chat(ch_id)
+                ch_title = chat.title
+                inv = await bot.create_chat_invite_link(ch_id, creates_join_request=True)
+                invite_link = inv.invite_link
+                temp.CHAT_CACHE[ch_id] = (ch_title, invite_link, now)
+            btn.append([InlineKeyboardButton(f"⛔️ Join {ch_title}", url=invite_link)])
         except ChatAdminRequired:
             logger.warning(f"Bot not admin in {ch_id}")
         except Exception as e:
@@ -88,19 +109,39 @@ async def is_req_subscribed(bot, user_id, rqfsub_channels):
 
 async def is_subscribed(bot, user_id, fsub_channels):
     btn = []
+    now = time.time()
     for channel_id in fsub_channels:
-        try:
-            chat = await bot.get_chat(int(channel_id))
-            await bot.get_chat_member(channel_id, user_id)
-        except UserNotParticipant:
+        # Membership cache (60s TTL)
+        cache_key = (user_id, channel_id)
+        cached = temp.FSUB_CACHE.get(cache_key)
+        if cached and now - cached[1] < 60:
+            is_member = cached[0]
+        else:
             try:
-                invite = await bot.create_chat_invite_link(channel_id, creates_join_request=False)
-                btn.append([InlineKeyboardButton(f"📢 Join {chat.title}", url=invite.invite_link)])
+                await bot.get_chat_member(channel_id, user_id)
+                is_member = True
+            except UserNotParticipant:
+                is_member = False
+            except Exception as e:
+                logger.exception(f"is_subscribed error for {channel_id}: {e}")
+                is_member = True  # fail-open
+            temp.FSUB_CACHE[cache_key] = (is_member, now)
+
+        if not is_member:
+            try:
+                # Channel info cache (10 min TTL)
+                ch_cached = temp.CHAT_CACHE.get(channel_id)
+                if ch_cached and now - ch_cached[2] < 600:
+                    ch_title, invite_link, _ = ch_cached
+                else:
+                    chat = await bot.get_chat(int(channel_id))
+                    ch_title = chat.title
+                    inv = await bot.create_chat_invite_link(channel_id, creates_join_request=False)
+                    invite_link = inv.invite_link
+                    temp.CHAT_CACHE[channel_id] = (ch_title, invite_link, now)
+                btn.append([InlineKeyboardButton(f"📢 Join {ch_title}", url=invite_link)])
             except Exception as e:
                 logger.warning(f"Failed to create invite for {channel_id}: {e}")
-        except Exception as e:
-            logger.exception(f"is_subscribed error for {channel_id}: {e}")
-            pass
     return btn
 
 async def is_check_admin(bot, chat_id, user_id):
