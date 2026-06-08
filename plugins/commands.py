@@ -15,10 +15,10 @@ from database.config_db import mdb
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, ReplyKeyboardMarkup
 from pyrogram import Client, filters, enums
 from pyrogram.errors import FloodWait, ChatAdminRequired, UserNotParticipant
-from database.ia_filterdb import Media, Media2, get_file_details,extract_languages_quality, unpack_new_file_id, get_bad_files, MULTIPLE_DB
+from database.ia_filterdb import Media, Media2, get_file_details, unpack_new_file_id, get_bad_files, get_cover_url
 from database.users_chats_db import db
 from info import *
-from utils import get_settings, save_group_settings, is_subscribed, is_req_subscribed, get_size, get_shortlink, is_check_admin, temp, get_readable_time, get_time, generate_settings_text, log_error, clean_filename, remove_prefix_garbage
+from utils import get_settings, save_group_settings, is_subscribed, is_req_subscribed, get_size, get_shortlink, is_check_admin, temp, get_readable_time, get_time, generate_settings_text, log_error, clean_filename
 
 
 
@@ -323,26 +323,24 @@ async def start(client, message):
             files = temp.GETALL.get(file_id)
             if not files:
                 return await message.reply('<b><i>ɴᴏ ꜱᴜᴄʜ ꜰɪʟᴇ ᴇxɪꜱᴛꜱ !</b></i>')
-            
+
             filesarr = []
-            cover = None
             for file in files:
                 f_id = file.file_id  # Conflict से बचने के लिए नाम बदला
                 files_ = await get_file_details(f_id)
                 files1 = files_[0]
                 title = clean_filename(files1.file_name)
-                cover = files1.cover
                 size = get_size(files1.file_size)
                 f_caption = files1.caption
                 settings = await get_settings(int(grp_id))
                 DREAMX_CAPTION = settings.get('caption', CUSTOM_FILE_CAPTION)
-                
+
                 if DREAMX_CAPTION:
                     try:
                         f_caption = DREAMX_CAPTION.format(file_name='' if title is None else title, file_size='' if size is None else size, file_caption='' if f_caption is None else f_caption)
                     except Exception as e:
                         logger.exception(e)
-                
+
                 if f_caption is None:
                     f_caption = f"{clean_filename(files1.file_name)}"
 
@@ -360,13 +358,14 @@ async def start(client, message):
                 else:
                     btn = [[InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]]
 
+                cover_url = getattr(files1, 'cover', None) if COVERX else None
                 msg = await client.send_cached_media(
                     chat_id=message.from_user.id,
-                    cover=cover,
                     file_id=f_id,
                     caption=f_caption,
                     protect_content=settings.get('file_secure', PROTECT_CONTENT),
-                    reply_markup=InlineKeyboardMarkup(btn)
+                    reply_markup=InlineKeyboardMarkup(btn),
+                    cover=cover_url
                 )
                 filesarr.append(msg)
                 await asyncio.sleep(1) # यहाँ लूप खत्म हो रहा है
@@ -379,7 +378,7 @@ async def start(client, message):
                     try: await x.delete()
                     except: pass
                 await k.edit_text("<b>ʏᴏᴜʀ ᴀʟʟ ᴠɪᴅᴇᴏꜱ/ꜰɪʟᴇꜱ ᴀʀᴇ ᴅᴇʟᴇᴛᴇᴅ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ !!\nᴋɪɴᴅʟʏ ꜱᴇᴀʀᴄʜ ᴀɢᴀɪɴ 😉</b>")
-            
+
             return # फंक्शन यहाँ खत्म होगा
 
         except Exception as e:
@@ -393,10 +392,6 @@ async def start(client, message):
     if not files_:
         pre, file_id = ((base64.urlsafe_b64decode(data + "=" * (-len(data) % 4))).decode("utf-8")).split("_", 1)
         try:
-            cover = None
-            if COVERX:
-                details= await get_file_details(file_id)
-                cover = details.get('cover', None)
             if STREAM_MODE and not PREMIUM_STREAM_MODE:
                 btn = [
                     [InlineKeyboardButton('🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️', callback_data=f'generate_stream_link:{file_id}')],
@@ -418,7 +413,6 @@ async def start(client, message):
                 btn = [[InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]] 
             msg = await client.send_cached_media(
                 chat_id=message.from_user.id,
-                cover=cover,
                 file_id=file_id,
                 protect_content=settings.get('file_secure', PROTECT_CONTENT),
                 reply_markup=InlineKeyboardMarkup(btn))
@@ -454,7 +448,6 @@ async def start(client, message):
     files = files_[0]
     title = clean_filename(files.file_name)
     size = get_size(files.file_size)
-    cover = files.cover if files.cover else None
     f_caption = files.caption
     settings = await get_settings(int(grp_id))            
     DREAMX_CAPTION = settings.get('caption', CUSTOM_FILE_CAPTION)
@@ -486,13 +479,14 @@ async def start(client, message):
             ]
     else:
         btn = [[InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]]
+    cover_url = getattr(files, 'cover', None) if COVERX else None
     msg = await client.send_cached_media(
         chat_id=message.from_user.id,
         file_id=file_id,
-        cover=cover,
         caption=f_caption,
         protect_content=settings.get('file_secure', PROTECT_CONTENT),
-        reply_markup=InlineKeyboardMarkup(btn)
+        reply_markup=InlineKeyboardMarkup(btn),
+        cover=cover_url
     )
     k = await msg.reply(script.DEL_MSG.format(get_time(DELETE_TIME)),
             quote=True, parse_mode=enums.ParseMode.HTML
@@ -724,7 +718,7 @@ async def requests(bot, message):
     if not content or len(content) < 3:
         template_text = (
             "<b>❌ अपनी मूवी या सीरीज का नाम तो लिखिये!</b>\n"
-         
+
 "<code>━━━━━━━━━━━━━━━━━━━━━</code>\n"
             "<b>📝 सही तरीका (Format):</b>\n"
             "<code>/request [Name] [Year] [Lang]</code>\n\n"
@@ -784,20 +778,21 @@ async def requests(bot, message):
                 InlineKeyboardButton('ᴍᴏᴠɪᴇ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ📢', url=MOVIE_UPDATE_CHANNEL_LINK),
                 InlineKeyboardButton('ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ👁‍🗨', url=f"{reported_post.link}")
             ]]
-            
+
             confirm_msg = await message.reply_text(
                 "<b>✅ आपकी रिक्वेस्ट सफलतापूर्वक भेज दी गई है!\n\n"
                 "⌛ थोड़ा इंतज़ार (Wait) कीजिये...\n"
-                "📢 नीचे दिए गए बटन पर क्लिक करके चैनल Join करें available होते ही यहां Post डाल दी जाएगी और अपनी रिक्वेस्ट चेक कर सकते हो।</b>",
+                "📢 नीचे दिए गए बटन पर क्लिक करके चैनल Join करें available होते ही यहां Post डाल दी जाएगी और अपनी ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ पर रिक्वेस्ट चेक कर सकते हो।</b>",
                 reply_markup=InlineKeyboardMarkup(btn_user)
             )
-            
+
             # 60 seconds baad command aur response dono delete ho jayenge
             await asyncio.sleep(60)
             await confirm_msg.delete()
             await message.delete()
         except:
             pass
+
 
 
 @Client.on_message(filters.command("send") & filters.user(ADMINS))
@@ -1428,167 +1423,3 @@ async def clean_db_command(client, message):
 
     except Exception as e:
         await message.reply_text(f"❌ <b>Error while cleaning DB:</b>\n<code>{e}</code>")
-
-
-
-
-
-@Client.on_message(filters.command("old_rename_db") & filters.user(ADMINS))
-async def rename_database_files(bot, message):
-    msg = await message.reply_text("🔄 Database renaming process start ho raha hai...")
-    
-    count = 0
-    # Dono DBs ko process karne ke liye list
-    databases = [Media]
-    if MULTIPLE_DB: databases.append(Media2)
-    
-    for db_model in databases:
-        async for file in db_model.find():
-            old_name = file.file_name
-            
-            # Dummy object taaki wahi naming logic use ho sake
-            class DummyMedia:
-                def __init__(self, f):
-                    self.file_name = f.file_name
-                    self.caption = f.caption or ""
-            
-            # Yahan hum logic call karenge (ye logic database.py me alag function me hona chahiye ideally)
-            # Lekin quick fix ke liye hum manual cleaning yahan kar rahe hain:
-            new_name = old_name # Yahan naming logic apply karein jo upar save_file me hai
-            
-            if old_name != new_name:
-                await db_model.collection.update_one(
-                    {"_id": file.file_id},
-                    {"$set": {"file_name": new_name}}
-                )
-                count += 1
-                if count % 100 == 0:
-                    await msg.edit(f"🔄 Processing... {count} files renamed.")
-
-    await msg.edit(f"✅ Task Completed! Total {count} files renamed to new pattern.")
-
-
-
-
-# Global list to track cancellation
-CANCELED_RENAME = []
-
-@Client.on_message(filters.command("rename_db") & filters.user(ADMINS))
-async def rename_old_files_with_progress(client, message):
-    user_id = message.from_user.id
-    
-    # Reset cancel status
-    if user_id in CANCELED_RENAME:
-        CANCELED_RENAME.remove(user_id)
-
-    sts = await message.reply("🔍 Database calculate ho raha hai...")
-    
-    # 1. Total Count
-    try:
-        total_files = await Media.count_documents({})
-        if MULTIPLE_DB:
-            total_files += await Media2.count_documents({})
-    except Exception as e:
-        return await sts.edit(f"❌ DB Count Error: {e}")
-    
-    if total_files == 0:
-        return await sts.edit("✖️ DB Khali hai!")
-
-    count = 0
-    renamed = 0
-    start_time = time.time()
-    
-    collections = [Media]
-    if MULTIPLE_DB:
-        collections.append(Media2)
-
-    for model in collections:
-        async for file in model.find():
-            # CANCEL CHECK
-            if user_id in CANCELED_RENAME:
-                await sts.edit(f"❌ **Process Cancelled!**\n\n- Processed: `{count}`\n- Renamed: `{renamed}`")
-                CANCELED_RENAME.remove(user_id)
-                return
-
-            old_name = file.file_name
-            caption_text = file.caption or ""
-
-            # --- TERA LOGIC ---
-            base_name, ext = os.path.splitext(old_name)
-            base_name = re.sub(r"[._\-]+", " ", base_name)
-            base_name = re.sub(r"\s+", " ", base_name).strip()
-            base_name = remove_prefix_garbage(base_name)
-
-            languages, resolution_caption, source_caption = extract_languages_quality(caption_text)
-
-            parts = [base_name]
-            base_lower = base_name.lower()
-            added_langs = set()
-
-            for lang in languages:
-                l = lang.lower()
-                if l not in base_lower and l not in added_langs:
-                    parts.append(lang)
-                    added_langs.add(l)
-
-            if resolution_caption and resolution_caption.upper() not in base_name.upper():
-                parts.append(resolution_caption.upper())
-
-            if source_caption and source_caption not in base_name.upper():
-                parts.append(source_caption)
-
-            new_file_name = " ".join(parts) + ext
-            new_file_name = re.sub(r"[^\w\s().]", " ", new_file_name)
-            new_file_name = re.sub(r"\s+", " ", new_file_name).strip()
-
-            # UPDATE
-            if new_file_name != old_name:
-                await model.collection.update_one({"_id": file.file_id}, {"$set": {"file_name": new_file_name}})
-                renamed += 1
-
-            count += 1
-            
-            # PROGRESS UPDATE (Every 30 files)
-            if count % 30 == 0 or count == total_files:
-                percent = (count / total_files) * 100
-                bar = "▰" * int(percent / 10) + "▱" * (10 - int(percent / 10))
-                
-                markup = InlineKeyboardMarkup([[
-                    InlineKeyboardButton("❌ Cancel", callback_data=f"cancel_rename_{user_id}")
-                ]])
-                
-                try:
-                    await sts.edit(
-                        text=f"⚙️ **Renaming DB...**\n\n`{bar}` {percent:.1f}%\n\n"
-                             f"📂 Total: `{total_files}`\n"
-                             f"🔄 Processed: `{count}`\n"
-                             f"✅ Updated: `{renamed}`",
-                        reply_markup=markup
-                    )
-                except:
-                    pass
-                await asyncio.sleep(0.3)
-
-    # --- FINAL SUCCESS MESSAGE ---
-    time_taken = time.strftime("%Hh %Mm %Ss", time.gmtime(time.time() - start_time))
-    
-    await sts.edit(
-        text=f"✅ **Database Renaming Successful!**\n\n"
-             f"🏁 **Status:** Completed\n"
-             f"📂 **Total Files:** `{total_files}`\n"
-             f"🔄 **Files Scanned:** `{count}`\n"
-             f"✅ **Names Updated:** `{renamed}`\n"
-             f"⏱️ **Time Taken:** `{time_taken}`\n\n"
-             f"Sab kuch update ho gaya hai bhai! 🔥",
-        reply_markup=None
-    )
-
-# --- CALLBACK ---
-@Client.on_callback_query(filters.regex(r"^cancel_rename_"))
-async def cancel_rename_callback(client, query):
-    u_id = int(query.data.split("_")[-1])
-    if query.from_user.id != u_id:
-        return await query.answer("Ye tere liye nahi hai!", show_alert=True)
-    CANCELED_RENAME.append(u_id)
-    await query.answer("Process roka ja raha hai...", show_alert=True)
-
