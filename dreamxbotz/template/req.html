@@ -218,6 +218,7 @@
             text-decoration: none;
             cursor: pointer;
             transition: all 0.2s;
+            user-select: none;
         }
 
         .btn:hover {
@@ -238,6 +239,7 @@
         .btn svg, .btn img {
             width: 18px;
             height: 18px;
+            pointer-events: none;
         }
 
         .btn:disabled {
@@ -326,12 +328,14 @@
             font-weight: 500;
             transition: all 0.2s;
             cursor: pointer;
+            user-select: none;
         }
 
         .player-link img {
             width: 16px;
             height: 16px;
             flex-shrink: 0;
+            pointer-events: none;
         }
 
         .player-link:hover {
@@ -523,6 +527,7 @@
             cursor: pointer;
             font-size: 0.8125rem;
             transition: all 0.2s;
+            user-select: none;
         }
 
         .aspect-item:hover {
@@ -641,7 +646,7 @@
                 <a href="#explore">Explore</a>
                 <a href="https://t.me/Tokyo_Updates">Contact</a>
             </nav>
-            <button class="mobile-menu">
+            <button class="mobile-menu" type="button">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <line x1="3" y1="12" x2="21" y2="12"></line>
                     <line x1="3" y1="6" x2="21" y2="6"></line>
@@ -679,7 +684,7 @@
                 </div>
 
                 <div class="actions">
-                    <button class="btn btn-primary" onclick="downloadVideo()" id="download-btn">
+                    <button class="btn btn-primary" id="downloadBtn" type="button">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                             <polyline points="7 10 12 15 17 10"></polyline>
@@ -688,18 +693,18 @@
                         Download
                     </button>
 
-                    <button class="btn" onclick="openVLC()">
+                    <button class="btn" id="vlcBtn" type="button">
                         <img src="https://i.postimg.cc/15TQ4y7B/vlc.png" alt="VLC" />
                         VLC Player
                     </button>
 
-                    <button class="btn" onclick="openMX()">
+                    <button class="btn" id="mxBtn" type="button">
                         <img src="https://i.postimg.cc/sx4Msv4T/mx.png" alt="MX" />
                         MX Player
                     </button>
 
                     <div class="dropdown">
-                        <button class="btn" onclick="toggleDropdown()">
+                        <button class="btn" id="morePlayersBtn" type="button">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <circle cx="12" cy="12" r="1"></circle>
                                 <circle cx="19" cy="12" r="1"></circle>
@@ -710,26 +715,26 @@
 
                         <div class="dropdown-menu" id="players-dropdown">
                             <div class="dropdown-grid">
-                                <a class="player-link" onclick="openPlayer('playit')">
+                                <button class="player-link" id="playitBtn" type="button">
                                     <img src="https://i.postimg.cc/RVGWYJFF/playit.png" alt="PLAYit" />
                                     <span>PLAYit</span>
-                                </a>
-                                <a class="player-link" onclick="openPlayer('km')">
+                                </button>
+                                <button class="player-link" id="kmBtn" type="button">
                                     <img src="https://i.postimg.cc/wT9tFQ9Z/km.png" alt="KM" />
                                     <span>KMPlayer</span>
-                                </a>
-                                <a class="player-link" onclick="openPlayer('s')">
+                                </button>
+                                <button class="player-link" id="sBtn" type="button">
                                     <img src="https://i.postimg.cc/XYJr6NGg/s.png" alt="S" />
                                     <span>S Player</span>
-                                </a>
-                                <a class="player-link" onclick="openPlayer('hd')">
+                                </button>
+                                <button class="player-link" id="hdBtn" type="button">
                                     <img src="https://i.postimg.cc/rFT43LNh/hd.png" alt="HD" />
                                     <span>HD Player</span>
-                                </a>
-                                <a class="player-link" onclick="openPlayer('mxpro')">
+                                </button>
+                                <button class="player-link" id="mxproBtn" type="button">
                                     <img src="https://i.postimg.cc/sx4Msv4T/mx.png" alt="MX Pro" />
                                     <span>MX Pro</span>
-                                </a>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -835,19 +840,57 @@
     <script src="https://cdn.plyr.io/3.7.8/plyr.polyfilled.js"></script>
 
     <script>
-        // Global variables
-        let fileUrl = "{{file_url}}";
-        let fileName = "{{file_name}}";
+        // ============================================
+        // CONFIGURATION
+        // ============================================
+        const CONFIG = {
+            fileUrl: "{{file_url}}",
+            fileName: "{{file_name}}",
+            isAndroid: /android/i.test(navigator.userAgent),
+            isIOS: /iphone|ipad|ipod/i.test(navigator.userAgent)
+        };
+
         let plyrInstance = null;
 
-        // Device detection
-        const isAndroid = /android/i.test(navigator.userAgent);
-        const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+        // ============================================
+        // UTILITY FUNCTIONS
+        // ============================================
+        function showStatus(message, type = 'info') {
+            const statusEl = document.getElementById('status-message');
+            if (!statusEl) return;
+            
+            statusEl.textContent = message;
+            statusEl.className = `status-message show ${type}`;
+            
+            setTimeout(() => {
+                statusEl.classList.remove('show');
+            }, 3000);
+        }
 
-        // Initialize Plyr player with full features
+        function cleanFileName() {
+            const titleEl = document.querySelector('.file-title');
+            if (!titleEl) return;
+            
+            let name = titleEl.textContent;
+            name = name
+                .replace(/\./g, ' ')
+                .replace(/\[/g, ' ')
+                .replace(/\]/g, ' ')
+                .replace(/\{/g, ' ')
+                .replace(/\}/g, ' ')
+                .replace(/_/g, ' ')
+                .replace(/\.mkv|\.mp4/gi, '')
+                .replace(/mkv|mp4/gi, '')
+                .replace(/\s+/g, ' ')
+                .trim();
+            titleEl.textContent = name;
+        }
+
+        // ============================================
+        // PLAYER INITIALIZATION
+        // ============================================
         function initializePlyr() {
             const video = document.getElementById('player');
-            
             if (!video) {
                 console.error('Video element not found');
                 return;
@@ -875,23 +918,16 @@
                         seek: true
                     },
                     autoplay: false,
-                    autopause: true,
-                    quality: {
-                        default: 720,
-                        options: [1080, 720, 480, 360]
-                    }
+                    autopause: true
                 });
 
-                // Add speed control
                 addSpeedControl();
-                
-                console.log('Plyr initialized successfully');
+                console.log('✓ Player initialized');
             } catch (error) {
-                console.error('Error initializing Plyr:', error);
+                console.error('Player init error:', error);
             }
         }
 
-        // Add speed control to player
         function addSpeedControl() {
             if (!plyrInstance || !plyrInstance.elements.controls) return;
 
@@ -899,7 +935,7 @@
             const fullscreenBtn = controls.querySelector('[data-plyr="fullscreen"]');
             if (!fullscreenBtn) return;
 
-            // Create speed button
+            // Speed button
             const speedBtn = document.createElement('button');
             speedBtn.className = 'plyr__controls__item plyr__control';
             speedBtn.type = 'button';
@@ -912,7 +948,7 @@
             `;
             speedBtn.title = 'Speed';
 
-            // Create speed menu
+            // Speed menu
             const speedMenu = document.createElement('div');
             speedMenu.className = 'aspect-dropdown';
             speedMenu.innerHTML = `
@@ -928,24 +964,24 @@
             speedBtn.appendChild(speedMenu);
             controls.insertBefore(speedBtn, fullscreenBtn);
 
-            // Speed button click handler
+            // Speed button handler
             speedBtn.addEventListener('click', (e) => {
+                e.preventDefault();
                 e.stopPropagation();
                 speedMenu.classList.toggle('active');
             });
 
-            // Speed item click handler
+            // Speed item handlers
             speedMenu.querySelectorAll('.aspect-item').forEach(item => {
                 item.addEventListener('click', (e) => {
+                    e.preventDefault();
                     e.stopPropagation();
-                    const speed = parseFloat(item.dataset.speed);
                     
-                    if (plyrInstance) {
-                        const video = plyrInstance.media;
-                        video.playbackRate = speed;
+                    const speed = parseFloat(item.dataset.speed);
+                    if (plyrInstance && plyrInstance.media) {
+                        plyrInstance.media.playbackRate = speed;
                     }
 
-                    // Update active state
                     speedMenu.querySelectorAll('.aspect-item').forEach(i => {
                         i.classList.remove('active');
                         const check = i.querySelector('span:last-child');
@@ -955,18 +991,15 @@
                     });
 
                     item.classList.add('active');
-                    if (!item.querySelector('span:last-child')?.textContent === '✓') {
-                        const check = document.createElement('span');
-                        check.textContent = '✓';
-                        item.appendChild(check);
-                    }
+                    const check = document.createElement('span');
+                    check.textContent = '✓';
+                    item.appendChild(check);
 
                     speedMenu.classList.remove('active');
                     showStatus(`Speed: ${speed}x`, 'info');
                 });
             });
 
-            // Close menu on outside click
             document.addEventListener('click', (e) => {
                 if (!speedBtn.contains(e.target)) {
                     speedMenu.classList.remove('active');
@@ -974,28 +1007,23 @@
             });
         }
 
-        // Show status message
-        function showStatus(message, type = 'info') {
-            const statusEl = document.getElementById('status-message');
-            statusEl.textContent = message;
-            statusEl.className = `status-message show ${type}`;
-            
-            setTimeout(() => {
-                statusEl.classList.remove('show');
-            }, 3000);
-        }
+        // ============================================
+        // DOWNLOAD FUNCTION
+        // ============================================
+        async function downloadVideo(e) {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
 
-        // Download video
-        async function downloadVideo() {
-            const btn = document.getElementById('download-btn');
-            const originalText = btn.innerHTML;
+            const btn = document.getElementById('downloadBtn');
+            const originalHTML = btn.innerHTML;
             
             btn.disabled = true;
             btn.innerHTML = '<span>⏳ Downloading...</span>';
 
             try {
-                // Try using fetch
-                const response = await fetch(fileUrl, {
+                const response = await fetch(CONFIG.fileUrl, {
                     mode: 'no-cors'
                 });
 
@@ -1004,109 +1032,157 @@
                     const url = window.URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = fileName || 'video.mp4';
+                    a.download = CONFIG.fileName || 'video.mp4';
                     document.body.appendChild(a);
                     a.click();
                     document.body.removeChild(a);
                     window.URL.revokeObjectURL(url);
-                    showStatus('✓ Download started successfully!', 'success');
+                    showStatus('✓ Download started!', 'success');
                 } else {
-                    throw new Error('Network response error');
+                    throw new Error('Fetch error');
                 }
             } catch (error) {
-                console.log('Fetch failed, trying direct download...');
+                console.log('Fetch failed, trying direct...');
                 try {
                     const a = document.createElement('a');
-                    a.href = fileUrl;
-                    a.download = fileName || 'video.mp4';
+                    a.href = CONFIG.fileUrl;
+                    a.download = CONFIG.fileName || 'video.mp4';
                     a.target = '_blank';
                     document.body.appendChild(a);
                     a.click();
                     document.body.removeChild(a);
                     showStatus('✓ Download started!', 'success');
                 } catch (err) {
-                    showStatus('✗ Download failed. Try external player', 'error');
+                    showStatus('✗ Download failed', 'error');
                 }
             } finally {
                 btn.disabled = false;
-                btn.innerHTML = originalText;
+                btn.innerHTML = originalHTML;
             }
         }
 
-        // Open external players
-        function openVLC() {
-            if (isAndroid) {
-                window.location.href = `intent:${fileUrl}#Intent;action=android.intent.action.VIEW;type=video/*;package=org.videolan.vlc;end`;
-                setTimeout(() => window.open(fileUrl, '_blank'), 1500);
+        // ============================================
+        // PLAYER FUNCTIONS
+        // ============================================
+        function openVLC(e) {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            
+            if (CONFIG.isAndroid) {
+                window.location.href = `intent:${CONFIG.fileUrl}#Intent;action=android.intent.action.VIEW;type=video/*;package=org.videolan.vlc;end`;
+                setTimeout(() => window.open(CONFIG.fileUrl, '_blank'), 1500);
             } else {
-                window.open(fileUrl, '_blank');
+                window.open(CONFIG.fileUrl, '_blank');
             }
             showStatus('Opening VLC Player...', 'info');
         }
 
-        function openMX() {
-            if (isAndroid) {
-                window.location.href = `intent:${fileUrl}#Intent;action=android.intent.action.VIEW;type=video/*;package=com.mxtech.videoplayer.ad;end`;
-                setTimeout(() => window.open(fileUrl, '_blank'), 1500);
+        function openMX(e) {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            
+            if (CONFIG.isAndroid) {
+                window.location.href = `intent:${CONFIG.fileUrl}#Intent;action=android.intent.action.VIEW;type=video/*;package=com.mxtech.videoplayer.ad;end`;
+                setTimeout(() => window.open(CONFIG.fileUrl, '_blank'), 1500);
             } else {
-                window.open(fileUrl, '_blank');
+                window.open(CONFIG.fileUrl, '_blank');
             }
             showStatus('Opening MX Player...', 'info');
         }
 
-        function openPlayer(type) {
-            const players = {
-                playit: () => {
-                    if (isAndroid) {
-                        window.location.href = `playit://playerv2/video?url=${encodeURIComponent(fileUrl)}`;
-                        setTimeout(() => window.open(fileUrl, '_blank'), 1500);
-                    } else {
-                        window.open(fileUrl, '_blank');
-                    }
-                },
-                km: () => {
-                    if (isAndroid) {
-                        window.location.href = `intent:${fileUrl}#Intent;action=android.intent.action.VIEW;type=video/*;package=com.kmplayer;end`;
-                        setTimeout(() => window.open(fileUrl, '_blank'), 1500);
-                    } else {
-                        window.open(fileUrl, '_blank');
-                    }
-                },
-                s: () => {
-                    if (isAndroid) {
-                        window.location.href = `intent:${fileUrl}#Intent;action=com.young.simple.player.playback_online;package=com.young.simple.player;end`;
-                        setTimeout(() => window.open(fileUrl, '_blank'), 1500);
-                    } else {
-                        window.open(fileUrl, '_blank');
-                    }
-                },
-                hd: () => {
-                    if (isAndroid) {
-                        window.location.href = `intent:${fileUrl}#Intent;action=android.intent.action.VIEW;type=video/*;package=uplayer.video.player;end`;
-                        setTimeout(() => window.open(fileUrl, '_blank'), 1500);
-                    } else {
-                        window.open(fileUrl, '_blank');
-                    }
-                },
-                mxpro: () => {
-                    if (isAndroid) {
-                        window.location.href = `intent:${fileUrl}#Intent;action=android.intent.action.VIEW;type=video/*;package=com.mxtech.videoplayer.pro;end`;
-                        setTimeout(() => window.open(fileUrl, '_blank'), 1500);
-                    } else {
-                        window.open(fileUrl, '_blank');
-                    }
-                }
-            };
-
-            if (players[type]) {
-                players[type]();
-                showStatus('Opening player...', 'info');
+        function openPlayit(e) {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
             }
+            
+            if (CONFIG.isAndroid) {
+                window.location.href = `playit://playerv2/video?url=${encodeURIComponent(CONFIG.fileUrl)}`;
+                setTimeout(() => window.open(CONFIG.fileUrl, '_blank'), 1500);
+            } else {
+                window.open(CONFIG.fileUrl, '_blank');
+            }
+            showStatus('Opening PLAYit...', 'info');
             closeDropdown();
         }
 
-        // Dropdown menu
-        function toggleDropdown() {
+        function openKM(e) {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            
+            if (CONFIG.isAndroid) {
+                window.location.href = `intent:${CONFIG.fileUrl}#Intent;action=android.intent.action.VIEW;type=video/*;package=com.kmplayer;end`;
+                setTimeout(() => window.open(CONFIG.fileUrl, '_blank'), 1500);
+            } else {
+                window.open(CONFIG.fileUrl, '_blank');
+            }
+            showStatus('Opening KMPlayer...', 'info');
+            closeDropdown();
+        }
+
+        function openS(e) {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            
+            if (CONFIG.isAndroid) {
+                window.location.href = `intent:${CONFIG.fileUrl}#Intent;action=com.young.simple.player.playback_online;package=com.young.simple.player;end`;
+                setTimeout(() => window.open(CONFIG.fileUrl, '_blank'), 1500);
+            } else {
+                window.open(CONFIG.fileUrl, '_blank');
+            }
+            showStatus('Opening S Player...', 'info');
+            closeDropdown();
+        }
+
+        function openHD(e) {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            
+            if (CONFIG.isAndroid) {
+                window.location.href = `intent:${CONFIG.fileUrl}#Intent;action=android.intent.action.VIEW;type=video/*;package=uplayer.video.player;end`;
+                setTimeout(() => window.open(CONFIG.fileUrl, '_blank'), 1500);
+            } else {
+                window.open(CONFIG.fileUrl, '_blank');
+            }
+            showStatus('Opening HD Player...', 'info');
+            closeDropdown();
+        }
+
+        function openMXPro(e) {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            
+            if (CONFIG.isAndroid) {
+                window.location.href = `intent:${CONFIG.fileUrl}#Intent;action=android.intent.action.VIEW;type=video/*;package=com.mxtech.videoplayer.pro;end`;
+                setTimeout(() => window.open(CONFIG.fileUrl, '_blank'), 1500);
+            } else {
+                window.open(CONFIG.fileUrl, '_blank');
+            }
+            showStatus('Opening MX Player Pro...', 'info');
+            closeDropdown();
+        }
+
+        // ============================================
+        // DROPDOWN MANAGEMENT
+        // ============================================
+        function toggleDropdown(e) {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            
             const dropdown = document.getElementById('players-dropdown');
             dropdown.classList.toggle('active');
         }
@@ -1117,68 +1193,115 @@
         }
 
         document.addEventListener('click', (e) => {
-            if (!e.target.closest('.dropdown')) {
-                closeDropdown();
+            const dropdown = document.getElementById('players-dropdown');
+            const morePlayersBtn = document.getElementById('morePlayersBtn');
+            
+            if (dropdown && morePlayersBtn && !morePlayersBtn.contains(e.target) && !dropdown.contains(e.target)) {
+                dropdown.classList.remove('active');
             }
         });
 
-        // Clean file name
-        function cleanFileName() {
-            const titleEl = document.querySelector('.file-title');
-            if (titleEl) {
-                let name = titleEl.textContent;
-                name = name
-                    .replace(/\./g, ' ')
-                    .replace(/\[/g, ' ')
-                    .replace(/\]/g, ' ')
-                    .replace(/\{/g, ' ')
-                    .replace(/\}/g, ' ')
-                    .replace(/_/g, ' ')
-                    .replace(/\.mkv/gi, '')
-                    .replace(/\.mp4/gi, '')
-                    .replace(/mkv|mp4/gi, '')
-                    .replace(/\s+/g, ' ')
-                    .trim();
-                titleEl.textContent = name;
-            }
-        }
-
-        // Mobile menu
+        // ============================================
+        // MOBILE MENU
+        // ============================================
         function initMobileMenu() {
             const mobileMenuBtn = document.querySelector('.mobile-menu');
             const nav = document.querySelector('.nav');
 
-            if (mobileMenuBtn && nav) {
-                mobileMenuBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    nav.classList.toggle('active');
-                });
+            if (!mobileMenuBtn || !nav) return;
 
-                nav.querySelectorAll('a').forEach(link => {
-                    link.addEventListener('click', () => {
-                        nav.classList.remove('active');
-                    });
-                });
+            mobileMenuBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                nav.classList.toggle('active');
+            });
 
-                document.addEventListener('click', (e) => {
-                    if (!nav.contains(e.target) && !mobileMenuBtn.contains(e.target)) {
-                        nav.classList.remove('active');
-                    }
+            nav.querySelectorAll('a').forEach(link => {
+                link.addEventListener('click', () => {
+                    nav.classList.remove('active');
                 });
+            });
+
+            document.addEventListener('click', (e) => {
+                if (!nav.contains(e.target) && !mobileMenuBtn.contains(e.target)) {
+                    nav.classList.remove('active');
+                }
+            });
+        }
+
+        // ============================================
+        // EVENT LISTENERS
+        // ============================================
+        function attachEventListeners() {
+            // Download button
+            const downloadBtn = document.getElementById('downloadBtn');
+            if (downloadBtn) {
+                downloadBtn.addEventListener('click', downloadVideo);
+            }
+
+            // VLC
+            const vlcBtn = document.getElementById('vlcBtn');
+            if (vlcBtn) {
+                vlcBtn.addEventListener('click', openVLC);
+            }
+
+            // MX
+            const mxBtn = document.getElementById('mxBtn');
+            if (mxBtn) {
+                mxBtn.addEventListener('click', openMX);
+            }
+
+            // More Players button
+            const morePlayersBtn = document.getElementById('morePlayersBtn');
+            if (morePlayersBtn) {
+                morePlayersBtn.addEventListener('click', toggleDropdown);
+            }
+
+            // Playit
+            const playitBtn = document.getElementById('playitBtn');
+            if (playitBtn) {
+                playitBtn.addEventListener('click', openPlayit);
+            }
+
+            // KM
+            const kmBtn = document.getElementById('kmBtn');
+            if (kmBtn) {
+                kmBtn.addEventListener('click', openKM);
+            }
+
+            // S
+            const sBtn = document.getElementById('sBtn');
+            if (sBtn) {
+                sBtn.addEventListener('click', openS);
+            }
+
+            // HD
+            const hdBtn = document.getElementById('hdBtn');
+            if (hdBtn) {
+                hdBtn.addEventListener('click', openHD);
+            }
+
+            // MX Pro
+            const mxproBtn = document.getElementById('mxproBtn');
+            if (mxproBtn) {
+                mxproBtn.addEventListener('click', openMXPro);
             }
         }
 
-        // Initialize on page load
+        // ============================================
+        // INITIALIZATION
+        // ============================================
         document.addEventListener('DOMContentLoaded', () => {
             cleanFileName();
             initializePlyr();
             initMobileMenu();
-            showStatus('Ready to stream! Use speed control in player', 'success');
+            attachEventListeners();
+            showStatus('Ready to stream!', 'success');
         });
 
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
-            if (!plyrInstance) return;
+            if (!plyrInstance || !plyrInstance.media) return;
 
             const video = plyrInstance.media;
             
@@ -1188,9 +1311,11 @@
                     plyrInstance.togglePlay();
                     break;
                 case 'f':
+                    e.preventDefault();
                     plyrInstance.fullscreen.toggle();
                     break;
                 case 'm':
+                    e.preventDefault();
                     plyrInstance.muted = !plyrInstance.muted;
                     break;
                 case 'arrowup':
