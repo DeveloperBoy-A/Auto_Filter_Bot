@@ -42,7 +42,31 @@ def build_new_name(doc) -> str | None:
     text_to_scan = f"{original_name} {caption_text}"
 
     # Import kiye gaye updated functions ka use ho raha hai
-    extracted     = extract_languages_quality(text_to_scan)
+    extracted = extract_languages_quality(text_to_scan)
+
+    # --- SMART AUTO-ADD LOGIC ---
+    # Agar Resolution nahi mili, to automatically 720P add karo
+    if not extracted.get("resolution"):
+        extracted["resolution"] = "720P"
+
+    # Agar Source nahi mila, to WEB-DL add karo
+    if not extracted.get("source"):
+        extracted["source"] = "WEB-DL"
+
+    # Audio Codec Check - Sirf tabhi AAC add karo jab koi audio tag na ho
+    audio_codecs = [
+        "Dolby TrueHD", "Dolby Atmos", "DTS-X", "DTS-HD", 
+        "DDP 7.1", "DDP 5.1", "DD 5.1", "DD 2.0", 
+        "DTS 5.1", "AAC 5.1", "AAC"
+    ]
+    audio_tags = extracted.get("extra_tags", [])
+    has_audio = any(codec in audio_tags for codec in audio_codecs)
+
+    if not has_audio:
+        if "AAC" not in audio_tags:
+            audio_tags.append("AAC")
+        extracted["extra_tags"] = audio_tags
+
     cleaned_title = extract_pure_title(base_name)
 
     # Title ko proper Case mein format karna
@@ -60,62 +84,55 @@ def build_new_name(doc) -> str | None:
         if value and str(value).lower() not in " ".join(map(str, parts)).lower():
             parts.append(value)
 
-    # === STRICT SEQUENCE ASSEMBLER ===
+    # ==========================================
+    #      STRICT SEQUENCE ASSEMBLER (1 to 18)
+    # ==========================================
+    
+    # [1] Title
+    if final_title: add_unique(final_title)
 
-    # [1] Title (e.g., Pushpa 2)
-    if final_title: 
-        add_unique(final_title)
+    # [2] Title Part / Volume / Chapter
+    if extracted.get("title_part"): add_unique(extracted["title_part"])
 
-    # [2] Title Part / Volume / Chapter (e.g., Part 1, Vol 2)
-    if extracted.get("title_part"): 
-        add_unique(extracted["title_part"])
+    # [3] Season & Episode
+    if extracted.get("season_episode"): add_unique(extracted["season_episode"])
 
-    # [3] Season & Episode (e.g., S01 E05)
-    if extracted.get("season_episode"): 
-        add_unique(extracted["season_episode"])
+    # [4] Episode Title
+    if extracted.get("season_episode") and extracted.get("episode_title"):
+        add_unique(extracted["episode_title"])
 
-    # [4] Series Status (e.g., COMPLETE)
-    if extracted.get("series_status"): 
-        add_unique(extracted["series_status"])
+    # [5] Series Status
+    if extracted.get("series_status"): add_unique(extracted["series_status"])
 
-    # [5] Release Year (e.g., 2024)
-    if extracted.get("year"): 
-        add_unique(extracted["year"])
+    # [6] Release Year
+    if extracted.get("year"): add_unique(extracted["year"])
 
-    # [6] Video Resolution (e.g., 1080P)
-    if extracted.get("resolution"): 
-        add_unique(extracted["resolution"])
+    # [7] Video Resolution
+    if extracted.get("resolution"): add_unique(extracted["resolution"])
 
-    # [7] Audio Languages (e.g., Hindi Tamil Dual Audio)
-    for lang in extracted.get("languages", []): 
-        add_unique(lang)
+    # [8] Audio Languages
+    for lang in extracted.get("languages", []): add_unique(lang)
 
-    # [8] Custom Qualifiers (e.g., Uncut, Director's Cut)
-    for qual in extracted.get("custom_qualifiers", []): 
-        add_unique(qual)
+    # [9] Custom Qualifiers
+    for qual in extracted.get("custom_qualifiers", []): add_unique(qual)
 
-    # [9] Color Depth / HDR (e.g., 10Bit, Dolby Vision)
+    # [10] Color Depth / HDR
     for tag in ["10Bit", "12Bit", "SDR", "HDR", "Dolby Vision", "IMAX", "60FPS"]:
-        if tag in extracted.get("extra_tags", []): 
-            add_unique(tag)
+        if tag in extracted.get("extra_tags", []): add_unique(tag)
 
-    # [10] OTT Platform Tag (e.g., Netflix, JioCinema)
+    # [11] OTT Platform Tag
     if extracted.get("ott") and extracted["ott"] not in parts:
         parts.append(extracted["ott"])
 
-    # [11] Source Type (e.g., WEB DL, BluRay)
-    if extracted.get("source"): 
-        add_unique(extracted["source"])
+    # [12] Source Type
+    if extracted.get("source"): add_unique(extracted["source"])
 
-    # [12] Video Codec (e.g., HEVC, AV1)
+    # [13] Video Codec
     for vcodec in ["AV1", "HEVC X265", "AVC X264"]:
-        if vcodec in extracted.get("extra_tags", []): 
-            add_unique(vcodec)
+        if vcodec in extracted.get("extra_tags", []): add_unique(vcodec)
 
-    # [13] Audio Codec & Channels (e.g., DD 5.1, Atmos)
+    # [14] Audio Codec & Channels (Smart Overlap Handler)
     audio_tags = extracted.get("extra_tags", [])
-
-    # Smart Overlap Handler (DDP 5.1 aur DD 5.1 ek sath na aaye)
     if "DDP 5.1" in audio_tags and "DD 5.1" in audio_tags:
         audio_tags.remove("DD 5.1")
     if "DDP 7.1" in audio_tags and "DD 5.1" in audio_tags:
@@ -127,20 +144,17 @@ def build_new_name(doc) -> str | None:
         if acodec in audio_tags: 
             add_unique(acodec)
 
-    # [14] Subtitles (e.g., ESubs)
+    # [15] Subtitles
     for sub in ["ESubs", "HardSubs", "MSubs"]:
-        if sub in extracted.get("extra_tags", []): 
-            add_unique(sub)
+        if sub in extracted.get("extra_tags", []): add_unique(sub)
 
-    # [15] Audio Bitrate (e.g., 192kbps)
-    if extracted.get("kbps"): 
-        add_unique(extracted["kbps"])
+    # [16] Audio Bitrate
+    if extracted.get("kbps"): add_unique(extracted["kbps"])
 
-    # [16] File Split Part (e.g., Part 001)
-    if extracted.get("split_part"): 
-        add_unique(extracted["split_part"])
+    # [17] File Split Part (e.g. part001)
+    if extracted.get("split_part"): add_unique(extracted["split_part"])
 
-    # [17] Branding Signature (Sabse aakhir mein tumhara tag)
+    # [18] Branding Signature
     parts = [p for p in parts if p and "Tokyo_Updates" not in str(p)]
     parts.append(RELEASE_TAG)
 
