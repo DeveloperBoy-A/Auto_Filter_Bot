@@ -456,6 +456,29 @@ def normalize_season_episode(text):
     return text.upper()
 
 
+def extract_episode_title(text):
+    text = re.sub(r'\.[a-z0-9]{2,4}$', '', text, flags=re.IGNORECASE)
+
+    patterns = [
+        r'(?:S\d{1,2}E\d{1,4}|S\d{1,2}\s*E\d{1,4})[\s._\-]+(.+?)(?=\b(?:19\d{2}|20\d{2}|2160p|1080p|720p|480p|web[- ]?dl|webrip|bluray|hdrip|x264|x265|aac|ac3|ddp)\b|$)',
+        r'(?:Episode|Ep)\s*\d+[\s._\-]+(.+?)(?=\b(?:19\d{2}|20\d{2}|2160p|1080p|720p|480p)\b|$)'
+    ]
+
+    for pattern in patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+
+        if match:
+            title = match.group(1)
+
+            title = re.sub(r'[._]+', ' ', title)
+            title = re.sub(r'[\[\]\(\)]', '', title)
+            title = re.sub(r'\s+', ' ', title).strip()
+
+            if len(title) > 2:
+                return title.title()
+
+    return None
+
 # =========================================================
 # 4. UPDATED DATA EXTRACTOR
 # =========================================================
@@ -468,10 +491,12 @@ def extract_languages_quality(text_to_scan):
     # Pure Episode aur Season Pack Extraction Logic
     normalized_se = normalize_season_episode(text_to_scan)
     season_episode = None
+    episode_title = None
 
     full_match = re.search(r'\b(S\d{2})\s(E\d{2,4}(?:-\d{2,4})?)\b', normalized_se)
     if full_match:
         season_episode = full_match.group(0)
+        episode_title = extract_episode_title(text_to_scan)
     else:
         s_match = re.search(r'\b(S\d{2}(?:-\d{2})?)\b', normalized_se)
         e_match = re.search(r'\b(E\d{2,4}(?:-\d{2,4})?)\b', normalized_se)
@@ -480,6 +505,7 @@ def extract_languages_quality(text_to_scan):
             season_episode = f"{s_match.group(1)} {e_match.group(1)}"
         elif e_match:
             season_episode = e_match.group(1)
+            episode_title = extract_episode_title(text_to_scan)
         elif s_match:
             season_episode = s_match.group(1)
             
@@ -640,7 +666,8 @@ def extract_languages_quality(text_to_scan):
         split_part = f"Part {sp_match.group(1)}"
 
     return {
-        "year": year, "season_episode": season_episode, "languages": languages,
+        "year": year, "season_episode": season_episode,
+"episode_title": episode_title, "languages": languages,
         "resolution": resolution, "source": source, "ott": ott_tag, 
         "extra_tags": extra_tags, "kbps": kbps_tag, 
         "custom_qualifiers": custom_qualifiers,
@@ -728,6 +755,21 @@ async def save_file(media, bot=None):
         text_to_scan = f"{original_name} {getattr(media, 'caption', '') or ''}"
 
         extracted = extract_languages_quality(text_to_scan)
+        media_info_found = any([
+            extracted.get("resolution"),
+            extracted.get("source"),
+            extracted.get("languages"),
+            extracted.get("extra_tags")
+        ])
+
+        if not media_info_found:
+            extracted["resolution"] = "720P"
+            extracted["source"] = "WEB-DL"
+
+            audio_tags = extracted.get("extra_tags", [])
+            audio_tags.append("AAC")
+            extracted["extra_tags"] = audio_tags
+
         cleaned_title = extract_pure_title(base_name)
 
         formatted_words = []
@@ -752,6 +794,10 @@ async def save_file(media, bot=None):
 
         # [2] Season & Episode
         if extracted.get("season_episode"): add_unique(extracted["season_episode"])
+
+        # [2.1] Episode Title
+        if extracted.get("season_episode") and extracted.get("episode_title"):
+            add_unique(extracted["episode_title"])
 
         # [2.5] Series Status
         if extracted.get("series_status"): add_unique(extracted["series_status"])
@@ -851,6 +897,8 @@ async def save_file(media, bot=None):
     except Exception as e:
         logger.exception(f"[ERROR] {e}")
         return False, 3
+
+
 
 
 #__________________________________
