@@ -457,24 +457,37 @@ def normalize_season_episode(text):
 
 
 def extract_episode_title(text):
+    # File extension udana
     text = re.sub(r'\.[a-z0-9]{2,4}$', '', text, flags=re.IGNORECASE)
 
+    # Stop words ki list (Yahan aakar title capture hona ruk jayega)
+    stop_keywords = [
+        r'19\d{2}', r'20\d{2}', r'2160p', r'1080p', r'720p', r'480p',
+        r'web[- ]?dl', r'webrip', r'bluray', r'hdrip', r'x264', r'x265', r'hevc', r'avc',
+        r'aac', r'ac3', r'ddp', r'hindi', r'english', r'tamil', r'telugu', r'malayalam',
+        r'dual', r'multi', r'av1', r'complete', r'combined'
+    ]
+    stop_pattern = '|'.join(stop_keywords)
+
+    # Lookahead: Stop at any stop_keyword, end of string, OR brackets `[` `(` `@`
+    lookahead = rf'(?=\b(?:{stop_pattern})\b|$|\[|\(|@)'
+
     patterns = [
-        r'(?:S\d{1,2}E\d{1,4}|S\d{1,2}\s*E\d{1,4})[\s._\-]+(.+?)(?=\b(?:19\d{2}|20\d{2}|2160p|1080p|720p|480p|web[- ]?dl|webrip|bluray|hdrip|x264|x265|aac|ac3|ddp)\b|$)',
-        r'(?:Episode|Ep)\s*\d+[\s._\-]+(.+?)(?=\b(?:19\d{2}|20\d{2}|2160p|1080p|720p|480p)\b|$)'
+        r'(?:S\d{1,2}[\s._\-]*E\d{1,4})[\s._\-]+(.+?)' + lookahead,
+        r'(?:Episode|Ep)[\s._\-]*\d+[\s._\-]+(.+?)' + lookahead
     ]
 
     for pattern in patterns:
         match = re.search(pattern, text, re.IGNORECASE)
-
         if match:
             title = match.group(1)
-
-            title = re.sub(r'[._]+', ' ', title)
+            # Junk characters clean karna
+            title = re.sub(r'[._\-]+', ' ', title)
             title = re.sub(r'[\[\]\(\)]', '', title)
             title = re.sub(r'\s+', ' ', title).strip()
 
-            if len(title) > 2:
+            # Ignore karna agar title sirf numbers ho ya empty ho
+            if len(title) > 2 and not re.fullmatch(r'[\d\s\-]+', title):
                 return title.title()
 
     return None
@@ -755,19 +768,29 @@ async def save_file(media, bot=None):
         text_to_scan = f"{original_name} {getattr(media, 'caption', '') or ''}"
 
         extracted = extract_languages_quality(text_to_scan)
-        media_info_found = any([
-            extracted.get("resolution"),
-            extracted.get("source"),
-            extracted.get("languages"),
-            extracted.get("extra_tags")
-        ])
-
-        if not media_info_found:
+        
+        # --- SMART AUTO-ADD LOGIC ---
+        # 1. Agar Resolution nahi mili, to automatically 720P add karo
+        if not extracted.get("resolution"):
             extracted["resolution"] = "720P"
+
+        # 2. Agar Source nahi mila, to WEB-DL add karo
+        if not extracted.get("source"):
             extracted["source"] = "WEB-DL"
 
-            audio_tags = extracted.get("extra_tags", [])
-            audio_tags.append("AAC")
+        # 3. Audio Codec Check - Sirf tabhi AAC add karo jab koi audio tag na ho
+        audio_codecs = [
+            "Dolby TrueHD", "Dolby Atmos", "DTS-X", "DTS-HD", 
+            "DDP 7.1", "DDP 5.1", "DD 5.1", "DD 2.0", 
+            "DTS 5.1", "AAC 5.1", "AAC"
+        ]
+        audio_tags = extracted.get("extra_tags", [])
+        
+        has_audio = any(codec in audio_tags for codec in audio_codecs)
+        
+        if not has_audio:
+            if "AAC" not in audio_tags:
+                audio_tags.append("AAC")
             extracted["extra_tags"] = audio_tags
 
         cleaned_title = extract_pure_title(base_name)
