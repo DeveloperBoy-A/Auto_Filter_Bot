@@ -162,7 +162,27 @@
         .loading-text { color: var(--text-secondary); font-size: 0.875rem; font-weight: 500; }
 
         /* ── WATERMARK ── */
-        .video-watermark { position: absolute; top: 12px; left: 14px; z-index: 9; background: rgba(0,0,0,0.45); color: rgba(255,255,255,0.88); font-size: 0.78rem; font-weight: 600; font-family: "Inter", sans-serif; padding: 4px 10px; border-radius: 6px; backdrop-filter: blur(6px); letter-spacing: 0.3px; max-width: 60%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; opacity: 0; transition: opacity 0.7s ease; user-select: none; }
+.video-watermark { 
+    position: absolute; 
+    top: 50%; 
+    left: 50%; 
+    transform: translate(-50%, -50%); 
+    z-index: 9; 
+    background: transparent; 
+    color: rgba(255, 255, 255, 0.6); 
+    font-size: 3rem; 
+    font-weight: 800; 
+    font-family: "Inter", sans-serif; 
+    padding: 0; 
+    border-radius: 0; 
+    pointer-events: none; 
+    opacity: 0; 
+    transition: opacity 0.5s ease; 
+    user-select: none;
+    text-shadow: 0px 0px 10px rgba(0,0,0,0.5);
+    text-align: center;
+    width: 100%;
+}
 
         .fade-in { animation: fadeIn 0.5s ease-out; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -214,7 +234,7 @@
 
     <header class="header">
         <div class="header-content">
-            <a href="https://t.me/Tokyo_Updates" class="logo">『𓆩ꨄ︎𓆪𝐓ᴏᴋʏᴏ 𝐁ᴀᴄᴋᴜᴘ𓆩ꨄ︎𓆪』</a>
+            <a href="https://t.me/Tokyo_Updates" class="logo">『𓆩ꨄ︎𓆪𝐓𝐨ᴋʏᴏ 𝐔𝐩𝐝𝐚𝐭𝐞𝐬𓆩ꨄ︎𓆪』</a>
             <nav class="nav">
                 <a href="#video-section">Stream</a>
                 <a href="#explore">Explore</a>
@@ -336,7 +356,7 @@
                     <p>Get exclusive content and real-time notifications from our premium channels</p>
                     <div class="card-links">
                         <a href="https://t.me/Tokyo_Updates" class="card-link">
-                            <span>🫧『𓆩ꨄ︎𓆪𝐓ᴏᴋʏᴏ 𝐁ᴀᴄᴋᴜᴘ𓆩ꨄ︎𓆪』🫧</span>
+                            <span>『𓆩ꨄ︎𓆪𝐓𝐨ᴋʏᴏ 𝐔𝐩𝐝𝐚𝐭𝐞𝐬𓆩ꨄ︎𓆪』</span>
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
                         </a>
                         <a href="https://t.me/newmovieswebseries_group" class="card-link">
@@ -383,8 +403,8 @@
 
     <footer class="footer">
         <center>
-            <h5>Copyright © 2026 <a href="https://t.me/Tokyo_Updates"><span style="font-weight:700;">🫧『𓆩ꨄ︎𓆪𝐓ᴏᴋʏᴏ 𝐁ᴀᴄᴋᴜᴘ𓆩ꨄ︎𓆪』🫧</span></a>. All Rights Reserved.</h5>
-            <h4 style="font-weight:700; margin-top:0.5rem;">This Page Is Made By <a href="https://t.me/its_ankit_meena907"><span>°‌ 🫧 •『𓆩ꨄ︎𓆪➵Mʀ⛦ᴀɴᴋɪᴛ ᴍᴇᴇणा⛦𓆩ꨄ︎𓆪』•🫧 °‌</span></a></h4>
+            <h5>Copyright © 2026 <a href="https://t.me/Tokyo_Updates"><span style="font-weight:700;">『𝐓𝐨ᴋʏᴏ 𝐔𝐩𝐝𝐚𝐭𝐞𝐬』</span></a>. All Rights Reserved.</h5>
+            <h4 style="font-weight:700; margin-top:0.5rem;">This Page Is Made By <a href="https://t.me/its_ankit_meena907"><span>°‌•『𓆩ꨄ︎𓆪➵Mʀ⛦ᴀɴᴋɪᴛ ᴍᴇᴇणा⛦𓆩ꨄ︎𓆪』•°</span></a></h4>
         </center>
     </footer>
 
@@ -677,7 +697,7 @@
 
         function showWatermark() {
             wm.style.opacity = "1";
-            setTimeout(() => { wm.style.opacity = "0"; }, 4000);
+            setTimeout(() => { wm.style.opacity = "0"; }, 10000);
         }
         
         // Video shuru hone ke 3 second baad dikhega
