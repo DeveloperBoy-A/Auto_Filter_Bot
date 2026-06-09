@@ -30,7 +30,6 @@
         }
 
         .plyr__control .lucide { fill: none !important; }
-
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
@@ -41,7 +40,6 @@
             line-height: 1.6;
         }
 
-        /* ── HEADER ── */
         .header {
             position: fixed;
             top: 0; left: 0; right: 0;
@@ -73,557 +71,112 @@
         }
 
         .nav { display: flex; gap: 2rem; }
-
-        .nav a {
-            color: var(--text-secondary);
-            text-decoration: none;
-            font-size: 0.875rem;
-            font-weight: 500;
-            transition: color 0.2s;
-        }
-
+        .nav a { color: var(--text-secondary); text-decoration: none; font-size: 0.875rem; font-weight: 500; transition: color 0.2s; }
         .nav a:hover { color: var(--accent-rose); }
+        .mobile-menu { display: none; background: none; border: none; color: var(--text-primary); cursor: pointer; }
 
-        .mobile-menu {
-            display: none;
-            background: none;
-            border: none;
-            color: var(--text-primary);
-            cursor: pointer;
-        }
-
-        /* ── SLOGAN ── */
-        .slogan {
-            text-align: center;
-            padding: 6.5rem 1.5rem 0.5rem;
-            font-size: 1rem;
-            font-weight: 600;
-            letter-spacing: 0.5px;
-        }
-
+        .slogan { text-align: center; padding: 6.5rem 1.5rem 0.5rem; font-size: 1rem; font-weight: 600; letter-spacing: 0.5px; }
         .slogan-text { color: var(--text-secondary); }
+        .slogan-highlight { background: linear-gradient(135deg, var(--accent-rose), var(--accent-amber)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
 
-        .slogan-highlight {
-            background: linear-gradient(135deg, var(--accent-rose), var(--accent-amber));
-            -webkit-background-clip: text;
-            background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
+        .container { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem 3rem; }
 
-        /* ── CONTAINER ── */
-        .container {
-            max-width: 1100px;
-            margin: 0 auto;
-            padding: 2rem 1.5rem 3rem;
-        }
+        .player-wrapper { margin-bottom: 1.5rem; border-radius: 16px; overflow: hidden; background: var(--bg-secondary); border: 1px solid var(--border-subtle); box-shadow: 0 20px 60px rgba(0,0,0,0.4); }
 
-        /* ── PLAYER ── */
-        .player-wrapper {
-            margin-bottom: 1.5rem;
-            border-radius: 16px;
-            overflow: hidden;
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-subtle);
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
-        }
+        .video-container { position: relative; width: 100%; padding-bottom: 56.25%; background: #000; overflow: hidden; }
+        .video-container video { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; }
+        .video-container .plyr { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
 
-        .video-container {
-            position: relative;
-            width: 100%;
-            padding-bottom: 56.25%;
-            background: #000;
-            overflow: hidden;
-        }
+        .info-card { background: var(--bg-glass); backdrop-filter: blur(20px); border: 1px solid var(--border-subtle); border-radius: 12px; padding: 1.75rem; margin-bottom: 1.5rem; }
+        .file-title { font-size: 1.5rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1rem; line-height: 1.4; word-break: break-word; }
+        .file-meta { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+        .meta-tag { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.375rem 0.875rem; background: rgba(244,63,94,0.1); border: 1px solid rgba(244,63,94,0.2); border-radius: 6px; color: var(--accent-rose); font-size: 0.8125rem; font-weight: 600; }
 
-        .video-container video {
-            position: absolute;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            object-fit: contain;
-        }
-
-        .video-container .plyr {
-            position: absolute;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-        }
-
-        /* ── INFO CARD ── */
-        .info-card {
-            background: var(--bg-glass);
-            backdrop-filter: blur(20px);
-            border: 1px solid var(--border-subtle);
-            border-radius: 12px;
-            padding: 1.75rem;
-            margin-bottom: 1.5rem;
-        }
-
-        .file-title {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: var(--text-primary);
-            margin-bottom: 1rem;
-            line-height: 1.4;
-            word-break: break-word;
-        }
-
-        .file-meta {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            flex-wrap: wrap;
-            margin-bottom: 1.5rem;
-        }
-
-        .meta-tag {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.375rem 0.875rem;
-            background: rgba(244, 63, 94, 0.1);
-            border: 1px solid rgba(244, 63, 94, 0.2);
-            border-radius: 6px;
-            color: var(--accent-rose);
-            font-size: 0.8125rem;
-            font-weight: 600;
-        }
-
-        /* ── ACTIONS ── */
-        .actions {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 0.75rem;
-        }
-
-        .btn {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.625rem;
-            padding: 0.875rem 1.25rem;
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-normal);
-            border-radius: 8px;
-            color: var(--text-primary);
-            font-size: 0.875rem;
-            font-weight: 600;
-            text-decoration: none;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .btn:hover {
-            background: rgba(244, 63, 94, 0.1);
-            border-color: var(--accent-rose);
-            transform: translateY(-1px);
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, var(--accent-rose), rgb(225, 29, 72));
-            border-color: transparent;
-        }
-
-        .btn-primary:hover {
-            box-shadow: 0 8px 20px rgba(244, 63, 94, 0.3);
-        }
-
+        .actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem; }
+        .btn { display: flex; align-items: center; justify-content: center; gap: 0.625rem; padding: 0.875rem 1.25rem; background: var(--bg-secondary); border: 1px solid var(--border-normal); border-radius: 8px; color: var(--text-primary); font-size: 0.875rem; font-weight: 600; text-decoration: none; cursor: pointer; transition: all 0.2s; }
+        .btn:hover { background: rgba(244,63,94,0.1); border-color: var(--accent-rose); transform: translateY(-1px); }
+        .btn-primary { background: linear-gradient(135deg, var(--accent-rose), rgb(225,29,72)); border-color: transparent; }
+        .btn-primary:hover { box-shadow: 0 8px 20px rgba(244,63,94,0.3); }
         .btn svg { width: 18px; height: 18px; }
         .btn img { width: 18px; height: 18px; }
 
-        /* ── DROPDOWN ── */
         .dropdown { position: relative; }
-
-        .dropdown-menu {
-            position: absolute;
-            bottom: calc(100% + 0.5rem);
-            right: 0;
-            min-width: 200px;
-            max-width: 280px;
-            max-height: 60vh;
-            overflow-y: auto;
-            background: var(--bg-glass-dark);
-            backdrop-filter: blur(20px);
-            border: 1px solid var(--border-normal);
-            border-radius: 8px;
-            padding: 0.5rem;
-            opacity: 0;
-            visibility: hidden;
-            transform: translateY(10px);
-            transition: all 0.2s;
-            z-index: 100;
-        }
-
-        .dropdown-menu.active {
-            opacity: 1;
-            visibility: visible;
-            transform: translateY(0);
-        }
-
-        .dropdown-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 0.5rem;
-        }
-
-        .player-link {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.5rem 0.625rem;
-            background: rgba(30, 41, 59, 0.4);
-            border: 1px solid var(--border-subtle);
-            border-radius: 6px;
-            color: var(--text-secondary);
-            text-decoration: none;
-            font-size: 0.8125rem;
-            font-weight: 500;
-            transition: all 0.2s;
-            cursor: pointer;
-        }
-
+        .dropdown-menu { position: absolute; bottom: calc(100% + 0.5rem); right: 0; min-width: 200px; max-width: 280px; max-height: 60vh; overflow-y: auto; background: var(--bg-glass-dark); backdrop-filter: blur(20px); border: 1px solid var(--border-normal); border-radius: 8px; padding: 0.5rem; opacity: 0; visibility: hidden; transform: translateY(10px); transition: all 0.2s; z-index: 100; }
+        .dropdown-menu.active { opacity: 1; visibility: visible; transform: translateY(0); }
+        .dropdown-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; }
+        .player-link { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.625rem; background: rgba(30,41,59,0.4); border: 1px solid var(--border-subtle); border-radius: 6px; color: var(--text-secondary); text-decoration: none; font-size: 0.8125rem; font-weight: 500; transition: all 0.2s; cursor: pointer; }
         .player-link img { width: 16px; height: 16px; flex-shrink: 0; }
+        .player-link:hover { background: rgba(244,63,94,0.1); border-color: var(--accent-rose); color: var(--accent-rose); }
 
-        .player-link:hover {
-            background: rgba(244, 63, 94, 0.1);
-            border-color: var(--accent-rose);
-            color: var(--accent-rose);
-        }
-
-        /* ── CARDS SECTION ── */
         .cards-section { margin: 3rem 0; }
-
         .section-header { text-align: center; margin-bottom: 2.5rem; }
-
-        .section-title {
-            font-size: 2rem;
-            font-weight: 800;
-            margin-bottom: 0.5rem;
-            background: linear-gradient(135deg, var(--accent-rose), var(--accent-amber));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
+        .section-title { font-size: 2rem; font-weight: 800; margin-bottom: 0.5rem; background: linear-gradient(135deg, var(--accent-rose), var(--accent-amber)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
         .section-subtitle { color: var(--text-muted); }
-
-        .cards-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 1.5rem;
-        }
-
-        .card {
-            background: var(--bg-glass);
-            backdrop-filter: blur(20px);
-            border: 1px solid var(--border-subtle);
-            border-radius: 12px;
-            padding: 2rem;
-            transition: all 0.3s;
-        }
-
-        .card:hover {
-            border-color: var(--accent-rose);
-            transform: translateY(-4px);
-            box-shadow: 0 12px 40px rgba(244, 63, 94, 0.2);
-        }
-
-        .card-icon {
-            width: 48px; height: 48px;
-            background: rgba(244, 63, 94, 0.1);
-            border: 1px solid rgba(244, 63, 94, 0.2);
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-bottom: 1.25rem;
-        }
-
+        .cards-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; }
+        .card { background: var(--bg-glass); backdrop-filter: blur(20px); border: 1px solid var(--border-subtle); border-radius: 12px; padding: 2rem; transition: all 0.3s; }
+        .card:hover { border-color: var(--accent-rose); transform: translateY(-4px); box-shadow: 0 12px 40px rgba(244,63,94,0.2); }
+        .card-icon { width: 48px; height: 48px; background: rgba(244,63,94,0.1); border: 1px solid rgba(244,63,94,0.2); border-radius: 10px; display: flex; align-items: center; justify-content: center; margin-bottom: 1.25rem; }
         .card-icon svg { color: var(--accent-rose); }
         .card h3 { font-size: 1.25rem; font-weight: 700; margin-bottom: 0.75rem; }
-
-        .card p {
-            color: var(--text-secondary);
-            font-size: 0.875rem;
-            line-height: 1.6;
-            margin-bottom: 1.5rem;
-        }
-
+        .card p { color: var(--text-secondary); font-size: 0.875rem; line-height: 1.6; margin-bottom: 1.5rem; }
         .card-links { display: flex; flex-direction: column; gap: 0.5rem; }
+        .card-link { display: flex; align-items: center; justify-content: space-between; padding: 0.625rem 0.875rem; background: rgba(30,41,59,0.4); border: 1px solid var(--border-subtle); border-radius: 6px; color: var(--text-secondary); text-decoration: none; font-size: 0.8125rem; font-weight: 500; transition: all 0.2s; }
+        .card-link:hover { background: rgba(244,63,94,0.1); border-color: var(--accent-rose); color: var(--accent-rose); }
 
-        .card-link {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0.625rem 0.875rem;
-            background: rgba(30, 41, 59, 0.4);
-            border: 1px solid var(--border-subtle);
-            border-radius: 6px;
-            color: var(--text-secondary);
-            text-decoration: none;
-            font-size: 0.8125rem;
-            font-weight: 500;
-            transition: all 0.2s;
-        }
-
-        .card-link:hover {
-            background: rgba(244, 63, 94, 0.1);
-            border-color: var(--accent-rose);
-            color: var(--accent-rose);
-        }
-
-        /* ── FOOTER ── */
-        .footer {
-            text-align: center;
-            padding: 2.5rem 1.5rem;
-            border-top: 1px solid var(--border-subtle);
-            color: var(--text-muted);
-            font-size: 0.875rem;
-        }
-
+        .footer { text-align: center; padding: 2.5rem 1.5rem; border-top: 1px solid var(--border-subtle); color: var(--text-muted); font-size: 0.875rem; }
         .footer a { color: var(--accent-rose); text-decoration: none; font-weight: 600; }
 
-        /* ── PLYR THEME ── */
-        .plyr {
-            --plyr-color-main: rgb(244, 63, 94);
-            border-radius: 0 0 16px 16px;
-        }
-
+        .plyr { --plyr-color-main: rgb(244, 63, 94); border-radius: 0 0 16px 16px; }
         .plyr__control { color: white; }
-        .plyr__control:hover { background: rgba(244, 63, 94, 0.2); }
-        .plyr__control--overlaid { background: rgba(244, 63, 94, 0.9); }
-
-        .plyr__menu {
-            background: var(--bg-glass-dark) !important;
-            backdrop-filter: blur(20px);
-            border: 1px solid var(--border-normal);
-            border-radius: 8px;
-        }
-
+        .plyr__control:hover { background: rgba(244,63,94,0.2); }
+        .plyr__control--overlaid { background: rgba(244,63,94,0.9); }
+        .plyr__menu { background: var(--bg-glass-dark) !important; backdrop-filter: blur(20px); border: 1px solid var(--border-normal); border-radius: 8px; }
         .plyr__menu__container .plyr__control { color: var(--text-primary); }
-        .plyr__menu__container .plyr__control:hover { background: rgba(244, 63, 94, 0.1); }
+        .plyr__menu__container .plyr__control:hover { background: rgba(244,63,94,0.1); }
         .plyr__menu__container .plyr__control[role="menuitemradio"][aria-checked="true"]::before { background: var(--accent-rose); }
 
-        /* ── ASPECT / SPEED DROPDOWN ── */
-        .aspect-dropdown {
-            position: absolute;
-            bottom: calc(100% + 10px);
-            right: 0;
-            min-width: 180px;
-            background: var(--bg-glass-dark);
-            backdrop-filter: blur(20px);
-            border: 1px solid var(--border-normal);
-            border-radius: 8px;
-            padding: 0.5rem;
-            opacity: 0;
-            visibility: hidden;
-            transform: translateY(10px);
-            transition: all 0.2s;
-            z-index: 1000;
-        }
+        .aspect-dropdown { position: absolute; bottom: calc(100% + 10px); right: 0; min-width: 180px; background: var(--bg-glass-dark); backdrop-filter: blur(20px); border: 1px solid var(--border-normal); border-radius: 8px; padding: 0.5rem; opacity: 0; visibility: hidden; transform: translateY(10px); transition: all 0.2s; z-index: 1000; }
+        .aspect-dropdown.active { opacity: 1; visibility: visible; transform: translateY(0); }
+        .aspect-item { display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0.75rem; border-radius: 6px; color: var(--text-secondary); cursor: pointer; font-size: 0.8125rem; transition: all 0.2s; }
+        .aspect-item:hover { background: rgba(244,63,94,0.1); color: var(--accent-rose); }
+        .aspect-item.active { background: rgba(244,63,94,0.2); color: var(--accent-rose); }
 
-        .aspect-dropdown.active {
-            opacity: 1;
-            visibility: visible;
-            transform: translateY(0);
-        }
-
-        .aspect-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0.5rem 0.75rem;
-            border-radius: 6px;
-            color: var(--text-secondary);
-            cursor: pointer;
-            font-size: 0.8125rem;
-            transition: all 0.2s;
-        }
-
-        .aspect-item:hover { background: rgba(244, 63, 94, 0.1); color: var(--accent-rose); }
-        .aspect-item.active { background: rgba(244, 63, 94, 0.2); color: var(--accent-rose); }
-
-        /* ── AUDIO WARNING ── */
-        .audio-warning {
-            position: static;
-            background: transparent;
-            color: rgb(251, 191, 36);
-            padding: 12px 16px;
-            border-radius: 8px;
-            font-size: 0.875rem;
-            font-weight: 500;
-            display: flex;
-            align-items: flex-start;
-            justify-content: center;
-            gap: 6px;
-            margin: 1.5rem 0;
-            text-align: center;
-        }
-
+        .audio-warning { position: static; background: transparent; color: rgb(251,191,36); padding: 12px 16px; border-radius: 8px; font-size: 0.875rem; font-weight: 500; display: flex; align-items: flex-start; justify-content: center; gap: 6px; margin: 1.5rem 0; text-align: center; }
         .audio-warning svg { margin-top: 3px; }
 
-        /* ── VOLUME POPUP ── */
-        button[data-plyr="volume-custom"] {
-            display: flex !important;
-            align-items: center;
-            justify-content: center;
-            height: auto;
-            position: relative;
-        }
+        button[data-plyr="volume-custom"] { display: flex !important; align-items: center; justify-content: center; height: auto; position: relative; }
+        button[data-plyr="volume-custom"] svg { width: var(--plyr-control-icon-size, 18px); height: var(--plyr-control-icon-size, 18px); pointer-events: none; }
 
-        button[data-plyr="volume-custom"] svg {
-            width: var(--plyr-control-icon-size, 18px);
-            height: var(--plyr-control-icon-size, 18px);
-            pointer-events: none;
-        }
-
-        .volume-popup {
-            position: absolute;
-            bottom: 100%;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 32px;
-            height: 120px;
-            background: var(--bg-glass-dark);
-            backdrop-filter: blur(20px);
-            border: 1px solid var(--border-normal);
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 10px 0;
-            opacity: 0;
-            visibility: hidden;
-            transition: all 0.2s;
-            margin-bottom: 10px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-            z-index: 1000;
-        }
-
-        .volume-popup.active {
-            opacity: 1;
-            visibility: visible;
-            transform: translateX(-50%) translateY(0);
-        }
-
-        .volume-slider-container {
-            width: 100%;
-            height: 100px;
-            display: flex;
-            justify-content: center;
-            position: relative;
-        }
-
-        .volume-slider {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 100px !important;
-            flex-shrink: 0;
-            height: 4px !important;
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 2px;
-            outline: none;
-            transform: rotate(-90deg);
-            transform-origin: center;
-            cursor: pointer;
-            margin-top: 48px !important;
-            padding: 0 !important;
-        }
-
-        .volume-slider::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            width: 12px; height: 12px;
-            background: var(--accent-rose);
-            border-radius: 50%;
-            cursor: pointer;
-            box-shadow: 0 0 10px rgba(244, 63, 94, 0.5);
-        }
-
-        .volume-percent {
-            position: absolute;
-            top: -25px;
-            left: 50%;
-            transform: translateX(-50%);
-            font-size: 11px;
-            font-weight: 600;
-            color: white;
-            background: var(--accent-rose);
-            padding: 2px 5px;
-            border-radius: 4px;
-            pointer-events: none;
-            white-space: nowrap;
-        }
-
+        .volume-popup { position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); width: 32px; height: 120px; background: var(--bg-glass-dark); backdrop-filter: blur(20px); border: 1px solid var(--border-normal); border-radius: 8px; display: flex; align-items: center; justify-content: center; padding: 10px 0; opacity: 0; visibility: hidden; transition: all 0.2s; margin-bottom: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 1000; }
+        .volume-popup.active { opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0); }
+        .volume-slider-container { width: 100%; height: 100px; display: flex; justify-content: center; position: relative; }
+        .volume-slider { -webkit-appearance: none; appearance: none; width: 100px !important; flex-shrink: 0; height: 4px !important; background: rgba(255,255,255,0.2); border-radius: 2px; outline: none; transform: rotate(-90deg); transform-origin: center; cursor: pointer; margin-top: 48px !important; padding: 0 !important; }
+        .volume-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; background: var(--accent-rose); border-radius: 50%; cursor: pointer; box-shadow: 0 0 10px rgba(244,63,94,0.5); }
+        .volume-percent { position: absolute; top: -25px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 600; color: white; background: var(--accent-rose); padding: 2px 5px; border-radius: 4px; pointer-events: none; white-space: nowrap; }
         .plyr__volume { display: none !important; }
 
-        /* ── LOADING OVERLAY ── */
-        .loading-overlay {
-            position: absolute;
-            inset: 0;
-            background: rgba(2, 6, 23, 0.85);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 12px;
-            z-index: 10;
-            border-radius: 8px;
-        }
-
+        .loading-overlay { position: absolute; inset: 0; background: rgba(2,6,23,0.85); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; z-index: 10; border-radius: 8px; }
         .loading-overlay.hidden { display: none; }
-
-        .spinner {
-            width: 40px; height: 40px;
-            border: 3px solid rgba(244, 63, 94, 0.3);
-            border-top-color: var(--accent-rose);
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-        }
-
+        .spinner { width: 40px; height: 40px; border: 3px solid rgba(244,63,94,0.3); border-top-color: var(--accent-rose); border-radius: 50%; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text { color: var(--text-secondary); font-size: 0.875rem; font-weight: 500; }
 
-        .loading-text {
-            color: var(--text-secondary);
-            font-size: 0.875rem;
-            font-weight: 500;
-        }
+        /* ── WATERMARK ── */
+        .video-watermark { position: absolute; top: 12px; left: 14px; z-index: 9; background: rgba(0,0,0,0.45); color: rgba(255,255,255,0.88); font-size: 0.78rem; font-weight: 600; font-family: "Inter", sans-serif; padding: 4px 10px; border-radius: 6px; backdrop-filter: blur(6px); letter-spacing: 0.3px; max-width: 60%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; opacity: 0; transition: opacity 0.7s ease; user-select: none; }
 
-        /* ── MISC ── */
         .fade-in { animation: fadeIn 0.5s ease-out; }
-
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: var(--bg-primary); }
         ::-webkit-scrollbar-thumb { background: var(--bg-secondary); border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: var(--accent-rose); }
-
         html { scroll-behavior: smooth; scroll-padding-top: 70px; }
 
-        /* ── MOBILE ── */
         @media (max-width: 768px) {
-            .nav {
-                display: none;
-                position: absolute;
-                top: 100%; left: 0; right: 0;
-                background: var(--bg-glass-dark);
-                flex-direction: column;
-                padding: 1rem;
-                gap: 1rem;
-                border-bottom: 1px solid var(--border-subtle);
-                backdrop-filter: blur(20px);
-                z-index: 999;
-                animation: slideDown 0.3s ease-out;
-            }
-
+            .nav { display: none; position: absolute; top: 100%; left: 0; right: 0; background: var(--bg-glass-dark); flex-direction: column; padding: 1rem; gap: 1rem; border-bottom: 1px solid var(--border-subtle); backdrop-filter: blur(20px); z-index: 999; animation: slideDown 0.3s ease-out; }
             .nav.active { display: flex; }
-
-            @keyframes slideDown {
-                from { opacity: 0; transform: translateY(-10px); }
-                to { opacity: 1; transform: translateY(0); }
-            }
-
+            @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
             .mobile-menu { display: block; }
-
             .slogan { padding: 5rem 1rem 0.5rem; font-size: 0.9rem; }
             .container { padding: 1rem 1rem 2rem; }
             .player-wrapper { margin-bottom: 2rem; }
@@ -632,46 +185,27 @@
             .file-meta { margin-bottom: 1.5rem; }
             .cards-section { margin-top: 5rem !important; }
             .actions { grid-template-columns: 1fr; gap: 0.75rem; }
-
             .actions .dropdown { width: 100%; display: flex; }
             .actions .dropdown .btn { width: 100%; justify-content: center; }
-            .actions .dropdown-menu {
-                width: 100%;
-                min-width: 250px;
-                left: 50%;
-                transform: translateX(-50%) translateY(10px);
-                z-index: 1001;
-            }
+            .actions .dropdown-menu { width: 100%; min-width: 250px; left: 50%; transform: translateX(-50%) translateY(10px); z-index: 1001; }
             .actions .dropdown-menu.active { transform: translateX(-50%) translateY(0); }
-
             .btn { padding: 0.5rem 0.75rem; font-size: 0.85rem; }
             .audio-warning { font-size: 0.6rem; padding: 8px 12px; margin: 1rem 0; }
             .cards-grid { grid-template-columns: 1fr; }
-
             .plyr__controls { padding-left: 5px; padding-right: 5px; }
             .plyr__control { padding: 5px; }
-            .plyr__control[data-plyr="pip"],
-            .plyr__control[data-plyr="airplay"] { display: none; }
+            .plyr__control[data-plyr="pip"], .plyr__control[data-plyr="airplay"] { display: none; }
             .plyr__progress__container { flex: 1; min-width: 100px; }
             .plyr__progress input[type="range"] { height: 12px !important; touch-action: manipulation; }
             .plyr__volume { display: none !important; }
-
-            .aspect-dropdown {
-                min-width: 120px;
-                bottom: calc(100% + 5px);
-                max-height: 50vh;
-                overflow-y: auto;
-            }
-
+            .aspect-dropdown { min-width: 120px; bottom: calc(100% + 5px); max-height: 50vh; overflow-y: auto; }
             .aspect-item { padding: 0.3rem 0.5rem; font-size: 0.65rem; }
             .aspect-item svg { width: 12px; height: 12px; }
-
             .volume-popup { height: 100px; width: 28px; bottom: calc(100% + 5px); }
             .volume-percent { font-size: 0.65rem; }
             .volume-slider-container { height: 80px; }
             .volume-slider { width: 80px !important; margin-top: 38px !important; }
         }
-
         @media (max-width: 380px) { .plyr__time { display: none; } }
     </style>
 </head>
@@ -681,13 +215,11 @@
     <header class="header">
         <div class="header-content">
             <a href="https://t.me/Tokyo_Updates" class="logo">『𓆩ꨄ︎𓆪𝐓ᴏᴋʏᴏ 𝐁ᴀᴄᴋᴜᴘ𓆩ꨄ︎𓆪』</a>
-
             <nav class="nav">
                 <a href="#video-section">Stream</a>
                 <a href="#explore">Explore</a>
                 <a href="https://t.me/Tokyo_Updates">Contact</a>
             </nav>
-
             <button class="mobile-menu" aria-label="Toggle menu">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <line x1="3" y1="12" x2="21" y2="12"></line>
@@ -711,6 +243,7 @@
                         <div class="spinner"></div>
                         <span class="loading-text">Loading video...</span>
                     </div>
+                    <div class="video-watermark" id="video-watermark"></div>
                     <video id="player" playsinline controls
                         data-poster="https://i.ibb.co/2RcWgCG/photo-2026-06-09-05-11-45-7649259075397484548.jpg">
                         <source src="{{file_url}}" />
@@ -720,7 +253,6 @@
 
             <div class="info-card">
                 <h1 class="file-title">{{file_name}}</h1>
-
                 <div class="file-meta">
                     <span class="meta-tag">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -730,7 +262,6 @@
                         Now Streaming
                     </span>
                 </div>
-
                 <div class="actions">
                     <button class="btn btn-primary" onclick="blazeDownload()">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -740,17 +271,14 @@
                         </svg>
                         Download
                     </button>
-
                     <button class="btn" onclick="vlc_player()">
                         <img src="https://i.postimg.cc/15TQ4y7B/vlc.png" alt="VLC" />
                         VLC Player
                     </button>
-
                     <button class="btn" onclick="mx_player()">
                         <img src="https://i.postimg.cc/sx4Msv4T/mx.png" alt="MX" />
                         MX Player
                     </button>
-
                     <div class="dropdown">
                         <button class="btn" onclick="toggleDropdown(event)">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -760,7 +288,6 @@
                             </svg>
                             More Players
                         </button>
-
                         <div class="dropdown-menu" id="players-dropdown">
                             <div class="dropdown-grid">
                                 <a class="player-link" onclick="playit_player(); return false;" href="#">
@@ -795,7 +322,6 @@
                 <h2 class="section-title">Explore Our Universe</h2>
                 <p class="section-subtitle">Discover our channels and intelligent bots</p>
             </div>
-
             <div class="cards-grid">
                 <div class="card">
                     <div class="card-icon">
@@ -811,28 +337,18 @@
                     <div class="card-links">
                         <a href="https://t.me/Tokyo_Updates" class="card-link">
                             <span>🫧『𓆩ꨄ︎𓆪𝐓ᴏᴋʏᴏ 𝐁ᴀᴄᴋᴜᴘ𓆩ꨄ︎𓆪』🫧</span>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <line x1="5" y1="12" x2="19" y2="12"></line>
-                                <polyline points="12 5 19 12 12 19"></polyline>
-                            </svg>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
                         </a>
                         <a href="https://t.me/newmovieswebseries_group" class="card-link">
                             <span>🔰 ᴍᴏᴠɪᴇ ꜱᴇᴀʀᴄʜ ɢʀᴏᴜᴘ 🔰</span>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <line x1="5" y1="12" x2="19" y2="12"></line>
-                                <polyline points="12 5 19 12 12 19"></polyline>
-                            </svg>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
                         </a>
                         <a href="https://t.me/Unrated_Movie_HD" class="card-link">
                             <span>🔞UNRATED MOVIE & SERIES🔞</span>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <line x1="5" y1="12" x2="19" y2="12"></line>
-                                <polyline points="12 5 19 12 12 19"></polyline>
-                            </svg>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
                         </a>
                     </div>
                 </div>
-
                 <div class="card">
                     <div class="card-icon">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -845,31 +361,19 @@
                     <div class="card-links">
                         <a href="https://t.me/Newmovie_sbot" class="card-link">
                             <span>𝐓𝐨𝐤𝐲𝐨 𝐏𝐫𝐢𝐧𝐜𝐞𝐬𝐬𝐁𝐨𝐭™</span>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <line x1="5" y1="12" x2="19" y2="12"></line>
-                                <polyline points="12 5 19 12 12 19"></polyline>
-                            </svg>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
                         </a>
                         <a href="https://t.me/DB_FileStorebot" class="card-link">
                             <span>FileStore Bot</span>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <line x1="5" y1="12" x2="19" y2="12"></line>
-                                <polyline points="12 5 19 12 12 19"></polyline>
-                            </svg>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
                         </a>
                         <a href="https://t.me/video_thumbcover_changerbot" class="card-link">
                             <span>Thumb Changer</span>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <line x1="5" y1="12" x2="19" y2="12"></line>
-                                <polyline points="12 5 19 12 12 19"></polyline>
-                            </svg>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
                         </a>
                         <a href="https://t.me/Blaze_forward_bot" class="card-link">
                             <span>Forward Bot Pro</span>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <line x1="5" y1="12" x2="19" y2="12"></line>
-                                <polyline points="12 5 19 12 12 19"></polyline>
-                            </svg>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
                         </a>
                     </div>
                 </div>
@@ -893,10 +397,8 @@
     const FILE_NAME = "{{file_name}}";
 
     function getExt(url) {
-        try {
-            const clean = url.split("?")[0].split("#")[0];
-            return clean.split(".").pop().toLowerCase();
-        } catch { return ""; }
+        try { const clean = url.split("?")[0].split("#")[0]; return clean.split(".").pop().toLowerCase(); }
+        catch { return ""; }
     }
 
     function hideLoading() {
@@ -916,20 +418,15 @@
                 hls.attachMedia(video);
                 hls.on(Hls.Events.MANIFEST_PARSED, () => hideLoading());
                 window.hlsPlayer = hls;
-                initPlyr(video);
-                return;
+                initPlyr(video); return;
             }
             if (video.canPlayType("application/vnd.apple.mpegurl")) {
-                video.src = FILE_URL;
-                hideLoading();
-                initPlyr(video);
-                return;
+                video.src = FILE_URL; hideLoading(); initPlyr(video); return;
             }
         }
 
         if (["flv", "ts"].includes(ext) && typeof mpegts !== "undefined" && mpegts.isSupported()) {
-            initMpegts(video, FILE_URL, ext);
-            return;
+            initMpegts(video, FILE_URL, ext); return;
         }
 
         if (ext === "mkv") {
@@ -951,13 +448,10 @@
             player.load();
             window.mpegtsPlayer = player;
             player.on(mpegts.Events.ERROR, () => { video.src = url; });
-            hideLoading();
-            initPlyr(video);
+            hideLoading(); initPlyr(video);
         } catch (err) {
             console.error("mpegts failed:", err);
-            video.src = url;
-            hideLoading();
-            initPlyr(video);
+            video.src = url; hideLoading(); initPlyr(video);
         }
     }
 
@@ -972,12 +466,11 @@
     }
 
     function addCustomControls() {
-        const controls  = document.querySelector(".plyr__controls");
+        const controls = document.querySelector(".plyr__controls");
         if (!controls) return;
         const fullscreen = controls.querySelector('[data-plyr="fullscreen"]');
         if (!fullscreen) return;
 
-        // SPEED
         const speedBtn = createControlBtn("speed-custom", `<i data-lucide="gauge" style="width:18px;height:18px;"></i><span class="plyr__tooltip">Speed</span>`);
         lucide.createIcons({ root: speedBtn });
         const speedDropdown = document.createElement("div");
@@ -986,13 +479,7 @@
         controls.insertBefore(speedBtn, fullscreen);
         speedBtn.appendChild(speedDropdown);
         lucide.createIcons({ root: speedDropdown });
-
-        speedBtn.addEventListener("click", e => {
-            e.stopPropagation();
-            closeAllDropdowns(speedDropdown);
-            speedDropdown.classList.toggle("active");
-        });
-
+        speedBtn.addEventListener("click", e => { e.stopPropagation(); closeAllDropdowns(speedDropdown); speedDropdown.classList.toggle("active"); });
         speedDropdown.querySelectorAll(".aspect-item").forEach(item => {
             item.addEventListener("click", e => {
                 e.stopPropagation();
@@ -1003,7 +490,6 @@
             });
         });
 
-        // ASPECT RATIO
         const aspectBtn = createControlBtn("aspect-ratio", `<i data-lucide="rectangle-horizontal" style="width:18px;height:18px;"></i><span class="plyr__tooltip">Aspect Ratio</span>`);
         lucide.createIcons({ root: aspectBtn });
         const aspectDropdown = document.createElement("div");
@@ -1012,13 +498,7 @@
         controls.insertBefore(aspectBtn, fullscreen);
         aspectBtn.appendChild(aspectDropdown);
         lucide.createIcons({ root: aspectDropdown });
-
-        aspectBtn.addEventListener("click", e => {
-            e.stopPropagation();
-            closeAllDropdowns(aspectDropdown);
-            aspectDropdown.classList.toggle("active");
-        });
-
+        aspectBtn.addEventListener("click", e => { e.stopPropagation(); closeAllDropdowns(aspectDropdown); aspectDropdown.classList.toggle("active"); });
         aspectDropdown.querySelectorAll(".aspect-item").forEach(item => {
             item.addEventListener("click", e => {
                 e.stopPropagation();
@@ -1028,7 +508,6 @@
             });
         });
 
-        // VOLUME
         const volumeBtn = createControlBtn("volume-custom", `
             <svg class="volume-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
@@ -1039,12 +518,7 @@
         `);
         const volumePopup = document.createElement("div");
         volumePopup.className = "volume-popup";
-        volumePopup.innerHTML = `
-            <div class="volume-percent">100%</div>
-            <div class="volume-slider-container">
-                <input type="range" min="0" max="1" step="0.05" value="1" class="volume-slider">
-            </div>
-        `;
+        volumePopup.innerHTML = `<div class="volume-percent">100%</div><div class="volume-slider-container"><input type="range" min="0" max="1" step="0.05" value="1" class="volume-slider"></div>`;
         volumeBtn.appendChild(volumePopup);
         controls.insertBefore(volumeBtn, speedBtn);
 
@@ -1060,16 +534,12 @@
             if (volHigh)   volHigh.style.display = (!muted && vol > 0) ? "block" : "none";
             if (volMute)   volMute.style.display = (muted || vol === 0) ? "block" : "none";
         }
-
         if (video) updateVolUI(video.volume, video.muted);
 
         volumeBtn.addEventListener("click", e => {
             if (e.target === volSlider || e.target.closest(".volume-popup")) return;
-            e.stopPropagation();
-            closeAllDropdowns();
-            volumePopup.classList.toggle("active");
+            e.stopPropagation(); closeAllDropdowns(); volumePopup.classList.toggle("active");
         });
-
         if (volSlider) {
             volSlider.addEventListener("input", e => {
                 const val = parseFloat(e.target.value);
@@ -1078,9 +548,7 @@
             });
             volSlider.addEventListener("click", e => e.stopPropagation());
         }
-
         if (video) video.addEventListener("volumechange", () => updateVolUI(video.volume, video.muted));
-
         document.addEventListener("click", () => closeAllDropdowns());
     }
 
@@ -1102,8 +570,7 @@
     function markActive(container, activeItem) {
         container.querySelectorAll(".aspect-item").forEach(i => {
             i.classList.remove("active");
-            const chk = i.querySelector(".check-icon");
-            if (chk) chk.remove();
+            const chk = i.querySelector(".check-icon"); if (chk) chk.remove();
         });
         activeItem.classList.add("active");
         const chk = document.createElement("i");
@@ -1117,65 +584,37 @@
     function applyAspectRatio(aspect) {
         const video = document.querySelector("#player");
         if (!video) return;
-        video.style.width = "100%";
-        video.style.height = "100%";
-        video.style.top = "0";
-        video.style.left = "0";
-        video.style.transform = "none";
-        if (aspect === "cover") {
-            video.style.objectFit = "cover";
-        } else if (aspect === "original") {
-            video.style.objectFit = "contain";
-        } else {
-            const target = parseFloat(aspect);
-            const cont = 16 / 9;
+        video.style.width = "100%"; video.style.height = "100%";
+        video.style.top = "0"; video.style.left = "0"; video.style.transform = "none";
+        if (aspect === "cover") { video.style.objectFit = "cover"; }
+        else if (aspect === "original") { video.style.objectFit = "contain"; }
+        else {
+            const target = parseFloat(aspect), cont = 16/9;
             video.style.objectFit = "fill";
             if (target < cont) {
-                const w = (target / cont) * 100;
-                video.style.width = w + "%";
-                video.style.left = ((100 - w) / 2) + "%";
-                video.style.height = "100%";
+                const w = (target/cont)*100;
+                video.style.width = w+"%"; video.style.left = ((100-w)/2)+"%"; video.style.height = "100%";
             } else {
-                const h = (cont / target) * 100;
-                video.style.height = h + "%";
-                video.style.top = ((100 - h) / 2) + "%";
-                video.style.width = "100%";
+                const h = (cont/target)*100;
+                video.style.height = h+"%"; video.style.top = ((100-h)/2)+"%"; video.style.width = "100%";
             }
         }
     }
 
     function buildSpeedItems() {
-        const speeds = [
-            { v: "0.5", l: "0.5x" }, { v: "0.75", l: "0.75x" },
-            { v: "1", l: "1x Normal", active: true }, { v: "1.25", l: "1.25x" },
-            { v: "1.5", l: "1.5x" }, { v: "1.75", l: "1.75x" }, { v: "2", l: "2x" },
-        ];
-        return speeds.map(s =>
-            `<div class="aspect-item${s.active ? " active" : ""}" data-speed="${s.v}">
-                <span>${s.l}</span>${s.active ? `<i data-lucide="check" style="width:14px;height:14px;"></i>` : ""}
-             </div>`
-        ).join("");
+        return [["0.5","0.5x"],["0.75","0.75x"],["1","1x Normal",true],["1.25","1.25x"],["1.5","1.5x"],["1.75","1.75x"],["2","2x"]]
+            .map(([v,l,a]) => `<div class="aspect-item${a?" active":""}" data-speed="${v}"><span>${l}</span>${a?`<i data-lucide="check" style="width:14px;height:14px;"></i>`:""}</div>`).join("");
     }
 
     function buildAspectItems() {
-        const ratios = [
-            { a: "original", l: "Original" }, { a: "1", l: "1:1 Square" },
-            { a: "1.333", l: "4:3 Classic" }, { a: "1.778", l: "16:9 Wide", active: true },
-            { a: "1.85", l: "1.85:1 Cinema" }, { a: "2.333", l: "21:9 Ultrawide" },
-            { a: "cover", l: "Fill Screen" },
-        ];
-        return ratios.map(r =>
-            `<div class="aspect-item${r.active ? " active" : ""}" data-aspect="${r.a}">
-                <span>${r.l}</span>${r.active ? `<i data-lucide="check" style="width:14px;height:14px;"></i>` : ""}
-             </div>`
-        ).join("");
+        return [["original","Original"],["1","1:1 Square"],["1.333","4:3 Classic"],["1.778","16:9 Wide",true],["1.85","1.85:1 Cinema"],["2.333","21:9 Ultrawide"],["cover","Fill Screen"]]
+            .map(([a,l,act]) => `<div class="aspect-item${act?" active":""}" data-aspect="${a}"><span>${l}</span>${act?`<i data-lucide="check" style="width:14px;height:14px;"></i>`:""}</div>`).join("");
     }
 
     function toggleDropdown(e) {
         if (e) e.stopPropagation();
         document.getElementById("players-dropdown").classList.toggle("active");
     }
-
     document.addEventListener("click", e => {
         if (!e.target.closest(".dropdown")) {
             const dd = document.getElementById("players-dropdown");
@@ -1185,45 +624,21 @@
 
     function blazeDownload() {
         const a = document.createElement("a");
-        a.href = FILE_URL;
-        a.download = FILE_NAME || "video";
-        a.target = "_blank";
-        a.rel = "noopener";
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+        a.href = FILE_URL; a.download = FILE_NAME || "video";
+        a.target = "_blank"; a.rel = "noopener";
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
     }
 
     function vlc_player() {
         window.location.href = "vlc://" + FILE_URL.replace(/^https?:\/\//, "");
-        setTimeout(() => {
-            window.location.href = `intent:${FILE_URL}#Intent;action=android.intent.action.VIEW;type=video/*;package=org.videolan.vlc;end`;
-        }, 800);
+        setTimeout(() => { window.location.href = `intent:${FILE_URL}#Intent;action=android.intent.action.VIEW;type=video/*;package=org.videolan.vlc;end`; }, 800);
     }
-
-    function mx_player() {
-        window.location.href = `intent:${FILE_URL}#Intent;action=android.intent.action.VIEW;type=video/*;package=com.mxtech.videoplayer.ad;end`;
-    }
-
-    function mx_playerpro() {
-        window.location.href = `intent:${FILE_URL}#Intent;action=android.intent.action.VIEW;type=video/*;package=com.mxtech.videoplayer.pro;end`;
-    }
-
-    function playit_player() {
-        window.location.href = `playit://playerv2/video?url=${encodeURIComponent(FILE_URL)}`;
-    }
-
-    function km_player() {
-        window.location.href = `intent:${FILE_URL}#Intent;action=android.intent.action.VIEW;type=video/*;package=com.kmplayer;end`;
-    }
-
-    function s_player() {
-        window.location.href = `intent:${FILE_URL}#Intent;action=com.young.simple.player.playback_online;package=com.young.simple.player;end`;
-    }
-
-    function hd_player() {
-        window.location.href = `intent:${FILE_URL}#Intent;action=android.intent.action.VIEW;type=video/*;package=uplayer.video.player;end`;
-    }
+    function mx_player() { window.location.href = `intent:${FILE_URL}#Intent;action=android.intent.action.VIEW;type=video/*;package=com.mxtech.videoplayer.ad;end`; }
+    function mx_playerpro() { window.location.href = `intent:${FILE_URL}#Intent;action=android.intent.action.VIEW;type=video/*;package=com.mxtech.videoplayer.pro;end`; }
+    function playit_player() { window.location.href = `playit://playerv2/video?url=${encodeURIComponent(FILE_URL)}`; }
+    function km_player() { window.location.href = `intent:${FILE_URL}#Intent;action=android.intent.action.VIEW;type=video/*;package=com.kmplayer;end`; }
+    function s_player() { window.location.href = `intent:${FILE_URL}#Intent;action=com.young.simple.player.playback_online;package=com.young.simple.player;end`; }
+    function hd_player() { window.location.href = `intent:${FILE_URL}#Intent;action=android.intent.action.VIEW;type=video/*;package=uplayer.video.player;end`; }
 
     function checkAudioSupport() {
         const test = document.createElement("video");
@@ -1232,14 +647,7 @@
         if (!section || document.querySelector(".audio-warning")) return;
         const warn = document.createElement("div");
         warn.className = "audio-warning";
-        warn.innerHTML = `
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;">
-                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-                <line x1="12" y1="9" x2="12" y2="13"></line>
-                <line x1="12" y1="17" x2="12.01" y2="17"></line>
-            </svg>
-            <span>Browser does not support EAC3 audio. If no sound, please use External Players.</span>
-        `;
+        warn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg><span>Browser does not support EAC3 audio. If no sound, please use External Players.</span>`;
         section.appendChild(warn);
     }
 
@@ -1248,9 +656,7 @@
         if (!el) return;
         el.textContent = el.textContent
             .replace(/\.(mkv|mp4|avi|mov|webm|flv|ts|m3u8)/gi, " ")
-            .replace(/[._[\]{}]/g, " ")
-            .replace(/\s+/g, " ")
-            .trim();
+            .replace(/[._[\]{}]/g, " ").replace(/\s+/g, " ").trim();
     }
 
     function initMobileNav() {
@@ -1259,9 +665,32 @@
         if (!btn || !nav) return;
         btn.addEventListener("click", e => { e.stopPropagation(); nav.classList.toggle("active"); });
         nav.querySelectorAll("a").forEach(a => a.addEventListener("click", () => nav.classList.remove("active")));
-        document.addEventListener("click", e => {
-            if (!nav.contains(e.target) && !btn.contains(e.target)) nav.classList.remove("active");
-        });
+        document.addEventListener("click", e => { if (!nav.contains(e.target) && !btn.contains(e.target)) nav.classList.remove("active"); });
+    }
+
+    function initWatermark() {
+        const wm = document.getElementById("video-watermark");
+        if (!wm) return;
+        
+        // Sirf channel ka naam set kiya, 'name' variable ki zaroorat nahi
+        wm.textContent = "『𝐓𝐨ᴋʏᴏ 𝐔𝐩𝐝𝐚𝐭𝐞𝐬』";
+
+        function showWatermark() {
+            wm.style.opacity = "1";
+            setTimeout(() => { wm.style.opacity = "0"; }, 4000);
+        }
+        
+        // Video shuru hone ke 3 second baad dikhega
+        setTimeout(showWatermark, 3000);
+        
+        function scheduleNext() {
+            const delay = (Math.random() * 5 + 5) * 60 * 1000;
+            setTimeout(() => { 
+                showWatermark(); 
+                scheduleNext(); 
+            }, delay);
+        }
+        scheduleNext();
     }
 
     function boot() {
@@ -1269,6 +698,7 @@
         initPlayer();
         checkAudioSupport();
         initMobileNav();
+        initWatermark();
         if (window.innerWidth > 768) {
             const vs = document.querySelector("#video-section");
             if (vs) setTimeout(() => vs.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
@@ -1280,6 +710,6 @@
     } else {
         boot();
     }
-    </script>
+</script>
 </body>
 </html>
