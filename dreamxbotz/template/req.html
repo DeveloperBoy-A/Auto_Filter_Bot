@@ -169,19 +169,17 @@
     transform: translate(-50%, -50%); 
     z-index: 9; 
     background: transparent; 
-    color: rgba(255, 255, 255, 0.6); 
-    font-size: 3rem; 
-    font-weight: 800; 
+    color: rgba(255, 255, 255, 0.5); 
+    font-size: 1.8rem;      /* Isse size thoda normal ho jayega */
+    font-weight: 700; 
     font-family: "Inter", sans-serif; 
-    padding: 0; 
-    border-radius: 0; 
     pointer-events: none; 
     opacity: 0; 
     transition: opacity 0.5s ease; 
     user-select: none;
-    text-shadow: 0px 0px 10px rgba(0,0,0,0.5);
+    text-shadow: 0px 0px 8px rgba(0,0,0,0.5);
+    width: 90%;             /* Text line wrap hone se bachega */
     text-align: center;
-    width: 100%;
 }
 
         .fade-in { animation: fadeIn 0.5s ease-out; }
@@ -234,7 +232,7 @@
 
     <header class="header">
         <div class="header-content">
-            <a href="https://t.me/Tokyo_Updates" class="logo">『𓆩ꨄ︎𓆪𝐓𝐨ᴋʏᴏ 𝐔𝐩𝐝𝐚𝐭𝐞𝐬𓆩ꨄ︎𓆪』</a>
+            <a href="https://t.me/Tokyo_Updates" class="logo">『𓆩𝐓𝐨ᴋʏᴏ_𝐔𝐩𝐝𝐚𝐭𝐞𝐬𓆪』</a>
             <nav class="nav">
                 <a href="#video-section">Stream</a>
                 <a href="#explore">Explore</a>
@@ -356,7 +354,7 @@
                     <p>Get exclusive content and real-time notifications from our premium channels</p>
                     <div class="card-links">
                         <a href="https://t.me/Tokyo_Updates" class="card-link">
-                            <span>『𓆩ꨄ︎𓆪𝐓𝐨ᴋʏᴏ 𝐔𝐩𝐝𝐚𝐭𝐞𝐬𓆩ꨄ︎𓆪』</span>
+                            <span>『𓆩𝐓𝐨ᴋʏᴏ_𝐔𝐩𝐝𝐚𝐭𝐞𝐬𓆪』</span>
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
                         </a>
                         <a href="https://t.me/newmovieswebseries_group" class="card-link">
@@ -689,29 +687,33 @@
     }
 
     function initWatermark() {
-        const wm = document.getElementById("video-watermark");
-        if (!wm) return;
-        
-        // Sirf channel ka naam set kiya, 'name' variable ki zaroorat nahi
-        wm.textContent = "『𝐓𝐨ᴋʏᴏ 𝐔𝐩𝐝𝐚𝐭𝐞𝐬』";
+    const wm = document.getElementById("video-watermark");
+    if (!wm) return;
+    wm.textContent = "[𝐓𝐨ᴋʏᴏ_𝐔𝐩𝐝𝐚𝐭𝐞𝐬]";
 
-        function showWatermark() {
-            wm.style.opacity = "1";
-            setTimeout(() => { wm.style.opacity = "0"; }, 10000);
-        }
-        
-        // Video shuru hone ke 3 second baad dikhega
-        setTimeout(showWatermark, 3000);
-        
-        function scheduleNext() {
-            const delay = (Math.random() * 5 + 5) * 60 * 1000;
-            setTimeout(() => { 
-                showWatermark(); 
-                scheduleNext(); 
-            }, delay);
-        }
-        scheduleNext();
+    function showWatermark() {
+        wm.style.opacity = "1";
+        // 10 seconds ke liye rukega
+        setTimeout(() => { 
+            wm.style.opacity = "0"; 
+        }, 10000); 
     }
+    
+    // Pehli baar shuruat mein dikhega
+    setTimeout(showWatermark, 3000);
+    
+    // Ab ye function loop banayega
+    function scheduleNext() {
+        // Har 1 minute (60000ms) mein dikhega. 
+        // Agar aap chahte hain jaldi dikhe toh 60000 ko kam karke 20000 (20 sec) kar dein.
+        const delay = 60000; 
+        setTimeout(() => { 
+            showWatermark(); 
+            scheduleNext(); 
+        }, delay);
+    }
+    scheduleNext();
+}
 
     function boot() {
         cleanFileName();
