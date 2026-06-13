@@ -61,18 +61,36 @@ class temp(object):
     FSUB_CACHE       = {}   # {(user_id, ch_id): (is_member, ts)}  — membership cache (TTL 60s)
     AIOHTTP_SESSION  = None # shared aiohttp session
 
-async def is_req_subscribed(bot, user_id, rqfsub_channels):
+async def is_req_subscribed(bot, user_id, rqfsub_channels, force_check=False):
+    """
+    Check if user has joined request-based channels
+    
+    Args:
+        bot: Pyrogram client
+        user_id: User ID to check
+        rqfsub_channels: List of request-based channel IDs
+        force_check: If True, bypass cache (default: False)
+    """
     btn = []
     now = time.time()
     for ch_id in rqfsub_channels:
         if await db.has_joined_channel(user_id, ch_id):
             continue
-        # Cache check (60s TTL)
+        
+        # 🔧 Cache check (10s TTL - changed from 60s)
         cache_key = (user_id, ch_id)
         cached = temp.FSUB_CACHE.get(cache_key)
-        if cached and now - cached[1] < 60:
+        
+        # 🔧 NEW: Check force_check parameter
+        if force_check:
+            is_member = None  # Skip cache, force fresh check
+        elif cached and now - cached[1] < 10:  # ✅ Changed from 60 to 10
             is_member = cached[0]
         else:
+            is_member = None
+        
+        # अगर cache miss या force_check है, तो fresh check करो
+        if is_member is None:
             try:
                 member = await bot.get_chat_member(ch_id, user_id)
                 is_member = member.status != enums.ChatMemberStatus.BANNED
@@ -107,16 +125,33 @@ async def is_req_subscribed(bot, user_id, rqfsub_channels):
     return btn
 
 
-async def is_subscribed(bot, user_id, fsub_channels):
+async def is_subscribed(bot, user_id, fsub_channels, force_check=False):
+    """
+    Check if user is subscribed to required channels
+    
+    Args:
+        bot: Pyrogram client
+        user_id: User ID to check
+        fsub_channels: List of channel IDs
+        force_check: If True, bypass cache (default: False)
+    """
     btn = []
     now = time.time()
     for channel_id in fsub_channels:
-        # Membership cache (60s TTL)
+        # 🔧 Membership cache (10s TTL - changed from 60s)
         cache_key = (user_id, channel_id)
         cached = temp.FSUB_CACHE.get(cache_key)
-        if cached and now - cached[1] < 60:
+        
+        # 🔧 NEW: Check force_check parameter
+        if force_check:
+            is_member = None  # Skip cache, force fresh check
+        elif cached and now - cached[1] < 10:  # ✅ Changed from 60 to 10
             is_member = cached[0]
         else:
+            is_member = None
+        
+        # अगर cache miss या force_check है, तो fresh check करो
+        if is_member is None:
             try:
                 await bot.get_chat_member(channel_id, user_id)
                 is_member = True
@@ -143,6 +178,7 @@ async def is_subscribed(bot, user_id, fsub_channels):
             except Exception as e:
                 logger.warning(f"Failed to create invite for {channel_id}: {e}")
     return btn
+
 
 async def is_check_admin(bot, chat_id, user_id):
     try:
