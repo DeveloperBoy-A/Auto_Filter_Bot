@@ -938,52 +938,50 @@ async def cb_handler(client: Client, query: CallbackQuery):
         await query.message.edit('ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ᴅᴇʟᴇᴛᴇᴅ ᴀʟʟ ɪɴᴅᴇxᴇᴅ ꜰɪʟᴇꜱ ✅')
 
     elif query.data.startswith("checksub"):
-    try:
-        ident, kk, file_id = query.data.split("#")
-        btn = []
-        chat = file_id.split("_")[0]
-        settings = await get_settings(chat)
-        fsub_channels = list(dict.fromkeys((settings.get('fsub', []) if settings else [])+ AUTH_CHANNELS))
-        
-        # 🔧 FIX #1: Clear cache for fresh check
-        user_id = query.from_user.id
-        for channel_id in fsub_channels:
-            cache_key = (user_id, channel_id)
-            if cache_key in temp.FSUB_CACHE:
-                del temp.FSUB_CACHE[cache_key]
-                logger.info(f"FSUB Cache cleared for user {user_id} in channel {channel_id}")
-        
-        # 🔧 FIX #2: Also clear AUTH_REQ_CHANNELS cache
-        for channel_id in AUTH_REQ_CHANNELS:
-            cache_key = (user_id, channel_id)
-            if cache_key in temp.FSUB_CACHE:
-                del temp.FSUB_CACHE[cache_key]
-                logger.info(f"REQ Cache cleared for user {user_id} in channel {channel_id}")
-        
-        # 🔧 FIX #3: Use force_check=True for fresh verification
-        btn += await is_subscribed(client, user_id, fsub_channels, force_check=True)
-        btn += await is_req_subscribed(client, user_id, AUTH_REQ_CHANNELS, force_check=True)
-        
-        if btn:
-            btn.append([InlineKeyboardButton("♻️ ᴛʀʏ ᴀɢᴀɪɴ ♻️", callback_data=f"checksub#{kk}#{file_id}")])
-            try:
-                await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(btn))
-            except MessageNotModified:
-                pass
-            await query.answer(
-                f"👋 Hello {query.from_user.first_name},\n\n"
-                "🛑 Yᴏᴜ ʜᴀᴠᴇ ɴᴏᴛ ᴊᴏɪɴᴇᴅ ᴀʟʟ ʀᴇǫᴜɪʀᴇᴅ ᴜᴘᴅᴀᴛᴇ Cʜᴀɴɴᴇʟs.\n"
-                "👉 Pʟᴇᴀsᴇ ᴊᴏɪɴ ᴇᴀᴄʜ ᴏɴᴇ ᴀɴᴅ ᴛʀʏ ᴀɢᴀɪɴ.\n",
-                show_alert=True
-            )
-            return
-        
-        await query.answer(url=f"https://t.me/{temp.U_NAME}?start={kk}_{file_id}")
-        await query.message.delete()
-        
-    except Exception as e:
-        await log_error(client, f"❌ Error in checksub callback:\n\n{repr(e)}")
-        logger.error(f"❌ Error in checksub callback:\n\n{repr(e)}")
+        # FIXED: Indented this entire block properly
+        try:
+            ident, kk, file_id = query.data.split("#")
+            btn = []
+            chat = file_id.split("_")[0]
+            settings = await get_settings(chat)
+            fsub_channels = list(dict.fromkeys((settings.get('fsub', []) if settings else [])+ AUTH_CHANNELS))
+
+            user_id = query.from_user.id
+            for channel_id in fsub_channels:
+                cache_key = (user_id, channel_id)
+                if cache_key in temp.FSUB_CACHE:
+                    del temp.FSUB_CACHE[cache_key]
+                    logger.info(f"FSUB Cache cleared for user {user_id} in channel {channel_id}")
+
+            for channel_id in AUTH_REQ_CHANNELS:
+                cache_key = (user_id, channel_id)
+                if cache_key in temp.FSUB_CACHE:
+                    del temp.FSUB_CACHE[cache_key]
+                    logger.info(f"REQ Cache cleared for user {user_id} in channel {channel_id}")
+
+            btn += await is_subscribed(client, user_id, fsub_channels, force_check=True)
+            btn += await is_req_subscribed(client, user_id, AUTH_REQ_CHANNELS, force_check=True)
+
+            if btn:
+                btn.append([InlineKeyboardButton("♻️ ᴛʀʏ ᴀɢᴀɪɴ ♻️", callback_data=f"checksub#{kk}#{file_id}")])
+                try:
+                    await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(btn))
+                except MessageNotModified:
+                    pass
+                await query.answer(
+                    f"👋 Hello {query.from_user.first_name},\n\n"
+                    "🛑 Yᴏᴜ ʜᴀᴠᴇ ɴᴏᴛ ᴊᴏɪɴᴇᴅ ᴀʟʟ ʀᴇǫᴜɪʀᴇᴅ ᴜᴘᴅᴀᴛᴇ Cʜᴀɴɴᴇʟs.\n"
+                    "👉 Pʟᴇᴀsᴇ ᴊᴏɪɴ ᴇᴀᴄʜ ᴏɴᴇ ᴀɴᴅ ᴛʀʏ ᴀɢᴀɪɴ.\n",
+                    show_alert=True
+                )
+                return
+
+            await query.answer(url=f"https://t.me/{temp.U_NAME}?start={kk}_{file_id}")
+            await query.message.delete()
+
+        except Exception as e:
+            await log_error(client, f"❌ Error in checksub callback:\n\n{repr(e)}")
+            logger.error(f"❌ Error in checksub callback:\n\n{repr(e)}")
 
 
     elif query.data.startswith("killfilesdq"):
