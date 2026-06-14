@@ -649,3 +649,391 @@ async def add_button(client, message):
             await asyncio.sleep(0.5)  # Small delay to handle rapid messages
         except Exception as e:
             print(f"Failed to add button: {e}")
+
+
+
+# ═══════════════════════════════════════════════════════════════
+# DRY RUN + CONFIRM COMMANDS - SINGLE & BATCH MODE
+
+
+# ═══════════════════════════════════════════════════════════════
+# SINGLE MOVIE MODE
+# ═══════════════════════════════════════════════════════════════
+
+# ╔════════════════════════════════════════════════════════════════╗
+# ║ COMMAND 1: /cleanup_dry_single <movie_name>                   ║
+# ║ DRY RUN - ek movie ke liye dekho konse files delete honge     ║
+# ╚════════════════════════════════════════════════════════════════╝
+
+@Client.on_message(filters.command("cleanup_dry_single") & filters.user(ADMINS))
+async def cleanup_dry_single(bot, message):
+    """
+    /cleanup_dry_single Avengers Endgame 2019
+    
+    DRY RUN - ek specific movie ke liye
+    Dikhata h konse files delete honge
+    """
+    try:
+        if len(message.command) < 2:
+            return await message.reply_text(
+                "❌ Usage: /cleanup_dry_single <movie_name>\n\n"
+                "Example: /cleanup_dry_single Avengers Endgame 2019"
+            )
+        
+        movie_name = " ".join(message.command[1:])
+        msg = await message.reply_text(
+            f"🔍 **DRY RUN - SINGLE MOVIE**\n\n"
+            f"Movie: {movie_name}\n"
+            f"Status: Scanning...\n\n"
+            f"(DRY RUN - Nothing will be deleted)"
+        )
+        
+        from plugins.quality_manager import extract_quality_info, get_base_title
+        from database.config_db import mdb
+        import re
+        
+        # Search for similar files
+        base_title = get_base_title(movie_name)
+        search_pattern = f".*{re.escape(base_title)}.*"
+        similar_files = await mdb.db.media.find({
+            'file_name': {'$regex': search_pattern, '$options': 'i'}
+        }).to_list(None)
+        
+        if not similar_files or len(similar_files) == 0:
+            return await msg.edit_text(f"❌ No files found for: {movie_name}")
+        
+        # Analyze each file
+        files_info = []
+        for file in similar_files:
+            quality = extract_quality_info(file.get('file_name', ''))
+            files_info.append({
+                'name': file.get('file_name', 'Unknown'),
+                'quality': quality['source'] or 'Unknown',
+                'resolution': quality['resolution'] or 'Unknown',
+                'score': quality['quality_score'],
+                'id': str(file.get('_id', ''))
+            })
+        
+        # Sort by quality score (highest first)
+        files_info.sort(key=lambda x: x['score'], reverse=True)
+        
+        # Build report
+        report = f"📊 **DRY RUN - SINGLE MOVIE**\n"
+        report += f"{'='*50}\n\n"
+        report += f"🎬 Movie: {movie_name}\n"
+        report += f"📁 Found: {len(files_info)} files\n\n"
+        
+        report += "📋 **File Details:**\n"
+        report += "─" * 50 + "\n"
+        
+        for idx, file in enumerate(files_info, 1):
+            status = "✅ KEEP" if idx == 1 else "❌ DELETE"
+            report += f"\n{idx}. {status}\n"
+            report += f"   📄 {file['name'][:60]}\n"
+            report += f"   🎬 {file['quality'].upper() if file['quality'] else 'N/A'} | "
+            report += f"📐 {file['resolution'].upper() if file['resolution'] else 'N/A'} | "
+            report += f"📊 Score: {file['score']:.1f}\n"
+        
+        report += "\n" + "─" * 50 + "\n"
+        to_delete = len(files_info) - 1
+        report += f"\n⚠️  **PREVIEW:**\n"
+        report += f"✅ Will KEEP: 1 file\n"
+        report += f"❌ Will DELETE: {to_delete} files\n\n"
+        
+        if to_delete > 0:
+            report += f"👉 To CONFIRM & DELETE:\n"
+            report += f"`/cleanup_confirm_single {movie_name}`"
+        else:
+            report += f"ℹ️  No files to delete (already optimal)"
+        
+        await msg.edit_text(report)
+        
+    except Exception as e:
+        await message.reply_text(f"❌ Error: {str(e)}")
+        logger.exception("Error in cleanup_dry_single")
+
+
+# ╔════════════════════════════════════════════════════════════════╗
+# ║ COMMAND 2: /cleanup_confirm_single <movie_name>               ║
+# ║ CONFIRM DELETE - ek movie ke liye actual delete karo           ║
+# ╚════════════════════════════════════════════════════════════════╝
+
+@Client.on_message(filters.command("cleanup_confirm_single") & filters.user(ADMINS))
+async def cleanup_confirm_single(bot, message):
+    """
+    /cleanup_confirm_single Avengers Endgame 2019
+    
+    CONFIRM DELETE - ek specific movie ke liye
+    Actually delete kar dega
+    """
+    try:
+        if len(message.command) < 2:
+            return await message.reply_text(
+                "❌ Usage: /cleanup_confirm_single <movie_name>\n\n"
+                "⚠️  WARNING: This will PERMANENTLY DELETE files!\n\n"
+                "Example: /cleanup_confirm_single Avengers Endgame 2019"
+            )
+        
+        movie_name = " ".join(message.command[1:])
+        msg = await message.reply_text(
+            f"⚠️  **CONFIRMING DELETE - SINGLE MOVIE**\n\n"
+            f"🎬 Movie: {movie_name}\n"
+            f"Status: Processing...\n\n"
+            f"🗑️  Deleting lower quality files..."
+        )
+        
+        from plugins.quality_manager import cleanup_duplicates, get_base_title
+        from database.config_db import mdb
+        
+        # Get base title
+        base_title = get_base_title(movie_name)
+        
+        if not base_title:
+            return await msg.edit_text(f"❌ Could not extract title from: {movie_name}")
+        
+        # Perform actual deletion
+        deleted_count, deleted_files = await cleanup_duplicates(
+            db_collection=mdb.db.media,
+            base_title=base_title,
+            keep_highest_quality=True
+        )
+        
+        if deleted_count > 0:
+            deleted_list = ""
+            for idx, file in enumerate(deleted_files[:8], 1):
+                deleted_list += f"{idx}. {file[:60]}\n"
+            
+            if len(deleted_files) > 8:
+                deleted_list += f"... + {len(deleted_files) - 8} more\n"
+            
+            report = (
+                f"✅ **DELETE COMPLETED!**\n"
+                f"{'='*50}\n\n"
+                f"🎬 Movie: {movie_name}\n"
+                f"🗑️  Deleted: {deleted_count} files\n"
+                f"✅ Kept: 1 file (highest quality)\n\n"
+                f"📋 **Deleted Files:**\n"
+                f"{deleted_list}"
+            )
+            
+            await msg.edit_text(report)
+            
+            # Log
+            logger.warning(
+                f"[CLEANUP SINGLE CONFIRMED] Movie: {movie_name} | "
+                f"Deleted: {deleted_count} files"
+            )
+        else:
+            await msg.edit_text(
+                f"ℹ️  **No files deleted**\n\n"
+                f"🎬 Movie: {movie_name}\n"
+                f"Reason: All files are optimal quality or no duplicates"
+            )
+        
+    except Exception as e:
+        await message.reply_text(f"❌ Error: {str(e)}")
+        logger.exception("Error in cleanup_confirm_single")
+
+
+# ═══════════════════════════════════════════════════════════════════
+# BATCH MODE - SAARI MOVIES
+# ═══════════════════════════════════════════════════════════════════
+
+# ╔═══════════════════════════════════════════════════════════════╗
+# ║ COMMAND 3: /cleanup_dry_batch                                 ║
+# ║ DRY RUN - SAARI FILES KE LIYE                                 ║
+# ║ Puri database me dekho konse files delete honge               ║
+# ╚═══════════════════════════════════════════════════════════════╝
+
+@Client.on_message(filters.command("cleanup_dry_batch") & filters.user(ADMINS))
+async def cleanup_dry_batch(bot, message):
+    """
+    /cleanup_dry_batch
+    
+    DRY RUN - BATCH MODE
+    SAARI movies ke liye dekho konse files delete honge
+    """
+    try:
+        msg = await message.reply_text(
+            f"🔍 **DRY RUN - BATCH MODE**\n\n"
+            f"Status: Scanning ALL files...\n\n"
+            f"(DRY RUN - Nothing will be deleted)"
+        )
+        
+        from plugins.quality_manager import extract_quality_info, get_base_title
+        from database.config_db import mdb
+        from collections import defaultdict
+        
+        # Get all files
+        all_files = await mdb.db.media.find({}).to_list(None)
+        
+        if not all_files or len(all_files) == 0:
+            return await msg.edit_text("❌ No files found in database")
+        
+        # Group by base title
+        movies = defaultdict(list)
+        for file in all_files:
+            base_title = get_base_title(file.get('file_name', ''))
+            if base_title:
+                quality = extract_quality_info(file.get('file_name', ''))
+                movies[base_title].append({
+                    'name': file.get('file_name', ''),
+                    'quality': quality['source'],
+                    'resolution': quality['resolution'],
+                    'score': quality['quality_score']
+                })
+        
+        # Count duplicates that would be deleted
+        total_to_delete = 0
+        duplicate_movies = []
+        
+        for base_title, files in movies.items():
+            if len(files) > 1:
+                # Sort by score
+                files.sort(key=lambda x: x['score'], reverse=True)
+                to_delete = len(files) - 1
+                total_to_delete += to_delete
+                duplicate_movies.append({
+                    'title': base_title,
+                    'count': len(files),
+                    'to_delete': to_delete
+                })
+        
+        # Sort by to_delete (highest first)
+        duplicate_movies.sort(key=lambda x: x['to_delete'], reverse=True)
+        
+        # Build report
+        report = f"📊 **DRY RUN - BATCH MODE**\n"
+        report += f"{'='*50}\n\n"
+        report += f"📁 Total Files: {len(all_files)}\n"
+        report += f"🎬 Total Movies: {len(movies)}\n"
+        report += f"📋 Movies with Duplicates: {len(duplicate_movies)}\n\n"
+        
+        report += f"⚠️  **WOULD BE DELETED: {total_to_delete} files**\n\n"
+        
+        if duplicate_movies:
+            report += f"📋 **Movies with Lower Quality Duplicates:**\n"
+            report += "─" * 50 + "\n"
+            
+            for idx, movie in enumerate(duplicate_movies[:15], 1):
+                report += f"{idx}. {movie['title'][:45]}\n"
+                report += f"   Total versions: {movie['count']} | "
+                report += f"Would delete: {movie['to_delete']}\n\n"
+            
+            if len(duplicate_movies) > 15:
+                remaining = len(duplicate_movies) - 15
+                report += f"... + {remaining} more movies\n\n"
+        
+        report += "─" * 50 + "\n"
+        report += f"\n👉 To CONFIRM & DELETE ALL:\n"
+        report += f"`/cleanup_confirm_batch`"
+        
+        await msg.edit_text(report)
+        
+    except Exception as e:
+        await message.reply_text(f"❌ Error: {str(e)}")
+        logger.exception("Error in cleanup_dry_batch")
+
+
+# ╔═══════════════════════════════════════════════════════════════╗
+# ║ COMMAND 4: /cleanup_confirm_batch                             ║
+# ║ CONFIRM DELETE - SAARI FILES KE LIYE                          ║
+# ║ Puri database se lower quality delete kar dega                ║
+# ╚═══════════════════════════════════════════════════════════════╝
+
+@Client.on_message(filters.command("cleanup_confirm_batch") & filters.user(ADMINS))
+async def cleanup_confirm_batch(bot, message):
+    """
+    /cleanup_confirm_batch
+    
+    CONFIRM DELETE - BATCH MODE
+    SAARI movies ke liye lower quality delete kar dega
+    """
+    try:
+        msg = await message.reply_text(
+            f"⚠️  **CONFIRMING DELETE - BATCH MODE**\n\n"
+            f"Status: Processing ALL files...\n\n"
+            f"🗑️  Deleting lower quality files from entire database...\n"
+            f"⏳ This may take a while..."
+        )
+        
+        from plugins.quality_manager import extract_quality_info, get_base_title
+        from database.config_db import mdb
+        from collections import defaultdict
+        
+        # Get all files
+        all_files = await mdb.db.media.find({}).to_list(None)
+        
+        if not all_files or len(all_files) == 0:
+            return await msg.edit_text("❌ No files found in database")
+        
+        # Group by base title
+        movies = defaultdict(list)
+        for file in all_files:
+            base_title = get_base_title(file.get('file_name', ''))
+            if base_title:
+                quality = extract_quality_info(file.get('file_name', ''))
+                movies[base_title].append({
+                    'file_obj': file,
+                    'name': file.get('file_name', ''),
+                    'quality': quality['source'],
+                    'resolution': quality['resolution'],
+                    'score': quality['quality_score']
+                })
+        
+        # Process each movie group
+        total_deleted = 0
+        movies_cleaned = 0
+        deleted_files_list = []
+        
+        for base_title, files in movies.items():
+            if len(files) > 1:
+                # Sort by score (highest first)
+                files.sort(key=lambda x: x['score'], reverse=True)
+                
+                # Delete lower quality versions
+                for file_data in files[1:]:  # Skip first (best quality)
+                    try:
+                        await mdb.db.media.delete_one({'_id': file_data['file_obj']['_id']})
+                        total_deleted += 1
+                        movies_cleaned += 1
+                        deleted_files_list.append(file_data['name'])
+                    except Exception as e:
+                        logger.error(f"Error deleting {file_data['name']}: {e}")
+        
+        # Build report
+        if total_deleted > 0:
+            deleted_preview = ""
+            for idx, file in enumerate(deleted_files_list[:8], 1):
+                deleted_preview += f"{idx}. {file[:55]}\n"
+            
+            if len(deleted_files_list) > 8:
+                deleted_preview += f"... + {len(deleted_files_list) - 8} more\n"
+            
+            report = (
+                f"✅ **BATCH CLEANUP COMPLETED!**\n"
+                f"{'='*50}\n\n"
+                f"🗑️  Total Deleted: {total_deleted} files\n"
+                f"🎬 Movies Cleaned: {movies_cleaned}\n"
+                f"✅ Highest Quality Kept: {movies_cleaned} files\n\n"
+                f"📋 **Sample Deleted Files:**\n"
+                f"{deleted_preview}"
+            )
+        else:
+            report = (
+                f"ℹ️  **No files to delete**\n\n"
+                f"All files are already optimal quality"
+            )
+        
+        await msg.edit_text(report)
+        
+        # Log
+        logger.warning(
+            f"[CLEANUP BATCH CONFIRMED] Total Deleted: {total_deleted} files | "
+            f"Movies Cleaned: {movies_cleaned}"
+        )
+        
+    except Exception as e:
+        await message.reply_text(f"❌ Error: {str(e)}")
+        logger.exception("Error in cleanup_confirm_batch")
+
