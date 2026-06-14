@@ -5,6 +5,9 @@ from datetime import datetime
 from collections import defaultdict
 from plugins.Dreamxfutures.Imdbposter import get_movie_detailsx, fetch_image, get_movie_details
 from database.users_chats_db import db
+from plugins.quality_manager import extract_quality_info, is_high_quality, find_and_delete_lower_quality
+
+
 from pyrogram import Client, filters, enums
 from info import CHANNELS, MOVIE_UPDATE_CHANNEL, LINK_PREVIEW, ABOVE_PREVIEW, BAD_WORDS, LANDSCAPE_POSTER, TMDB_POSTER
 from Script import script
@@ -265,6 +268,18 @@ async def media_handler(bot, message):
         return
 
     try:
+        # === Quality Management Start ===
+        quality_info = extract_quality_info(media.file_name, media.caption)
+        if is_high_quality(quality_info):
+            from database.config_db import mdb
+            success, cleanup_msg = await find_and_delete_lower_quality(
+                db_collection=mdb.db.media,
+                new_filename=media.file_name,
+                new_caption=media.caption
+            )
+            if success:
+                logger.info(f"[QUALITY] {cleanup_msg}")
+        # === Quality Management End ===
         if await db.movie_update_status(bot.me.id):
             await process_and_send_update(bot, media.file_name, media.caption)
     except Exception:
