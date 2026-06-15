@@ -30,7 +30,7 @@ IGNORE_WORDS = {
     "telesync", "dvdscr", "dvdrip", "predvd", "webrip", "web-dl", "tvrip", 
     "hdtv", "web dl", "webdl", "bluray", "brrip", "bdrip", "360p", "480p", 
     "720p", "1080p", "2160p", "4k", "1440p", "540p", "240p", "140p", "hevc", 
-    "hdrip", "hin", "hindi", "tam", "tamil", "kan", "kannada", "tel", "telugu", "HD"
+    "hdrip", "hin", "hindi", "tam", "tamil", "kan", "kannada", "tel", "telugu", "hd",
     "mal", "malayalam", "eng", "english", "pun", "punjabi", "ben", "bengali", 
     "mar", "marathi", "guj", "gujarati", "urd", "urdu", "kor", "korean", "jpn", 
     "japanese", "nf", "netflix", "sonyliv", "sony", "sliv", "amzn", "prime", 
