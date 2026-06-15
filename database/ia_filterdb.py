@@ -1045,7 +1045,7 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
     if file_type:
         filter_mongo["file_type"] = file_type
 
-    fetch_limit = max(100, offset + max_results)
+    fetch_limit = max(500, offset + max_results * 2)  # Increased for better pagination
 
     if MULTIPLE_DB:
         count1, count2, files = await asyncio.gather(
@@ -1058,6 +1058,15 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
             remaining = fetch_limit - len(files)
             files2 = await Media2.find(filter_mongo).sort("$natural", -1).limit(remaining).to_list(length=remaining)
             files.extend(files2)
+        
+        # Remove duplicate files by file_id
+        seen_ids = set()
+        unique_files = []
+        for file in files:
+            if file.file_id not in seen_ids:
+                unique_files.append(file)
+                seen_ids.add(file.file_id)
+        files = unique_files
     else:
         total_results, files = await asyncio.gather(
             Media.count_documents(filter_mongo),
@@ -1097,12 +1106,12 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
 
     paginated_files = files[offset:offset + max_results]
 
-    next_offset = offset + len(paginated_files)
-    if next_offset >= total_results or len(paginated_files) == 0:
+    # FIX: Use fixed max_results instead of len(paginated_files) to avoid duplicate results
+    next_offset = offset + max_results
+    if next_offset >= total_results or len(paginated_files) < max_results:
         next_offset = ""
 
     return paginated_files, next_offset, total_results
-
 
 #_________________________________
 
