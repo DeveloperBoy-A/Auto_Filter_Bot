@@ -173,6 +173,7 @@ def get_base_title(filename: str) -> str:
     return text
 
 
+
 async def find_and_delete_lower_quality(
     db_collection,
     new_filename: str,
@@ -180,33 +181,36 @@ async def find_and_delete_lower_quality(
     file_id: Optional[str] = None
 ) -> Tuple[bool, str]:
     """
-    Find and delete lower quality versions of the same movie/series
-    
-    Args:
-        db_collection: MongoDB collection for media files
-        new_filename: Filename of newly added file
-        new_caption: Caption of newly added file
-        file_id: File ID to exclude from deletion (the new file)
-    
-    Returns:
-        (success: bool, message: str)
+    Find and delete lower quality versions - IMPROVED LOGGING
     """
     try:
         # Extract quality info for new file
         new_quality = extract_quality_info(new_filename, new_caption)
         
+        # Better logging
+        logger.info(
+            f"[QUALITY] New file uploaded:\n"
+            f"  📄 Filename: {new_filename[:70]}\n"
+            f"  🎬 Source: {new_quality.get('source', 'N/A').upper() if new_quality.get('source') else 'UNKNOWN'}\n"
+            f"  📐 Resolution: {new_quality.get('resolution', 'N/A').upper() if new_quality.get('resolution') else 'UNKNOWN'}\n"
+            f"  📊 Quality Score: {new_quality.get('quality_score', 0):.1f}"
+        )
+        
         # If new file doesn't have quality info, skip deletion logic
         if not new_quality['source']:
+            logger.warning(f"[QUALITY] Could not detect quality source from filename: {new_filename}")
             return True, "No quality info found in new file, skipping cleanup"
         
         # Get base title
         base_title = get_base_title(new_filename)
         
         if not base_title:
+            logger.warning(f"[QUALITY] Could not extract base title from: {new_filename}")
             return True, "Could not extract title for comparison"
         
+        logger.debug(f"[QUALITY] Base title extracted: {base_title}")
+        
         # Search for similar files in database
-        # Adjust this based on your actual database schema
         search_query = {
             'file_name': {'$regex': f'.*{re.escape(base_title)}.*', '$options': 'i'}
         }
@@ -216,13 +220,23 @@ async def find_and_delete_lower_quality(
         
         similar_files = await db_collection.find(search_query).to_list(None)
         
+        logger.info(f"[QUALITY] Similar files found in DB: {len(similar_files)}")
+        
         deleted_count = 0
         deleted_files = []
+        kept_files = []
         
         for existing_file in similar_files:
             existing_filename = existing_file.get('file_name', '')
             existing_caption = existing_file.get('caption', '')
             existing_quality = extract_quality_info(existing_filename, existing_caption)
+            
+            logger.debug(
+                f"[QUALITY] Checking existing file:\n"
+                f"  📄 {existing_filename[:60]}\n"
+                f"  🎬 Source: {existing_quality.get('source', 'N/A')}\n"
+                f"  📊 Score: {existing_quality.get('quality_score', 0):.1f}"
+            )
             
             # Check if we should delete this file
             if should_delete_existing(existing_quality, new_quality):
@@ -231,20 +245,72 @@ async def find_and_delete_lower_quality(
                     await db_collection.delete_one({'_id': existing_file['_id']})
                     deleted_count += 1
                     deleted_files.append(existing_filename)
-                    logger.info(f"Deleted lower quality file: {existing_filename}")
+                    
+                    logger.warning(
+                        f"[QUALITY] ✅ DELETED lower quality file:\n"
+                        f"  📄 {existing_filename[:70]}\n"
+                        f"  🎬 Source: {existing_quality.get('source', 'N/A').upper()}\n"
+                        f"  📊 Old Score: {existing_quality.get('quality_score', 0):.1f} "
+                        f"< New Score: {new_quality.get('quality_score', 0):.1f}"
+                    )
                 except Exception as e:
-                    logger.error(f"Error deleting file {existing_filename}: {e}")
+                    logger.error(f"[QUALITY] ❌ Error deleting file {existing_filename}: {e}")
+            else:
+                kept_files.append(existing_filename)
+                logger.debug(
+                    f"[QUALITY] ℹ️  Keeping file (equal or better quality):\n"
+                    f"  📄 {existing_filename[:60]}\n"
+                    f"  📊 Score: {existing_quality.get('quality_score', 0):.1f}"
+                )
         
+        # Generate final message with details
         if deleted_count > 0:
-            message = f"Deleted {deleted_count} lower quality files: {', '.join(deleted_files[:3])}"
-            if deleted_count > 3:
-                message += f" and {deleted_count - 3} more"
+            message = (
+                f"✅ Cleanup completed:\n"
+                f"  🗑️  Deleted: {deleted_count} file(s)\n"
+                f"  ✨ Kept: {len(kept_files)} file(s)"
+            )
+            logger.warning(
+                f"[QUALITY] ✅ CLEANUP SUMMARY:\n"
+                f"  Movie: {base_title}\n"
+                f"  🗑️  Deleted: {deleted_count} files\n"
+                f"  ✨ Kept: {len(kept_files)} files\n"
+                f"  New Quality: {new_quality.get('source', 'N/A').upper()} ({new_quality.get('quality_score', 0):.1f})"
+            )
             return True, message
         else:
-            return True, "No lower quality files found to delete"
+            # Provide detailed reason
+            if len(similar_files) == 0:
+                message = "❌ No similar files found in database"
+                logger.info(
+                    f"[QUALITY] ℹ️  NO CLEANUP NEEDED:\n"
+                    f"  Reason: No similar files found\n"
+                    f"  New file will be kept as first/only version\n"
+                    f"  Quality: {new_quality.get('source', 'N/A').upper()} ({new_quality.get('quality_score', 0):.1f})"
+                )
+            elif all(existing_quality.get('quality_score', 0) >= new_quality.get('quality_score', 0) 
+                     for existing_file in similar_files 
+                     for existing_quality in [extract_quality_info(existing_file.get('file_name', ''), 
+                                                                   existing_file.get('caption', ''))]):
+                message = "ℹ️  Existing files are equal or better quality"
+                logger.info(
+                    f"[QUALITY] ℹ️  NO CLEANUP NEEDED:\n"
+                    f"  Reason: Existing files are equal or better quality\n"
+                    f"  New Quality Score: {new_quality.get('quality_score', 0):.1f}\n"
+                    f"  Existing files scores: {[extract_quality_info(f.get('file_name', '')).get('quality_score', 0) for f in similar_files]}"
+                )
+            else:
+                message = "ℹ️  No lower quality files to delete"
+                logger.info(
+                    f"[QUALITY] ℹ️  NO CLEANUP NEEDED:\n"
+                    f"  New Quality: {new_quality.get('source', 'N/A').upper()} ({new_quality.get('quality_score', 0):.1f})\n"
+                    f"  Similar files: {len(similar_files)} found but no lower quality versions"
+                )
+            
+            return True, message
     
     except Exception as e:
-        logger.error(f"Error in find_and_delete_lower_quality: {e}")
+        logger.error(f"[QUALITY] ❌ Error in find_and_delete_lower_quality: {e}", exc_info=True)
         return False, f"Error during quality cleanup: {str(e)}"
 
 
