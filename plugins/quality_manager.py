@@ -23,19 +23,29 @@ RESOLUTION_HIERARCHY = {
     "240p": 1, "140p": 1, "360p": 2, "480p": 3, "540p": 4, "720p": 5, "1080p": 6, "1440p": 7, "2160p": 8, "4k": 8,
 }
 
-LANGUAGES = [
-    "hindi","english","tamil","telugu","malayalam",
-    "kannada","punjabi","bengali","marathi","gujarati"
-]
+LANGUAGES = {
+    "hindi": [r"\bhindi\b", r"\bhin\b"],
+    "english": [r"\benglish\b", r"\beng\b"],
+    "tamil": [r"\btamil\b", r"\btam\b"],
+    "telugu": [r"\btelugu\b", r"\btel\b"],
+    "malayalam": [r"\bmalayalam\b", r"\bmal\b"],
+    "kannada": [r"\bkannada\b", r"\bkan\b"],
+    "punjabi": [r"\bpunjabi\b", r"\bpan\b", r"\bpbi\b"],
+    "bengali": [r"\bbengali\b", r"\bben\b"],
+    "marathi": [r"\bmarathi\b", r"\bmar\b"],
+    "gujarati": [r"\bgujarati\b", r"\bguj\b", r"\bgujrat\b"]
+}
 
 LOW_QUALITY_SOURCES = ['camrip','hdcam','hdtc','hdts','ts','tc','telesync','predvd','dvdscr']
 HIGH_QUALITY_SOURCES = ['webrip','web-dl','webdl','web dl','hdrip','bluray','bdrip','brrip']
 
 def extract_language(text: str) -> str:
     text = text.lower()
-    for lang in LANGUAGES:
-        if re.search(rf'\b{lang}\b', text):
-            return lang
+    # Har language (key) aur uske patterns (list) ke liye
+    for lang, patterns in LANGUAGES.items():
+        for pattern in patterns:
+            if re.search(pattern, text):
+                return lang  # Ye 'hindi', 'english' etc return karega
     return "unknown"
 
 def extract_quality_info(filename: str, caption: str = "") -> dict:
@@ -45,14 +55,17 @@ def extract_quality_info(filename: str, caption: str = "") -> dict:
     }
 
     for source, score in QUALITY_HIERARCHY.items():
-        pattern = rf'\b{re.escape(source)}\b'
+        # Yahan change kiya hai: \b hata kar [._\-\s] lagaya hai
+        # Ye space, dash, dot, aur underscore sabko handle karega
+        pattern = rf'[._\-\s]{re.escape(source)}[._\-\s]|^{re.escape(source)}[._\-\s]|[._\-\s]{re.escape(source)}$'
         if re.search(pattern, text):
             quality_info['source'] = source
             quality_info['source_score'] = score
             break
 
     for res, score in RESOLUTION_HIERARCHY.items():
-        pattern = rf'\b{re.escape(res)}\b'
+        # Yahan bhi wahi change
+        pattern = rf'[._\-\s]{re.escape(res)}[._\-\s]|^{re.escape(res)}[._\-\s]|[._\-\s]{re.escape(res)}$'
         if re.search(pattern, text):
             quality_info['resolution'] = res
             quality_info['resolution_score'] = score
