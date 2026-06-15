@@ -1,7 +1,9 @@
 import re
 import logging
 from typing import Optional, Tuple, List
-from database.ia_filterdb import Media
+from database.ia_filterdb import Media, Media2
+from info import MULTIPLE_DB
+
 
 logger = logging.getLogger(__name__)
 
@@ -288,7 +290,14 @@ from collections import defaultdict
 async def quality_report_cmd(bot, message):
     try:
         msg = await message.reply_text("📊 Generating report...\n⏳ Please wait...")
+        
+        # Get files from DB1
         all_files = await Media.collection.find({}).to_list(None)
+        # Get files from DB2 if enabled
+        if MULTIPLE_DB:
+            all_files2 = await Media2.collection.find({}).to_list(None)
+            all_files.extend(all_files2)
+
         if not all_files:
             return await msg.edit_text("❌ No files in database")
             
@@ -304,7 +313,7 @@ async def quality_report_cmd(bot, message):
             quality_dist[source] += 1
             resolution_dist[resolution] += 1
 
-        report = f"📊 **QUALITY REPORT**\n{'='*50}\n\n📁 **Total Files:** {len(all_files)}\n\n🎬 **Source Quality Distribution:**\n{'─'*50}\n"
+        report = f"📊 **QUALITY REPORT (DB1 & DB2)**\n{'='*50}\n\n📁 **Total Files:** {len(all_files)}\n\n🎬 **Source Quality Distribution:**\n{'─'*50}\n"
         quality_order = ['camrip', 'hdcam', 'hdtc', 'hdts', 'ts', 'tc', 'predvd', 'dvdscr', 'dvdrip', 'tvrip', 'hdtv', 'webrip', 'web-dl', 'webdl', 'hdrip', 'bluray', 'bdrip', 'brrip', 'unknown']
         
         for quality in quality_order:
@@ -338,36 +347,26 @@ async def quality_report_cmd(bot, message):
 async def cleanup_dry_single_cmd(bot, message):
     try:
         if len(message.command) < 2:
-            return await message.reply_text(
-                "❌ Usage: /cleanup_dry_single <movie_name>\n\n"
-                "Example: /cleanup_dry_single Oppenheimer 2023"
-            )
+            return await message.reply_text("❌ Usage: /cleanup_dry_single <movie_name>")
             
         movie_name = " ".join(message.command[1:])
         msg = await message.reply_text(f"🔍 **DRY RUN - SINGLE**\n\nMovie: {movie_name}\n⏳ Scanning...")
-        logger.info(f"[DRY RUN SINGLE] Starting for: {movie_name}")
         
         base_title = get_base_title(movie_name)
-        logger.debug(f"[DRY RUN SINGLE] Base title: {base_title}")
-        
         if not base_title:
-            logger.warning(f"[DRY RUN SINGLE] Could not extract base title from: {movie_name}")
             return await msg.edit_text(f"❌ Could not extract title from: {movie_name}")
 
         words = [w for w in base_title.split() if len(w) > 1]
         search_pattern = ".*".join(map(re.escape, words[:5])) if words else re.escape(base_title)
-        logger.debug(f"[DRY RUN SINGLE] Search pattern: {search_pattern}")
 
-        try:
-            similar_files = await Media.collection.find({'file_name': {'$regex': search_pattern, '$options': 'i'}}).to_list(None)
-        except Exception as e:
-            logger.error(f"[DRY RUN SINGLE] Database error: {e}")
-            return await msg.edit_text(f"❌ Database error: {str(e)}")
-            
-        logger.info(f"[DRY RUN SINGLE] Found {len(similar_files)} files")
+        # Search DB1
+        similar_files = await Media.collection.find({'file_name': {'$regex': search_pattern, '$options': 'i'}}).to_list(None)
+        # Search DB2
+        if MULTIPLE_DB:
+            similar_files2 = await Media2.collection.find({'file_name': {'$regex': search_pattern, '$options': 'i'}}).to_list(None)
+            similar_files.extend(similar_files2)
         
         if not similar_files:
-            logger.warning(f"[DRY RUN SINGLE] No files found for: {base_title}")
             return await msg.edit_text(f"❌ No files found for: {movie_name}")
 
         files_info = []
@@ -378,10 +377,8 @@ async def cleanup_dry_single_cmd(bot, message):
                 'name': file_name,
                 'quality': quality['source'] or 'Unknown',
                 'resolution': quality['resolution'] or 'Unknown',
-                'score': quality['quality_score'],
-                'id': str(file.get('_id', ''))
+                'score': quality['quality_score']
             })
-            logger.debug(f"[DRY RUN SINGLE] File: {file_name[:50]} | Score: {quality['quality_score']:.1f}")
 
         files_info.sort(key=lambda x: x['score'], reverse=True)
         has_high_quality = any(f['quality'] in HIGH_QUALITY_SOURCES for f in files_info)
@@ -409,9 +406,7 @@ async def cleanup_dry_single_cmd(bot, message):
             report += f"ℹ️ No files to delete (Rules applied)"
             
         await msg.edit_text(report)
-        logger.info(f"[DRY RUN SINGLE] Complete - Will delete: {to_delete}")
     except Exception as e:
-        logger.error(f"[DRY RUN SINGLE] Error: {e}", exc_info=True)
         await message.reply_text(f"❌ Error: {str(e)}")
 
 
@@ -419,25 +414,21 @@ async def cleanup_dry_single_cmd(bot, message):
 async def cleanup_confirm_single_cmd(bot, message):
     try:
         if len(message.command) < 2:
-            return await message.reply_text(
-                "❌ Usage: /cleanup_confirm_single <movie_name>\n\n"
-                "⚠️ WARNING: Will PERMANENTLY DELETE files!\n\n"
-                "Example: /cleanup_confirm_single Oppenheimer 2023"
-            )
+            return await message.reply_text("❌ Usage: /cleanup_confirm_single <movie_name>")
             
         movie_name = " ".join(message.command[1:])
-        msg = await message.reply_text(
-            f"⚠️ **CONFIRMING DELETE**\n\nMovie: {movie_name}\n🗑️ Processing...\n\n⏳ Please wait..."
-        )
-        logger.info(f"[CONFIRM SINGLE] Starting for: {movie_name}")
+        msg = await message.reply_text(f"⚠️ **CONFIRMING DELETE**\n\nMovie: {movie_name}\n🗑️ Processing...\n\n⏳ Please wait...")
         
         base_title = get_base_title(movie_name)
         if not base_title:
-            logger.error(f"[CONFIRM SINGLE] Could not extract title: {movie_name}")
             return await msg.edit_text(f"❌ Could not extract title from: {movie_name}")
 
         deleted_count, deleted_files = await cleanup_duplicates(db_collection=Media.collection, base_title=base_title, keep_highest_quality=True)
-        logger.warning(f"[CONFIRM SINGLE] Movie: {movie_name} | Deleted: {deleted_count} files")
+        
+        if MULTIPLE_DB:
+            d_count2, d_files2 = await cleanup_duplicates(db_collection=Media2.collection, base_title=base_title, keep_highest_quality=True)
+            deleted_count += d_count2
+            deleted_files.extend(d_files2)
         
         if deleted_count > 0:
             deleted_preview = ""
@@ -453,67 +444,65 @@ async def cleanup_confirm_single_cmd(bot, message):
                 f"📋 **Deleted Files:**\n{deleted_preview}"
             )
         else:
-            report = (
-                f"ℹ️ **No files deleted**\n\n"
-                f"🎬 Movie: {movie_name}\n"
-                f"Reason: No low-quality duplicates found based on strict rules."
-            )
+            report = f"ℹ️ **No files deleted**\n\n🎬 Movie: {movie_name}\nReason: No low-quality duplicates found based on strict rules."
         await msg.edit_text(report)
     except Exception as e:
-        logger.error(f"[CONFIRM SINGLE] Error: {e}", exc_info=True)
         await message.reply_text(f"❌ Error: {str(e)}")
 
+
+async def process_dry_batch(collection):
+    all_files = await collection.find({}).to_list(None)
+    movies = defaultdict(list)
+    for file in all_files:
+        base_title = get_base_title(file.get('file_name', ''))
+        if base_title:
+            quality = extract_quality_info(file.get('file_name', ''))
+            movies[base_title].append({
+                'name': file.get('file_name', ''),
+                'quality': quality['source'],
+                'score': quality['quality_score']
+            })
+    
+    total_to_delete = 0
+    duplicate_movies = []
+    
+    for base_title, files in movies.items():
+        if len(files) > 1:
+            files.sort(key=lambda x: x['score'], reverse=True)
+            has_high_quality = any(f['quality'] in HIGH_QUALITY_SOURCES for f in files)
+            to_delete = sum(1 for f in files[1:] if f['quality'] in LOW_QUALITY_SOURCES and has_high_quality)
+            
+            if to_delete > 0:
+                total_to_delete += to_delete
+                duplicate_movies.append({'title': base_title, 'count': len(files), 'to_delete': to_delete})
+                
+    return len(all_files), len(movies), total_to_delete, duplicate_movies
 
 @Client.on_message(filters.command("cleanup_dry_batch") & filters.user(ADMINS))
 async def cleanup_dry_batch_cmd(bot, message):
     try:
         msg = await message.reply_text(f"🔍 **DRY RUN - BATCH MODE**\n\n⏳ Scanning all files...\n\n(DRY RUN - Nothing will be deleted)")
-        logger.info(f"[DRY RUN BATCH] Starting")
-
-        all_files = await Media.collection.find({}).to_list(None)
-        logger.info(f"[DRY RUN BATCH] Total files in DB: {len(all_files)}")
         
-        if not all_files:
+        t_files1, t_movies1, del1, dup_movies1 = await process_dry_batch(Media.collection)
+        t_files, t_movies, total_del = t_files1, t_movies1, del1
+        duplicate_movies = dup_movies1
+
+        if MULTIPLE_DB:
+            t_files2, t_movies2, del2, dup_movies2 = await process_dry_batch(Media2.collection)
+            t_files += t_files2
+            t_movies += t_movies2
+            total_del += del2
+            duplicate_movies.extend(dup_movies2)
+
+        if t_files == 0:
             return await msg.edit_text("❌ No files in database")
-
-        movies = defaultdict(list)
-        for file in all_files:
-            base_title = get_base_title(file.get('file_name', ''))
-            if base_title:
-                quality = extract_quality_info(file.get('file_name', ''))
-                movies[base_title].append({
-                    'name': file.get('file_name', ''),
-                    'quality': quality['source'],
-                    'resolution': quality['resolution'],
-                    'score': quality['quality_score']
-                })
-
-        logger.info(f"[DRY RUN BATCH] Unique movies: {len(movies)}")
-
-        total_to_delete = 0
-        duplicate_movies = []
-        
-        for base_title, files in movies.items():
-            if len(files) > 1:
-                files.sort(key=lambda x: x['score'], reverse=True)
-                has_high_quality = any(f['quality'] in HIGH_QUALITY_SOURCES for f in files)
-                
-                to_delete = sum(1 for f in files[1:] if f['quality'] in LOW_QUALITY_SOURCES and has_high_quality)
-                
-                if to_delete > 0:
-                    total_to_delete += to_delete
-                    duplicate_movies.append({
-                        'title': base_title,
-                        'count': len(files),
-                        'to_delete': to_delete
-                    })
 
         duplicate_movies.sort(key=lambda x: x['to_delete'], reverse=True)
 
         report = f"📊 **DRY RUN - BATCH MODE**\n{'='*50}\n\n"
-        report += f"📁 Total Files: {len(all_files)}\n🎬 Total Movies: {len(movies)}\n"
+        report += f"📁 Total Files: {t_files}\n🎬 Total Movies: {t_movies}\n"
         report += f"📋 Movies with Low-Q Duplicates: {len(duplicate_movies)}\n\n"
-        report += f"⚠️ **WOULD DELETE: {total_to_delete} files**\n\n"
+        report += f"⚠️ **WOULD DELETE: {total_del} files**\n\n"
 
         if duplicate_movies:
             report += f"📋 **Top Movies with Duplicates:**\n{'─'*50}\n"
@@ -525,70 +514,69 @@ async def cleanup_dry_batch_cmd(bot, message):
             
         await msg.edit_text(report)
     except Exception as e:
-        logger.error(f"[DRY RUN BATCH] Error: {e}", exc_info=True)
         await message.reply_text(f"❌ Error: {str(e)}")
 
+
+async def process_confirm_batch(collection):
+    all_files = await collection.find({}).to_list(None)
+    movies = defaultdict(list)
+    for file in all_files:
+        base_title = get_base_title(file.get('file_name', ''))
+        if base_title:
+            quality = extract_quality_info(file.get('file_name', ''))
+            movies[base_title].append({
+                'file_obj': file, 'name': file.get('file_name', ''),
+                'quality': quality['source'], 'score': quality['quality_score']
+            })
+
+    total_deleted = 0
+    movies_cleaned = 0
+    deleted_files_list = []
+
+    for base_title, files in movies.items():
+        if len(files) > 1:
+            files.sort(key=lambda x: x['score'], reverse=True)
+            has_high_quality = any(f['quality'] in HIGH_QUALITY_SOURCES for f in files)
+            
+            cleaned_this_movie = False
+            for file_data in files[1:]:
+                if file_data['quality'] in LOW_QUALITY_SOURCES and has_high_quality:
+                    try:
+                        await collection.delete_one({'_id': file_data['file_obj']['_id']})
+                        total_deleted += 1
+                        deleted_files_list.append(file_data['name'])
+                        cleaned_this_movie = True
+                    except Exception:
+                        pass
+            if cleaned_this_movie:
+                movies_cleaned += 1
+                
+    return total_deleted, movies_cleaned, deleted_files_list
 
 @Client.on_message(filters.command("cleanup_confirm_batch") & filters.user(ADMINS))
 async def cleanup_confirm_batch_cmd(bot, message):
     try:
         msg = await message.reply_text(f"⚠️ **CONFIRMING DELETE - BATCH**\n\n🗑️ Processing all files...\n\n⏳ This may take a while...")
-        logger.info(f"[CONFIRM BATCH] Starting")
 
-        all_files = await Media.collection.find({}).to_list(None)
-        logger.info(f"[CONFIRM BATCH] Total files: {len(all_files)}")
+        total_del, movies_clean, del_files = await process_confirm_batch(Media.collection)
         
-        if not all_files:
-            return await msg.edit_text("❌ No files in database")
+        if MULTIPLE_DB:
+            del2, clean2, files2 = await process_confirm_batch(Media2.collection)
+            total_del += del2
+            movies_clean += clean2
+            del_files.extend(files2)
 
-        movies = defaultdict(list)
-        for file in all_files:
-            base_title = get_base_title(file.get('file_name', ''))
-            if base_title:
-                quality = extract_quality_info(file.get('file_name', ''))
-                movies[base_title].append({
-                    'file_obj': file,
-                    'name': file.get('file_name', ''),
-                    'quality': quality['source'],
-                    'resolution': quality['resolution'],
-                    'score': quality['quality_score']
-                })
-
-        total_deleted = 0
-        movies_cleaned = 0
-        deleted_files_list = []
-
-        for base_title, files in movies.items():
-            if len(files) > 1:
-                files.sort(key=lambda x: x['score'], reverse=True)
-                has_high_quality = any(f['quality'] in HIGH_QUALITY_SOURCES for f in files)
-                
-                cleaned_this_movie = False
-                for file_data in files[1:]:
-                    if file_data['quality'] in LOW_QUALITY_SOURCES and has_high_quality:
-                        try:
-                            await Media.collection.delete_one({'_id': file_data['file_obj']['_id']})
-                            total_deleted += 1
-                            deleted_files_list.append(file_data['name'])
-                            cleaned_this_movie = True
-                        except Exception as e:
-                            logger.error(f"[CONFIRM BATCH] Delete error: {e}")
-                if cleaned_this_movie:
-                    movies_cleaned += 1
-
-        logger.warning(f"[CONFIRM BATCH] Deleted: {total_deleted} files | Movies: {movies_cleaned}")
-
-        if total_deleted > 0:
+        if total_del > 0:
             deleted_preview = ""
-            for idx, file in enumerate(deleted_files_list[:8], 1):
+            for idx, file in enumerate(del_files[:8], 1):
                 deleted_preview += f"{idx}. {file[:55]}\n"
-            if len(deleted_files_list) > 8:
-                deleted_preview += f"... + {len(deleted_files_list) - 8} more\n"
+            if len(del_files) > 8:
+                deleted_preview += f"... + {len(del_files) - 8} more\n"
                 
             report = (
                 f"✅ **BATCH DELETE COMPLETED!**\n{'='*50}\n\n"
-                f"🗑️ Total Deleted: {total_deleted} files\n"
-                f"🎬 Movies Cleaned: {movies_cleaned}\n\n"
+                f"🗑️ Total Deleted: {total_del} files\n"
+                f"🎬 Movies Cleaned: {movies_clean}\n\n"
                 f"📋 **Sample Deleted:**\n{deleted_preview}"
             )
         else:
@@ -596,5 +584,4 @@ async def cleanup_confirm_batch_cmd(bot, message):
             
         await msg.edit_text(report)
     except Exception as e:
-        logger.error(f"[CONFIRM BATCH] Error: {e}", exc_info=True)
         await message.reply_text(f"❌ Error: {str(e)}")
