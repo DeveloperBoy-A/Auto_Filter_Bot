@@ -289,37 +289,41 @@ from collections import defaultdict
 @Client.on_message(filters.command("quality_report") & filters.user(ADMINS))
 async def quality_report_cmd(bot, message):
     try:
-        msg = await message.reply_text("📊 Generating report...\n⏳ Please wait...")
+        msg = await message.reply_text("📊 Generating report...\n⏳ Please wait (Memory Safe Mode)...")
         
-        # Get files from DB1
-        all_files = await Media.collection.find({}).to_list(None)
-        # Get files from DB2 if enabled
-        if MULTIPLE_DB:
-            all_files2 = await Media2.collection.find({}).to_list(None)
-            all_files.extend(all_files2)
-
-        if not all_files:
-            return await msg.edit_text("❌ No files in database")
-            
-        logger.info(f"[QUALITY REPORT] Total files found: {len(all_files)}")
+        total_files = 0
         quality_dist = defaultdict(int)
         resolution_dist = defaultdict(int)
-        
-        for file in all_files:
+
+        # DB1 (Safe Memory Loop)
+        async for file in Media.collection.find({}, projection={'file_name': 1}):
+            total_files += 1
             file_name = file.get('file_name', '')
             quality_info = extract_quality_info(file_name)
-            source = quality_info.get('source', 'unknown')
-            resolution = quality_info.get('resolution', 'unknown')
-            quality_dist[source] += 1
-            resolution_dist[resolution] += 1
+            quality_dist[quality_info.get('source', 'unknown')] += 1
+            resolution_dist[quality_info.get('resolution', 'unknown')] += 1
 
-        report = f"📊 **QUALITY REPORT (DB1 & DB2)**\n{'='*50}\n\n📁 **Total Files:** {len(all_files)}\n\n🎬 **Source Quality Distribution:**\n{'─'*50}\n"
+        # DB2 (Safe Memory Loop)
+        if MULTIPLE_DB:
+            async for file in Media2.collection.find({}, projection={'file_name': 1}):
+                total_files += 1
+                file_name = file.get('file_name', '')
+                quality_info = extract_quality_info(file_name)
+                quality_dist[quality_info.get('source', 'unknown')] += 1
+                resolution_dist[quality_info.get('resolution', 'unknown')] += 1
+
+        if total_files == 0:
+            return await msg.edit_text("❌ No files in database")
+            
+        logger.info(f"[QUALITY REPORT] Total files found: {total_files}")
+
+        report = f"📊 **QUALITY REPORT (DB1 & DB2)**\n{'='*50}\n\n📁 **Total Files:** {total_files}\n\n🎬 **Source Quality Distribution:**\n{'─'*50}\n"
         quality_order = ['camrip', 'hdcam', 'hdtc', 'hdts', 'ts', 'tc', 'predvd', 'dvdscr', 'dvdrip', 'tvrip', 'hdtv', 'webrip', 'web-dl', 'webdl', 'hdrip', 'bluray', 'bdrip', 'brrip', 'unknown']
         
         for quality in quality_order:
             if quality in quality_dist and quality_dist[quality] > 0:
                 count = quality_dist[quality]
-                percent = (count / len(all_files) * 100) if len(all_files) > 0 else 0
+                percent = (count / total_files * 100) if total_files > 0 else 0
                 if quality in LOW_QUALITY_SOURCES: emoji = "⚠️ "
                 elif quality in HIGH_QUALITY_SOURCES: emoji = "✨"
                 else: emoji = "⭐"
@@ -330,14 +334,13 @@ async def quality_report_cmd(bot, message):
         for res in ['240p', '360p', '480p', '540p', '720p', '1080p', '1440p', '2160p', 'unknown']:
             if res in resolution_dist and resolution_dist[res] > 0:
                 count = resolution_dist[res]
-                percent = (count / len(all_files) * 100) if len(all_files) > 0 else 0
+                percent = (count / total_files * 100) if total_files > 0 else 0
                 report += f"📹 {res}: {count} ({percent:.1f}%)\n"
 
         low_count = sum(quality_dist.get(q, 0) for q in LOW_QUALITY_SOURCES)
         report += f"\n⚠️ **Low Quality Count:** {low_count} files\n"
         
         await msg.edit_text(report)
-        logger.info(f"[QUALITY REPORT] Report generated - Low quality: {low_count}")
     except Exception as e:
         logger.error(f"[QUALITY REPORT] Error: {e}", exc_info=True)
         await message.reply_text(f"❌ Error: {str(e)}")
@@ -359,9 +362,8 @@ async def cleanup_dry_single_cmd(bot, message):
         words = [w for w in base_title.split() if len(w) > 1]
         search_pattern = ".*".join(map(re.escape, words[:5])) if words else re.escape(base_title)
 
-        # Search DB1
+        # Single movie search is memory safe, to_list is fine here.
         similar_files = await Media.collection.find({'file_name': {'$regex': search_pattern, '$options': 'i'}}).to_list(None)
-        # Search DB2
         if MULTIPLE_DB:
             similar_files2 = await Media2.collection.find({'file_name': {'$regex': search_pattern, '$options': 'i'}}).to_list(None)
             similar_files.extend(similar_files2)
@@ -386,19 +388,24 @@ async def cleanup_dry_single_cmd(bot, message):
         report = f"📊 **DRY RUN - SINGLE MOVIE**\n{'='*50}\n\n🎬 Movie: {movie_name}\n📁 Found: {len(files_info)} files\n\n📋 **File Details:**\n{'─'*50}\n"
         
         to_delete = 0
-        for idx, file in enumerate(files_info, 1):
+        DISPLAY_LIMIT = 15 # Telegram message length limit fix
+        
+        for idx, file in enumerate(files_info):
             will_delete = False
-            if idx > 1 and file['quality'] in LOW_QUALITY_SOURCES and has_high_quality:
+            if idx > 0 and file['quality'] in LOW_QUALITY_SOURCES and has_high_quality:
                 will_delete = True
                 to_delete += 1
                 
-            status = "❌ DELETE (Low Quality)" if will_delete else "✅ KEEP"
-            quality_str = file['quality'].upper() if file['quality'] != 'Unknown' else 'N/A'
-            res_str = file['resolution'].upper() if file['resolution'] != 'Unknown' else 'N/A'
-            
-            report += f"\n{idx}. {status}\n  📄 {file['name'][:60]}\n  Quality: {quality_str} | Res: {res_str} | Score: {file['score']:.1f}\n"
+            if idx < DISPLAY_LIMIT:
+                status = "❌ DELETE (Low Q)" if will_delete else "✅ KEEP"
+                quality_str = file['quality'].upper() if file['quality'] != 'Unknown' else 'N/A'
+                res_str = file['resolution'].upper() if file['resolution'] != 'Unknown' else 'N/A'
+                report += f"\n{idx+1}. {status}\n  📄 {file['name'][:55]}...\n  Quality: {quality_str} | Res: {res_str}\n"
 
-        report += f"\n{'─'*50}\n⚠️ **PREVIEW:**\n✅ Will KEEP: {len(files_info) - to_delete}\n❌ Will DELETE: {to_delete}\n\n"
+        if len(files_info) > DISPLAY_LIMIT:
+            report += f"\n*... and {len(files_info) - DISPLAY_LIMIT} more files hidden to prevent Telegram message error.*"
+
+        report += f"\n\n{'─'*50}\n⚠️ **PREVIEW SUMMARY:**\n✅ Will KEEP: {len(files_info) - to_delete}\n❌ Will DELETE: {to_delete}\n\n"
         
         if to_delete > 0:
             report += f"👉 Confirm & Delete:\n`/cleanup_confirm_single {movie_name}`"
@@ -451,9 +458,11 @@ async def cleanup_confirm_single_cmd(bot, message):
 
 
 async def process_dry_batch(collection):
-    all_files = await collection.find({}).to_list(None)
     movies = defaultdict(list)
-    for file in all_files:
+    total_files = 0
+    # Memory Safe Async Cursor with Projection (RAM won't crash)
+    async for file in collection.find({}, projection={'file_name': 1}):
+        total_files += 1
         base_title = get_base_title(file.get('file_name', ''))
         if base_title:
             quality = extract_quality_info(file.get('file_name', ''))
@@ -476,12 +485,12 @@ async def process_dry_batch(collection):
                 total_to_delete += to_delete
                 duplicate_movies.append({'title': base_title, 'count': len(files), 'to_delete': to_delete})
                 
-    return len(all_files), len(movies), total_to_delete, duplicate_movies
+    return total_files, len(movies), total_to_delete, duplicate_movies
 
 @Client.on_message(filters.command("cleanup_dry_batch") & filters.user(ADMINS))
 async def cleanup_dry_batch_cmd(bot, message):
     try:
-        msg = await message.reply_text(f"🔍 **DRY RUN - BATCH MODE**\n\n⏳ Scanning all files...\n\n(DRY RUN - Nothing will be deleted)")
+        msg = await message.reply_text(f"🔍 **DRY RUN - BATCH MODE**\n\n⏳ Scanning files safely (Memory Optimized)...\n\n(DRY RUN - Nothing will be deleted)")
         
         t_files1, t_movies1, del1, dup_movies1 = await process_dry_batch(Media.collection)
         t_files, t_movies, total_del = t_files1, t_movies1, del1
@@ -500,16 +509,16 @@ async def cleanup_dry_batch_cmd(bot, message):
         duplicate_movies.sort(key=lambda x: x['to_delete'], reverse=True)
 
         report = f"📊 **DRY RUN - BATCH MODE**\n{'='*50}\n\n"
-        report += f"📁 Total Files: {t_files}\n🎬 Total Movies: {t_movies}\n"
+        report += f"📁 Total Files Scanned: {t_files}\n🎬 Total Unique Movies: {t_movies}\n"
         report += f"📋 Movies with Low-Q Duplicates: {len(duplicate_movies)}\n\n"
         report += f"⚠️ **WOULD DELETE: {total_del} files**\n\n"
 
         if duplicate_movies:
             report += f"📋 **Top Movies with Duplicates:**\n{'─'*50}\n"
-            for idx, movie in enumerate(duplicate_movies[:12], 1):
+            for idx, movie in enumerate(duplicate_movies[:10], 1): # Max 10 limit for TG Message length
                 report += f"{idx}. {movie['title'][:45]}\n   Versions: {movie['count']} | Will Delete: {movie['to_delete']}\n\n"
-            if len(duplicate_movies) > 12:
-                report += f"... + {len(duplicate_movies) - 12} more\n\n"
+            if len(duplicate_movies) > 10:
+                report += f"... + {len(duplicate_movies) - 10} more\n\n"
             report += f"{'─'*50}\n\n👉 Confirm & Delete ALL:\n`/cleanup_confirm_batch`"
             
         await msg.edit_text(report)
@@ -518,15 +527,17 @@ async def cleanup_dry_batch_cmd(bot, message):
 
 
 async def process_confirm_batch(collection):
-    all_files = await collection.find({}).to_list(None)
     movies = defaultdict(list)
-    for file in all_files:
+    # Memory Safe Async Cursor with Projection
+    async for file in collection.find({}, projection={'_id': 1, 'file_name': 1}):
         base_title = get_base_title(file.get('file_name', ''))
         if base_title:
             quality = extract_quality_info(file.get('file_name', ''))
             movies[base_title].append({
-                'file_obj': file, 'name': file.get('file_name', ''),
-                'quality': quality['source'], 'score': quality['quality_score']
+                'file_id': file['_id'], 
+                'name': file.get('file_name', ''),
+                'quality': quality['source'], 
+                'score': quality['quality_score']
             })
 
     total_deleted = 0
@@ -542,7 +553,7 @@ async def process_confirm_batch(collection):
             for file_data in files[1:]:
                 if file_data['quality'] in LOW_QUALITY_SOURCES and has_high_quality:
                     try:
-                        await collection.delete_one({'_id': file_data['file_obj']['_id']})
+                        await collection.delete_one({'_id': file_data['file_id']})
                         total_deleted += 1
                         deleted_files_list.append(file_data['name'])
                         cleaned_this_movie = True
@@ -556,7 +567,7 @@ async def process_confirm_batch(collection):
 @Client.on_message(filters.command("cleanup_confirm_batch") & filters.user(ADMINS))
 async def cleanup_confirm_batch_cmd(bot, message):
     try:
-        msg = await message.reply_text(f"⚠️ **CONFIRMING DELETE - BATCH**\n\n🗑️ Processing all files...\n\n⏳ This may take a while...")
+        msg = await message.reply_text(f"⚠️ **CONFIRMING DELETE - BATCH**\n\n🗑️ Processing safely...\n\n⏳ This may take a while...")
 
         total_del, movies_clean, del_files = await process_confirm_batch(Media.collection)
         
