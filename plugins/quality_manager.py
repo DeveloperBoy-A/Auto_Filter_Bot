@@ -13,10 +13,13 @@ logger = logging.getLogger(__name__)
 
 # Quality hierarchy
 QUALITY_HIERARCHY = {
-    "camrip": 1, "hdcam": 1, "hdtc": 2, "hdts": 2, "ts": 2, "tc": 2, "telesync": 2, "predvd": 3, "dvdscr": 3,
-    "dvdrip": 4, "tvrip": 5, "hdtv": 5, 
-    "webrip": 6, "web-dl": 7, "webdl": 7, "web dl": 7, 
-    "hdrip": 8, "bluray": 9, "bdrip": 9, "brrip": 9,
+    "camrip": 1, "cam rip": 1, "hdcam": 1, "hd cam": 1, 
+    "hdtc": 2, "hd tc": 2, "hdts": 2, "hd ts": 2, 
+    "ts": 2, "tc": 2, "telesync": 2, 
+    "predvd": 3, "pre dvd": 3, "dvdscr": 3, "dvd scr": 3,
+    "dvdrip": 4, "dvd rip": 4, "tvrip": 5, "tv rip": 5, "hdtv": 5, "hd tv": 5,
+    "webrip": 6, "web rip": 6, "web-dl": 7, "web dl": 7, "webdl": 7, 
+    "hdrip": 8, "hd rip": 8, "bluray": 9, "blu ray": 9, "bdrip": 9, "bd rip": 9, "brrip": 9, "br rip": 9
 }
 
 RESOLUTION_HIERARCHY = {
@@ -36,8 +39,15 @@ LANGUAGES = {
     "gujarati": [r"\bgujarati\b", r"\bguj\b", r"\bgujrat\b"]
 }
 
-LOW_QUALITY_SOURCES = ['camrip','hdcam','hdtc','hdts','ts','tc','telesync','predvd','dvdscr']
-HIGH_QUALITY_SOURCES = ['webrip','web-dl','webdl','web dl','hdrip','bluray','bdrip','brrip']
+LOW_QUALITY_SOURCES = [
+    'camrip', 'cam rip', 'hdcam', 'hd cam', 'hdtc', 'hd tc', 
+    'hdts', 'hd ts', 'ts', 'tc', 'telesync', 'predvd', 'pre dvd', 'dvdscr', 'dvd scr'
+]
+
+HIGH_QUALITY_SOURCES = [
+    'webrip', 'web rip', 'web-dl', 'web dl', 'webdl', 
+    'hdrip', 'hd rip', 'bluray', 'blu ray', 'bdrip', 'bd rip', 'brrip', 'br rip'
+]
 
 def extract_language(text: str) -> str:
     text = text.lower()
