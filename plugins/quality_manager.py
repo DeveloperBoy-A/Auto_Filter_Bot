@@ -213,14 +213,20 @@ async def cleanup_duplicates(db_collection, base_title: str, keep_highest_qualit
                     
                     if is_replaceable:
                         try:
+                            file_to_delete = scored_file['file'].get('file_name', 'Unknown')
                             await db_collection.delete_one({'_id': scored_file['file']['_id']})
                             deleted_count += 1
-                            deleted_files.append(scored_file['file'].get('file_name', 'Unknown'))
+                            deleted_files.append(file_to_delete)
+                            
+                            # 🔥 LOGS KE LIYE YAHAN ADD KIYA GAYA HAI
+                            logger.info(f"[CLEANUP SINGLE] 🗑️ Deleted File: {file_to_delete}")
+                            
                         except Exception as e:
-                            pass
+                            logger.error(f"[CLEANUP SINGLE] ❌ Error deleting file: {e}")
 
         return deleted_count, deleted_files
     except Exception as e:
+        logger.error(f"Error in cleanup_duplicates: {e}")
         return 0, []
 
 
