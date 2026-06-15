@@ -213,6 +213,15 @@ def extract_quality_info(filename: str, caption: str = "") -> dict:
     return quality_info
 
 
+def is_high_quality(quality_info: dict) -> bool:
+    try:
+        source = quality_info.get('source')
+        if not source:
+            return False
+        return source in HIGH_QUALITY_SOURCES
+    except Exception:
+        return False
+
 # =========================================================
 # DELETE DECISION LOGIC (UPDATED STRICT VERSION)
 # =========================================================
