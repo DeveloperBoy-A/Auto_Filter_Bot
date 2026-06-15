@@ -60,6 +60,22 @@ RESOLUTION_HIERARCHY = {
 }
 
 
+LANGUAGES = [
+    "hindi","english","tamil","telugu","malayalam",
+    "kannada","punjabi","bengali","marathi","gujarati"
+]
+
+LOW_QUALITY_SOURCES = ['camrip','hdcam','hdtc','hdts','ts','tc','telesync','predvd','dvdscr']
+HIGH_QUALITY_SOURCES = ['webrip','web-dl','webdl','web dl','hdrip','bluray','bdrip','brrip']
+
+def extract_language(text: str) -> str:
+    text = text.lower()
+    for lang in LANGUAGES:
+        if re.search(rf'\b{lang}\b', text):
+            return lang
+    return "unknown"
+
+
 def extract_quality_info(filename: str, caption: str = "") -> dict:
     """
     Extract quality information from filename and caption
@@ -122,57 +138,42 @@ def is_high_quality(quality_info: dict) -> bool:
     return quality_info.get('source') in high_quality_sources
 
 
-def should_delete_existing(existing_quality: dict, new_quality: dict) -> bool:
-    """
-    Determine if existing file should be deleted based on new file's quality
-    
-    Delete existing if:
-    1. New file is higher quality than existing
-    2. New file is high quality (WebDL, BluRay, HDRip) and existing is low quality (CamRip, HDTC, etc)
-    
-    Returns: True if existing should be deleted, False otherwise
-    """
-    # If new quality is significantly better (score difference > 2)
-    if new_quality['quality_score'] > existing_quality['quality_score'] + 2:
+
+def should_delete_existing(existing_quality: dict, new_quality: dict, existing_lang: str, new_lang: str) -> bool:
+    if existing_lang != new_lang:
+        return False
+
+    existing_source = existing_quality.get('source')
+    new_source = new_quality.get('source')
+
+    if existing_source in LOW_QUALITY_SOURCES and new_source in HIGH_QUALITY_SOURCES:
         return True
-    
-    # If new is high quality and existing is low quality
-    if is_high_quality(new_quality) and is_low_quality_print(existing_quality):
-        return True
-    
-    # Same source, but new has better resolution
-    if new_quality['source'] == existing_quality['source']:
-        if new_quality['resolution_score'] > existing_quality['resolution_score']:
-            return True
-    
+
     return False
 
 
+
 def get_base_title(filename: str) -> str:
-    """
-    Extract base title from filename for matching different quality versions
-    Removes quality indicators, resolution, source, etc.
-    
-    Example:
-    'Movie Name 2023 1080p WebDL AAC' -> 'Movie Name 2023'
-    'Movie Name 2023 720p CamRip' -> 'Movie Name 2023'
-    """
     text = filename.lower()
-    
-    # Remove all quality indicators
+    text = re.sub(r'\.(mkv|mp4|avi|mov|wmv|flv|webm)$', '', text, flags=re.I)
+    text = re.sub(r'[._\-]+', ' ', text)
+
     for quality in list(QUALITY_HIERARCHY.keys()) + list(RESOLUTION_HIERARCHY.keys()):
-        text = re.sub(rf'\b{re.escape(quality)}\b', '', text, flags=re.IGNORECASE)
-    
-    # Remove common codecs and tags
-    text = re.sub(r'\b(hevc|x265|x264|h\.?264|avc|av1|aac|flac|dts|dub|sub|hindi|english|tam|tel|hin)\b', '', text, flags=re.IGNORECASE)
-    
-    # Remove extra spaces and special characters
+        text = re.sub(rf'\b{re.escape(quality)}\b', '', text, flags=re.I)
+
+    text = re.sub(
+        r'\b(hevc|x265|x264|h264|avc|av1|aac|flac|dts|ac3|eac3|ddp|'
+        r'dub|sub|esub|esubs|multi|proper|uncut|'
+        r'hindi|english|tamil|telugu|malayalam|kannada|punjabi|'
+        r'bengali|marathi|gujarati|movies4u|tokyo_updates)\b',
+        '',
+        text,
+        flags=re.I
+    )
+
     text = re.sub(r'[\[\(\{].*?[\]\)\}]', '', text)
     text = re.sub(r'\s+', ' ', text).strip()
-    
     return text
-
-
 
 async def find_and_delete_lower_quality(
     db_collection,
@@ -210,9 +211,11 @@ async def find_and_delete_lower_quality(
         
         logger.debug(f"[QUALITY] Base title extracted: {base_title}")
         
-        # Search for similar files in database
+        words = [w for w in base_title.split() if len(w) > 2]
+        pattern = ".*".join(map(re.escape, words[:6])) if words else re.escape(base_title)
+
         search_query = {
-            'file_name': {'$regex': f'.*{re.escape(base_title)}.*', '$options': 'i'}
+            'file_name': {'$regex': pattern, '$options': 'i'}
         }
         
         if file_id:
@@ -239,7 +242,10 @@ async def find_and_delete_lower_quality(
             )
             
             # Check if we should delete this file
-            if should_delete_existing(existing_quality, new_quality):
+            existing_lang = extract_language(f"{existing_filename} {existing_caption}")
+            new_lang = extract_language(f"{new_filename} {new_caption}")
+
+            if should_delete_existing(existing_quality, new_quality, existing_lang, new_lang):
                 try:
                     # Delete from database
                     await db_collection.delete_one({'_id': existing_file['_id']})
