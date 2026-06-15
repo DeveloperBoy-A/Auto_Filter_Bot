@@ -134,6 +134,45 @@ QUALITY_HIERARCHY = {
     "digital": 15
 }
 
+RESOLUTION_HIERARCHY = {
+    # SD / low quality
+    "140p": 1,
+    "240p": 1,
+    "288p": 2,
+
+    # SD standard
+    "360p": 2,
+    "480p": 3,
+
+    # HD Ready
+    "540p": 4,
+    "576p": 4,
+
+    # HD
+    "720p": 5,
+    "hd": 5,
+
+    # Full HD
+    "1080p": 6,
+    "fhd": 6,
+    "fullhd": 6,
+
+    # 2K / QHD
+    "1440p": 7,
+    "2k": 7,
+    "qhd": 7,
+
+    # 4K / UHD
+    "2160p": 8,
+    "4k": 8,
+    "uhd": 8,
+    "ultra hd": 8,
+
+    # 8K (future proof)
+    "4320p": 9,
+    "8k": 9
+}
+
 LOW_QUALITY_SOURCES = [
     "camrip",
     "hdcam",
