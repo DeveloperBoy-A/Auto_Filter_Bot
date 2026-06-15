@@ -267,49 +267,54 @@ async def media_handler(bot, message):
     if not success:
         return
 
+    # === Quality Management Start ===
     try:
-        # === Quality Management Start ===
         quality_info = extract_quality_info(media.file_name, media.caption)
-    
-    # Log file upload with quality
-    file_source = quality_info.get('source', 'Unknown').upper() if quality_info.get('source') else 'UNKNOWN'
-    file_res = quality_info.get('resolution', 'Unknown').upper() if quality_info.get('resolution') else 'UNKNOWN'
-    
-    logger.info(
-        f"[QUALITY UPLOAD] File saved:\n"
-        f"  📄 {media.file_name[:70]}\n"
-        f"  🎬 Quality: {file_source}\n"
-        f"  📐 Resolution: {file_res}\n"
-        f"  📊 Score: {quality_info.get('quality_score', 0):.1f}"
-    )
-    
-    # Check if high quality and cleanup
-    if is_high_quality(quality_info):
-        logger.info(f"[QUALITY] ✨ High quality file detected - checking for lower quality duplicates...")
         
-        from database.config_db import mdb
-        success, cleanup_msg = await find_and_delete_lower_quality(
-            db_collection=mdb.db.media,
-            new_filename=media.file_name,
-            new_caption=media.caption
-        )
+        # Log file upload with quality
+        file_source = quality_info.get('source', 'Unknown').upper() if quality_info.get('source') else 'UNKNOWN'
+        file_res = quality_info.get('resolution', 'Unknown').upper() if quality_info.get('resolution') else 'UNKNOWN'
         
-        if success:
-            logger.info(f"[QUALITY] {cleanup_msg}")
-    else:
         logger.info(
-            f"[QUALITY] ℹ️  Lower/Standard quality file uploaded:\n"
-            f"  Quality: {file_source} ({quality_info.get('quality_score', 0):.1f})\n"
-            f"  Note: Will be deleted if higher quality version uploaded later"
+            f"[QUALITY UPLOAD] File saved:\n"
+            f"  📄 {media.file_name[:70]}\n"
+            f"  🎬 Quality: {file_source}\n"
+            f"  📐 Resolution: {file_res}\n"
+            f"  📊 Score: {quality_info.get('quality_score', 0):.1f}"
         )
         
-except Exception as e:
-    logger.error(f"[QUALITY] Error in quality management: {e}", exc_info=True)
-        # === Quality Management End ===
+        # Check if high quality and cleanup
+        if is_high_quality(quality_info):
+            logger.info(f"[QUALITY] ✨ High quality file detected - checking for lower quality duplicates...")
+            
+            from database.config_db import mdb
+            # Changed variable to cleanup_success so it doesn't overwrite your earlier 'success'
+            cleanup_success, cleanup_msg = await find_and_delete_lower_quality(
+                db_collection=mdb.db.media,
+                new_filename=media.file_name,
+                new_caption=media.caption
+            )
+            
+            if cleanup_success:
+                logger.info(f"[QUALITY] {cleanup_msg}")
+        else:
+            logger.info(
+                f"[QUALITY] ℹ️  Lower/Standard quality file uploaded:\n"
+                f"  Quality: {file_source} ({quality_info.get('quality_score', 0):.1f})\n"
+                f"  Note: Will be deleted if higher quality version uploaded later"
+            )
+            
+    except Exception as e:
+        logger.error(f"[QUALITY] Error in quality management: {e}", exc_info=True)
+    # === Quality Management End ===
+
+    # === Update Processing Start ===
+    try:
         if await db.movie_update_status(bot.me.id):
             await process_and_send_update(bot, media.file_name, media.caption)
     except Exception:
         logger.exception("Error processing media")
+
 
 async def process_and_send_update(bot, filename, caption):
     try:
