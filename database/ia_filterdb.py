@@ -392,7 +392,7 @@ def extract_pure_title(original_name):
         r'web[\-\s]?dl', r'web[\-\s]?rip', r'hdrip', r'bluray', r'brrip', r'dvdrip', r'camrip', r'hdts', r'hdcam', 
         r'av1', r'x264', r'x265', r'hevc', r'10bit', r'aac', r'eac3', r'ac3', r'ddp[\s\-]?7\.1', r'ddp[\s\-]?5\.1', r'dd[\s\-]?5\.1', r'dd[\s\-]?2\.0', r'ddp', r'5\.1', r'7\.1', r'2\.0', r'2ch', r'stereo',
         r'download', r'watch', r'full[\s\-]?movie', r'web[\s\-]?series', r'new', r'latest', 
-        r'netflix', r'amazon', r'prime', r'hotstar', r'zee5', r'sonyliv', r'jio', r'jiocinema', r'voot', r'altbalaji' 
+        r'netflix', r'amazon', r'prime', r'hotstar', r'zee5', r'sonyliv', r'jio', r'jiocinema', r'voot', r'altbalaji', r'Movies4u' 
     ]
 
     prefix_cleanup = r'^(?:(?:' + '|'.join(prefix_tags) + r')[\s_\-]*)+'
