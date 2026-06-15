@@ -140,16 +140,38 @@ def is_high_quality(quality_info: dict) -> bool:
 
 
 def should_delete_existing(existing_quality: dict, new_quality: dict, existing_lang: str, new_lang: str) -> bool:
-    if existing_lang != new_lang:
+    """
+    Determine if existing file should be deleted based on quality comparison
+    Only delete if languages match and new file is significantly better
+    """
+    try:
+        # If languages don't match, keep both versions
+        if existing_lang != new_lang and existing_lang != "unknown" and new_lang != "unknown":
+            return False
+
+        existing_source = existing_quality.get('source')
+        new_source = new_quality.get('source')
+        
+        # If either source is missing, don't delete
+        if not existing_source or not new_source:
+            return False
+
+        # Delete if new is high quality and existing is low quality
+        if existing_source in LOW_QUALITY_SOURCES and new_source in HIGH_QUALITY_SOURCES:
+            return True
+
+        # Don't delete if quality levels are equal or existing is better
+        existing_score = existing_quality.get('quality_score', 0)
+        new_score = new_quality.get('quality_score', 0)
+        
+        # Only delete if new score is significantly higher (at least 1.0 point difference)
+        if existing_score > 0 and new_score - existing_score > 1.0:
+            return True
+
         return False
-
-    existing_source = existing_quality.get('source')
-    new_source = new_quality.get('source')
-
-    if existing_source in LOW_QUALITY_SOURCES and new_source in HIGH_QUALITY_SOURCES:
-        return True
-
-    return False
+    except Exception as e:
+        logger.error(f"Error in should_delete_existing: {e}")
+        return False
 
 
 
@@ -182,11 +204,16 @@ async def find_and_delete_lower_quality(
     file_id: Optional[str] = None
 ) -> Tuple[bool, str]:
     """
-    Find and delete lower quality versions - IMPROVED LOGGING
+    Find and delete lower quality versions - IMPROVED LOGGING & ERROR HANDLING
     """
     try:
+        # Validate inputs
+        if not new_filename or not isinstance(new_filename, str):
+            logger.warning(f"[QUALITY] Invalid filename input: {new_filename}")
+            return False, "Invalid filename provided"
+        
         # Extract quality info for new file
-        new_quality = extract_quality_info(new_filename, new_caption)
+        new_quality = extract_quality_info(new_filename, new_caption or "")
         
         # Better logging
         logger.info(
@@ -211,8 +238,13 @@ async def find_and_delete_lower_quality(
         
         logger.debug(f"[QUALITY] Base title extracted: {base_title}")
         
-        words = [w for w in base_title.split() if len(w) > 2]
-        pattern = ".*".join(map(re.escape, words[:6])) if words else re.escape(base_title)
+        # Build search query with error handling
+        try:
+            words = [w for w in base_title.split() if len(w) > 2]
+            pattern = ".*".join(map(re.escape, words[:6])) if words else re.escape(base_title)
+        except Exception as e:
+            logger.error(f"[QUALITY] Error building search pattern: {e}")
+            return False, f"Error building search pattern: {str(e)}"
 
         search_query = {
             'file_name': {'$regex': pattern, '$options': 'i'}
@@ -221,7 +253,11 @@ async def find_and_delete_lower_quality(
         if file_id:
             search_query['file_id'] = {'$ne': file_id}
         
-        similar_files = await db_collection.find(search_query).to_list(None)
+        try:
+            similar_files = await db_collection.find(search_query).to_list(None)
+        except Exception as e:
+            logger.error(f"[QUALITY] Database query error: {e}")
+            return False, f"Database error: {str(e)}"
         
         logger.info(f"[QUALITY] Similar files found in DB: {len(similar_files)}")
         
@@ -230,44 +266,48 @@ async def find_and_delete_lower_quality(
         kept_files = []
         
         for existing_file in similar_files:
-            existing_filename = existing_file.get('file_name', '')
-            existing_caption = existing_file.get('caption', '')
-            existing_quality = extract_quality_info(existing_filename, existing_caption)
-            
-            logger.debug(
-                f"[QUALITY] Checking existing file:\n"
-                f"  📄 {existing_filename[:60]}\n"
-                f"  🎬 Source: {existing_quality.get('source', 'N/A')}\n"
-                f"  📊 Score: {existing_quality.get('quality_score', 0):.1f}"
-            )
-            
-            # Check if we should delete this file
-            existing_lang = extract_language(f"{existing_filename} {existing_caption}")
-            new_lang = extract_language(f"{new_filename} {new_caption}")
-
-            if should_delete_existing(existing_quality, new_quality, existing_lang, new_lang):
-                try:
-                    # Delete from database
-                    await db_collection.delete_one({'_id': existing_file['_id']})
-                    deleted_count += 1
-                    deleted_files.append(existing_filename)
-                    
-                    logger.warning(
-                        f"[QUALITY] ✅ DELETED lower quality file:\n"
-                        f"  📄 {existing_filename[:70]}\n"
-                        f"  🎬 Source: {existing_quality.get('source', 'N/A').upper()}\n"
-                        f"  📊 Old Score: {existing_quality.get('quality_score', 0):.1f} "
-                        f"< New Score: {new_quality.get('quality_score', 0):.1f}"
-                    )
-                except Exception as e:
-                    logger.error(f"[QUALITY] ❌ Error deleting file {existing_filename}: {e}")
-            else:
-                kept_files.append(existing_filename)
+            try:
+                existing_filename = existing_file.get('file_name', '')
+                existing_caption = existing_file.get('caption', '')
+                existing_quality = extract_quality_info(existing_filename, existing_caption or "")
+                
                 logger.debug(
-                    f"[QUALITY] ℹ️  Keeping file (equal or better quality):\n"
+                    f"[QUALITY] Checking existing file:\n"
                     f"  📄 {existing_filename[:60]}\n"
+                    f"  🎬 Source: {existing_quality.get('source', 'N/A')}\n"
                     f"  📊 Score: {existing_quality.get('quality_score', 0):.1f}"
                 )
+                
+                # Check if we should delete this file
+                existing_lang = extract_language(f"{existing_filename} {existing_caption or ''}")
+                new_lang = extract_language(f"{new_filename} {new_caption or ''}")
+
+                if should_delete_existing(existing_quality, new_quality, existing_lang, new_lang):
+                    try:
+                        # Delete from database
+                        await db_collection.delete_one({'_id': existing_file['_id']})
+                        deleted_count += 1
+                        deleted_files.append(existing_filename)
+                        
+                        logger.warning(
+                            f"[QUALITY] ✅ DELETED lower quality file:\n"
+                            f"  📄 {existing_filename[:70]}\n"
+                            f"  🎬 Source: {existing_quality.get('source', 'N/A').upper()}\n"
+                            f"  📊 Old Score: {existing_quality.get('quality_score', 0):.1f} "
+                            f"< New Score: {new_quality.get('quality_score', 0):.1f}"
+                        )
+                    except Exception as e:
+                        logger.error(f"[QUALITY] ❌ Error deleting file {existing_filename}: {e}")
+                else:
+                    kept_files.append(existing_filename)
+                    logger.debug(
+                        f"[QUALITY] ℹ️  Keeping file (equal or better quality):\n"
+                        f"  📄 {existing_filename[:60]}\n"
+                        f"  📊 Score: {existing_quality.get('quality_score', 0):.1f}"
+                    )
+            except Exception as e:
+                logger.error(f"[QUALITY] Error processing file {existing_file.get('file_name', 'Unknown')}: {e}")
+                continue
         
         # Generate final message with details
         if deleted_count > 0:
@@ -294,10 +334,9 @@ async def find_and_delete_lower_quality(
                     f"  New file will be kept as first/only version\n"
                     f"  Quality: {new_quality.get('source', 'N/A').upper()} ({new_quality.get('quality_score', 0):.1f})"
                 )
-            elif all(existing_quality.get('quality_score', 0) >= new_quality.get('quality_score', 0) 
-                     for existing_file in similar_files 
-                     for existing_quality in [extract_quality_info(existing_file.get('file_name', ''), 
-                                                                   existing_file.get('caption', ''))]):
+            elif all(extract_quality_info(existing_file.get('file_name', ''), 
+                                         existing_file.get('caption', '')).get('quality_score', 0) >= new_quality.get('quality_score', 0) 
+                     for existing_file in similar_files):
                 message = "ℹ️  Existing files are equal or better quality"
                 logger.info(
                     f"[QUALITY] ℹ️  NO CLEANUP NEEDED:\n"
