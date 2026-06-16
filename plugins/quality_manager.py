@@ -16,7 +16,7 @@ QUALITY_HIERARCHY = {
     "camrip": 1, "cam rip": 1, "hdcam": 1, "hd cam": 1, 
     "hdtc": 2, "hd tc": 2, "hdts": 2, "hd ts": 2, 
     "ts": 2, "tc": 2, "telesync": 2, 
-    "predvd": 3, "pre dvd": 3, "dvdscr": 3, "dvd scr": 3,
+    "predvd": 3, "predvdrip": 3, "pre dvd": 3, "dvdscr": 3, "dvd scr": 3,
     "dvdrip": 4, "dvd rip": 4, "tvrip": 5, "tv rip": 5, "hdtv": 5, "hd tv": 5,
     "webrip": 6, "web rip": 6, "web-dl": 7, "web dl": 7, "webdl": 7, 
     "hdrip": 8, "hd rip": 8, "bluray": 9, "blu ray": 9, "bdrip": 9, "bd rip": 9, "brrip": 9, "br rip": 9
@@ -42,7 +42,7 @@ LANGUAGES = {
 
 LOW_QUALITY_SOURCES = [
     'camrip', 'cam rip', 'hdcam', 'hd cam', 'hdtc', 'hd tc', 
-    'hdts', 'hd ts', 'ts', 'tc', 'telesync', 'predvd', 'pre dvd', 'dvdscr', 'dvd scr'
+    'hdts', 'hd ts', 'ts', 'tc', 'telesync', 'predvd', 'predvdrip', 'pre dvd', 'dvdscr', 'dvd scr'
 ]
 
 HIGH_QUALITY_SOURCES = [
@@ -98,21 +98,25 @@ def is_low_quality_print(quality_info: dict) -> bool:
 def is_high_quality(quality_info: dict) -> bool:
     return quality_info.get('source') in HIGH_QUALITY_SOURCES
 
-# 🔧 RULE 3: SET MATCH (Not Partial Overlap)
+# 🔧 RULE 3: SUBSET MATCH (Corrected)
 def should_delete_existing(existing_quality: dict, new_quality: dict, existing_langs: List[str], new_langs: List[str]) -> bool:
     try:
-        # LANGUAGE CHECK: EXACT SET MATCH REQUIRED (NOT PARTIAL)
-        # Case A: LOW=[Hindi, English], HIGH=[Hindi, English] → MATCH ✅ Delete allowed
-        # Case B: LOW=[Hindi, English], HIGH=[Hindi] → NO MATCH ❌ NO DELETE
-        # Case C: LOW=[Hindi, Tamil], HIGH=[Hindi, English] → NO MATCH ❌ NO DELETE
+        # RULE 3 (CORRECTED): SUBSET CHECK
+        # LOW languages must be a subset of HIGH languages
+        # i.e., HIGH must have ALL languages that LOW has (and can have extra)
+        # 
+        # Case A: LOW={Tamil}, HIGH={Hindi, Tamil} → {Tamil} ⊆ {Hindi, Tamil} ✅ DELETE
+        # Case B: LOW={Hindi}, HIGH={Hindi, English} → {Hindi} ⊆ {Hindi, English} ✅ DELETE
+        # Case C: LOW={Hindi, English}, HIGH={Hindi} → {Hindi, English} ⊄ {Hindi} ❌ KEEP
+        # Case D: LOW={Hindi, Tamil}, HIGH={Hindi, English} → {Hindi, Tamil} ⊄ {Hindi, English} ❌ KEEP
         
-        # Convert to sets for comparison (order doesn't matter)
         existing_set = set(existing_langs)
         new_set = set(new_langs)
         
-        # Check if language sets are exactly equal
-        if existing_set != new_set:
-            return False  # Language sets don't match, don't delete
+        # Check if existing (LOW) is a subset of new (HIGH)
+        # i.e., HIGH has all languages of LOW
+        if not (existing_set <= new_set):
+            return False  # LOW has languages not in HIGH, can't delete
 
         existing_source = existing_quality.get('source')
         new_source = new_quality.get('source')
@@ -121,7 +125,7 @@ def should_delete_existing(existing_quality: dict, new_quality: dict, existing_l
             return False
 
         # QUALITY CHECK: Low Quality delete hogi ONLY jab:
-        # 1. Language sets EXACTLY match (rule above)
+        # 1. LOW language set is SUBSET of HIGH language set (rule above)
         # 2. Existing is LOW quality AND New is HIGH quality
         if existing_source in LOW_QUALITY_SOURCES and new_source in HIGH_QUALITY_SOURCES:
             return True
@@ -255,7 +259,8 @@ async def cleanup_duplicates(db_collection, base_title: str, keep_highest_qualit
                 file_source = scored_file['quality'].get('source')
 
                 if file_source in LOW_QUALITY_SOURCES:
-                    # RULE 3: SET MATCH (Exact language set match required)
+                    # RULE 3: SUBSET CHECK
+                    # LOW language set must be subset of HIGH language set
                     is_replaceable = False
                     low_lang_set = set(scored_file['languages'])
                     
@@ -263,8 +268,9 @@ async def cleanup_duplicates(db_collection, base_title: str, keep_highest_qualit
                         if hq_file['quality'].get('source') in HIGH_QUALITY_SOURCES:
                             high_lang_set = set(hq_file['languages'])
                             
-                            # Language sets must be EXACTLY equal
-                            if low_lang_set == high_lang_set:
+                            # Check if LOW is subset of HIGH
+                            # i.e., HIGH has all languages of LOW
+                            if low_lang_set <= high_lang_set:
                                 is_replaceable = True
                                 break
 
@@ -498,7 +504,8 @@ async def cleanup_dry_single_cmd(bot, message):
         for idx, file in enumerate(files_info):
             will_delete = False
 
-            # 🔧 RULE 3: SET MATCH (Exact language set match required)
+            # 🔧 RULE 3: SUBSET CHECK
+            # LOW languages must be subset of HIGH languages
             if file['quality'] in LOW_QUALITY_SOURCES:
                 low_lang_set = set(file['languages'])
                 
@@ -506,8 +513,8 @@ async def cleanup_dry_single_cmd(bot, message):
                     if hq['quality'] in HIGH_QUALITY_SOURCES:
                         high_lang_set = set(hq['languages'])
                         
-                        # Language sets must be EXACTLY equal
-                        if low_lang_set == high_lang_set:
+                        # Check if LOW is subset of HIGH
+                        if low_lang_set <= high_lang_set:
                             will_delete = True
                             break
 
@@ -517,7 +524,7 @@ async def cleanup_dry_single_cmd(bot, message):
             status = "❌ DELETE (Low Q)" if will_delete else "✅ KEEP"
             quality_str = file['quality'].upper() if file['quality'] != 'Unknown' else 'N/A'
             res_str = file['resolution'].upper() if file['resolution'] != 'Unknown' else 'N/A'
-            # 🔧 IMPROVED: Show all languages found
+            # Show all languages found
             lang_str = ", ".join([l.upper() for l in file['languages']])
 
             # Pre-format the text for this file
@@ -632,8 +639,9 @@ async def process_dry_batch(collection, task_id, msg, cancel_markup, total_docs,
                         if hq['quality'] in HIGH_QUALITY_SOURCES:
                             high_lang_set = set(hq['languages'])
                             
-                            # RULE 3: SET MATCH - Exact language set match required
-                            if low_lang_set == high_lang_set:
+                            # RULE 3: SUBSET CHECK
+                            # LOW languages must be subset of HIGH languages
+                            if low_lang_set <= high_lang_set:
                                 to_delete += 1
                                 break
 
@@ -747,8 +755,9 @@ async def process_confirm_batch(collection, task_id, msg, cancel_markup, total_d
                         if hq['quality'] in HIGH_QUALITY_SOURCES:
                             high_lang_set = set(hq['languages'])
                             
-                            # RULE 3: SET MATCH - Exact language set match required
-                            if low_lang_set == high_lang_set:
+                            # RULE 3: SUBSET CHECK
+                            # LOW languages must be subset of HIGH languages
+                            if low_lang_set <= high_lang_set:
                                 is_replaceable = True
                                 break
 
