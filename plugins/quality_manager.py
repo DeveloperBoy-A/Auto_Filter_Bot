@@ -98,25 +98,21 @@ def is_low_quality_print(quality_info: dict) -> bool:
 def is_high_quality(quality_info: dict) -> bool:
     return quality_info.get('source') in HIGH_QUALITY_SOURCES
 
-# 🔧 IMPROVED: Handle multiple languages properly
+# 🔧 RULE 3: SET MATCH (Not Partial Overlap)
 def should_delete_existing(existing_quality: dict, new_quality: dict, existing_langs: List[str], new_langs: List[str]) -> bool:
     try:
-        # LANGUAGE CHECK: Check if languages overlap
-        # Agar koi bhi same language hai, toh delete ho sakta hai
-        # Agar dono unknown hain, toh delete ho sakta hai
-        languages_match = False
+        # LANGUAGE CHECK: EXACT SET MATCH REQUIRED (NOT PARTIAL)
+        # Case A: LOW=[Hindi, English], HIGH=[Hindi, English] → MATCH ✅ Delete allowed
+        # Case B: LOW=[Hindi, English], HIGH=[Hindi] → NO MATCH ❌ NO DELETE
+        # Case C: LOW=[Hindi, Tamil], HIGH=[Hindi, English] → NO MATCH ❌ NO DELETE
         
-        if "unknown" in existing_langs or "unknown" in new_langs:
-            languages_match = True
-        else:
-            # Check if there's any overlap
-            for lang in existing_langs:
-                if lang in new_langs:
-                    languages_match = True
-                    break
+        # Convert to sets for comparison (order doesn't matter)
+        existing_set = set(existing_langs)
+        new_set = set(new_langs)
         
-        if not languages_match:
-            return False
+        # Check if language sets are exactly equal
+        if existing_set != new_set:
+            return False  # Language sets don't match, don't delete
 
         existing_source = existing_quality.get('source')
         new_source = new_quality.get('source')
@@ -124,7 +120,9 @@ def should_delete_existing(existing_quality: dict, new_quality: dict, existing_l
         if not existing_source or not new_source:
             return False
 
-        # QUALITY CHECK: Sirf Low Quality delete hogi jab naya High Quality aayega
+        # QUALITY CHECK: Low Quality delete hogi ONLY jab:
+        # 1. Language sets EXACTLY match (rule above)
+        # 2. Existing is LOW quality AND New is HIGH quality
         if existing_source in LOW_QUALITY_SOURCES and new_source in HIGH_QUALITY_SOURCES:
             return True
 
@@ -257,22 +255,16 @@ async def cleanup_duplicates(db_collection, base_title: str, keep_highest_qualit
                 file_source = scored_file['quality'].get('source')
 
                 if file_source in LOW_QUALITY_SOURCES:
-                    # STRICT LANGUAGE & QUALITY CHECK
+                    # RULE 3: SET MATCH (Exact language set match required)
                     is_replaceable = False
+                    low_lang_set = set(scored_file['languages'])
+                    
                     for hq_file in scored_files:
                         if hq_file['quality'].get('source') in HIGH_QUALITY_SOURCES:
-                            lang1 = scored_file['languages']
-                            lang2 = hq_file['languages']
+                            high_lang_set = set(hq_file['languages'])
                             
-                            # Check if languages overlap or either is unknown
-                            has_overlap = "unknown" in lang1 or "unknown" in lang2
-                            if not has_overlap:
-                                for l in lang1:
-                                    if l in lang2:
-                                        has_overlap = True
-                                        break
-                            
-                            if has_overlap:
+                            # Language sets must be EXACTLY equal
+                            if low_lang_set == high_lang_set:
                                 is_replaceable = True
                                 break
 
@@ -506,22 +498,16 @@ async def cleanup_dry_single_cmd(bot, message):
         for idx, file in enumerate(files_info):
             will_delete = False
 
-            # 🔧 IMPROVED: Handle multiple languages properly
+            # 🔧 RULE 3: SET MATCH (Exact language set match required)
             if file['quality'] in LOW_QUALITY_SOURCES:
+                low_lang_set = set(file['languages'])
+                
                 for hq in files_info:
                     if hq['quality'] in HIGH_QUALITY_SOURCES:
-                        lang1 = file['languages']
-                        lang2 = hq['languages']
+                        high_lang_set = set(hq['languages'])
                         
-                        # Check if languages overlap
-                        has_overlap = "unknown" in lang1 or "unknown" in lang2
-                        if not has_overlap:
-                            for l in lang1:
-                                if l in lang2:
-                                    has_overlap = True
-                                    break
-                        
-                        if has_overlap:
+                        # Language sets must be EXACTLY equal
+                        if low_lang_set == high_lang_set:
                             will_delete = True
                             break
 
@@ -640,19 +626,14 @@ async def process_dry_batch(collection, task_id, msg, cancel_markup, total_docs,
             to_delete = 0
             for f in files:
                 if f['quality'] in LOW_QUALITY_SOURCES:
+                    low_lang_set = set(f['languages'])
+                    
                     for hq in files:
                         if hq['quality'] in HIGH_QUALITY_SOURCES:
-                            lang1 = f['languages']
-                            lang2 = hq['languages']
+                            high_lang_set = set(hq['languages'])
                             
-                            has_overlap = "unknown" in lang1 or "unknown" in lang2
-                            if not has_overlap:
-                                for l in lang1:
-                                    if l in lang2:
-                                        has_overlap = True
-                                        break
-                            
-                            if has_overlap:
+                            # RULE 3: SET MATCH - Exact language set match required
+                            if low_lang_set == high_lang_set:
                                 to_delete += 1
                                 break
 
@@ -760,19 +741,14 @@ async def process_confirm_batch(collection, task_id, msg, cancel_markup, total_d
             for f in files:
                 if f['quality'] in LOW_QUALITY_SOURCES:
                     is_replaceable = False
+                    low_lang_set = set(f['languages'])
+                    
                     for hq in files:
                         if hq['quality'] in HIGH_QUALITY_SOURCES:
-                            lang1 = f['languages']
-                            lang2 = hq['languages']
+                            high_lang_set = set(hq['languages'])
                             
-                            has_overlap = "unknown" in lang1 or "unknown" in lang2
-                            if not has_overlap:
-                                for l in lang1:
-                                    if l in lang2:
-                                        has_overlap = True
-                                        break
-                            
-                            if has_overlap:
+                            # RULE 3: SET MATCH - Exact language set match required
+                            if low_lang_set == high_lang_set:
                                 is_replaceable = True
                                 break
 
