@@ -26,17 +26,18 @@ RESOLUTION_HIERARCHY = {
     "240p": 1, "140p": 1, "360p": 2, "480p": 3, "540p": 4, "720p": 5, "1080p": 6, "1440p": 7, "2160p": 8, "4k": 8,
 }
 
+# 🔧 IMPROVED LANGUAGES WITH MORE SHORT FORMS
 LANGUAGES = {
-    "hindi": [r"\bhindi\b", r"\bhin\b"],
-    "english": [r"\benglish\b", r"\beng\b"],
-    "tamil": [r"\btamil\b", r"\btam\b"],
-    "telugu": [r"\btelugu\b", r"\btel\b"],
-    "malayalam": [r"\bmalayalam\b", r"\bmal\b"],
-    "kannada": [r"\bkannada\b", r"\bkan\b"],
-    "punjabi": [r"\bpunjabi\b", r"\bpan\b", r"\bpbi\b"],
-    "bengali": [r"\bbengali\b", r"\bben\b"],
-    "marathi": [r"\bmarathi\b", r"\bmar\b"],
-    "gujarati": [r"\bgujarati\b", r"\bguj\b", r"\bgujrat\b"]
+    "hindi": [r"\bhindi\b", r"\bhin\b", r"\bhi\b"],
+    "english": [r"\benglish\b", r"\beng\b", r"\ben\b"],
+    "tamil": [r"\btamil\b", r"\btam\b", r"\bta\b"],
+    "telugu": [r"\btelugu\b", r"\btel\b", r"\nte\b"],
+    "malayalam": [r"\bmalayalam\b", r"\bmal\b", r"\bml\b"],
+    "kannada": [r"\bkannada\b", r"\bkan\b", r"\bkn\b"],
+    "punjabi": [r"\bpunjabi\b", r"\bpan\b", r"\bpbi\b", r"\bpa\b"],
+    "bengali": [r"\bbengali\b", r"\bben\b", r"\bbn\b"],
+    "marathi": [r"\bmarathi\b", r"\bmar\b", r"\bmr\b"],
+    "gujarati": [r"\bgujarati\b", r"\bguj\b", r"\bgujrat\b", r"\bgu\b"]
 }
 
 LOW_QUALITY_SOURCES = [
@@ -49,14 +50,21 @@ HIGH_QUALITY_SOURCES = [
     'hdrip', 'hd rip', 'bluray', 'blu ray', 'bdrip', 'bd rip', 'brrip', 'br rip'
 ]
 
-def extract_language(text: str) -> str:
+# 🔧 IMPROVED: Returns ALL languages found (not just first one)
+def extract_language(text: str) -> List[str]:
+    """Extract ALL languages from text. Returns list of languages found."""
     text = text.lower()
+    found_languages = []
+    
     # Har language (key) aur uske patterns (list) ke liye
     for lang, patterns in LANGUAGES.items():
         for pattern in patterns:
             if re.search(pattern, text):
-                return lang  # Ye 'hindi', 'english' etc return karega
-    return "unknown"
+                if lang not in found_languages:
+                    found_languages.append(lang)
+                break  # Move to next language once found
+    
+    return found_languages if found_languages else ["unknown"]
 
 def extract_quality_info(filename: str, caption: str = "") -> dict:
     text = f"{filename} {caption}".lower()
@@ -90,10 +98,24 @@ def is_low_quality_print(quality_info: dict) -> bool:
 def is_high_quality(quality_info: dict) -> bool:
     return quality_info.get('source') in HIGH_QUALITY_SOURCES
 
-def should_delete_existing(existing_quality: dict, new_quality: dict, existing_lang: str, new_lang: str) -> bool:
+# 🔧 IMPROVED: Handle multiple languages properly
+def should_delete_existing(existing_quality: dict, new_quality: dict, existing_langs: List[str], new_langs: List[str]) -> bool:
     try:
-        # LANGUAGE CHECK: Agar languages alag-alag hain aur unknown nahi hain, toh Delete NAHI hoga.
-        if existing_lang != new_lang and existing_lang != "unknown" and new_lang != "unknown":
+        # LANGUAGE CHECK: Check if languages overlap
+        # Agar koi bhi same language hai, toh delete ho sakta hai
+        # Agar dono unknown hain, toh delete ho sakta hai
+        languages_match = False
+        
+        if "unknown" in existing_langs or "unknown" in new_langs:
+            languages_match = True
+        else:
+            # Check if there's any overlap
+            for lang in existing_langs:
+                if lang in new_langs:
+                    languages_match = True
+                    break
+        
+        if not languages_match:
             return False
 
         existing_source = existing_quality.get('source')
@@ -111,10 +133,17 @@ def should_delete_existing(existing_quality: dict, new_quality: dict, existing_l
         logger.error(f"Error in should_delete_existing: {e}")
         return False
 
+# 🔧 IMPROVED: Extract title with Season/Episode/Year handling
 def get_base_title(filename: str) -> str:
     text = filename.lower()
     text = re.sub(r'\.(mkv|mp4|avi|mov|wmv|flv|webm)$', '', text, flags=re.I)
     text = re.sub(r'[._-]+', ' ', text)
+
+    # Remove season/episode info but remember we extracted title
+    # s01, s001, season 1, season 01 etc
+    text = re.sub(r'\bs\d{1,2}\b|\bseason\s*\d{1,2}\b', '', text, flags=re.I)
+    # e01, e001, episode 1, episode 01 etc
+    text = re.sub(r'\be\d{1,2}\b|\bepisode\s*\d{1,2}\b', '', text, flags=re.I)
 
     for quality in list(QUALITY_HIERARCHY.keys()) + list(RESOLUTION_HIERARCHY.keys()):
         text = re.sub(rf'\b{re.escape(quality)}\b', '', text, flags=re.I)
@@ -123,7 +152,9 @@ def get_base_title(filename: str) -> str:
         r'\b(hevc|x265|x264|h264|avc|av1|aac|flac|dts|ac3|eac3|ddp|ddp5\.1|dd5\.1|5\.1|7\.1|2\.0|'
         r'dub|sub|esub|esubs|multi|proper|uncut|'
         r'hindi|english|tamil|telugu|malayalam|kannada|punjabi|'
-        r'bengali|marathi|gujarati|movies4u|tokyo_updates|telly|amzn|nf|dsnp)\b', '', text, flags=re.I
+        r'bengali|marathi|gujarati|movies4u|tokyo_updates|telly|amzn|nf|dsnp|'
+        r'hin|eng|tam|tel|mal|kan|pan|ben|mar|guj|'
+        r'hi|en|ta|te|ml|kn|pa|bn|mr|gu)\b', '', text, flags=re.I
     )
     text = re.sub(r'[\[\(\{].*?[\]\)\}]', '', text)
     text = re.sub(r'\s+', ' ', text).strip()
@@ -159,23 +190,25 @@ async def find_and_delete_lower_quality(
         deleted_count = 0
         kept_files = []
 
+        new_langs = extract_language(f"{new_filename} {new_caption or ''}")
+
         for existing_file in similar_files:
             try:
                 existing_filename = existing_file.get('file_name', '')
                 existing_caption = existing_file.get('caption', '')
                 existing_quality = extract_quality_info(existing_filename, existing_caption or "")
 
-                existing_lang = extract_language(f"{existing_filename} {existing_caption or ''}")
-                new_lang = extract_language(f"{new_filename} {new_caption or ''}")
+                existing_langs = extract_language(f"{existing_filename} {existing_caption or ''}")
 
-                if should_delete_existing(existing_quality, new_quality, existing_lang, new_lang):
+                if should_delete_existing(existing_quality, new_quality, existing_langs, new_langs):
                     try:
                         await db_collection.delete_one({'_id': existing_file['_id']})
                         deleted_count += 1
+                        langs_str = ", ".join(existing_langs)
                         logger.warning(
                             f"[QUALITY] ✅ DELETED lower quality file:\n"
                             f"  📄 {existing_filename[:70]}\n"
-                            f"  🎬 Source: {existing_quality.get('source', 'N/A').upper()} | Lang: {existing_lang}\n"
+                            f"  🎬 Source: {existing_quality.get('source', 'N/A').upper()} | Langs: {langs_str}\n"
                         )
                     except Exception as e:
                         logger.error(f"[QUALITY] ❌ Error deleting file {existing_filename}: {e}")
@@ -208,11 +241,11 @@ async def cleanup_duplicates(db_collection, base_title: str, keep_highest_qualit
         for file in files:
             file_name = file.get('file_name', '')
             quality = extract_quality_info(file_name, file.get('caption', ''))
-            lang = extract_language(file_name)
+            langs = extract_language(file_name)
             scored_files.append({
                 'file': file, 
                 'quality': quality, 
-                'language': lang,
+                'languages': langs,
                 'score': quality['quality_score']
             })
 
@@ -228,9 +261,18 @@ async def cleanup_duplicates(db_collection, base_title: str, keep_highest_qualit
                     is_replaceable = False
                     for hq_file in scored_files:
                         if hq_file['quality'].get('source') in HIGH_QUALITY_SOURCES:
-                            lang1 = scored_file['language']
-                            lang2 = hq_file['language']
-                            if lang1 == lang2 or lang1 == "unknown" or lang2 == "unknown":
+                            lang1 = scored_file['languages']
+                            lang2 = hq_file['languages']
+                            
+                            # Check if languages overlap or either is unknown
+                            has_overlap = "unknown" in lang1 or "unknown" in lang2
+                            if not has_overlap:
+                                for l in lang1:
+                                    if l in lang2:
+                                        has_overlap = True
+                                        break
+                            
+                            if has_overlap:
                                 is_replaceable = True
                                 break
 
@@ -446,12 +488,12 @@ async def cleanup_dry_single_cmd(bot, message):
         for file in similar_files:
             file_name = file.get('file_name', 'Unknown')
             quality = extract_quality_info(file_name)
-            lang = extract_language(file_name)
+            langs = extract_language(file_name)
             files_info.append({
                 'name': file_name,
                 'quality': quality['source'] or 'Unknown',
                 'resolution': quality['resolution'] or 'Unknown',
-                'language': lang,
+                'languages': langs,
                 'score': quality['quality_score']
             })
 
@@ -464,11 +506,22 @@ async def cleanup_dry_single_cmd(bot, message):
         for idx, file in enumerate(files_info):
             will_delete = False
 
-            # STRICT LANGUAGE MATCHING IN DRY RUN
+            # 🔧 IMPROVED: Handle multiple languages properly
             if file['quality'] in LOW_QUALITY_SOURCES:
                 for hq in files_info:
                     if hq['quality'] in HIGH_QUALITY_SOURCES:
-                        if file['language'] == hq['language'] or file['language'] == 'unknown' or hq['language'] == 'unknown':
+                        lang1 = file['languages']
+                        lang2 = hq['languages']
+                        
+                        # Check if languages overlap
+                        has_overlap = "unknown" in lang1 or "unknown" in lang2
+                        if not has_overlap:
+                            for l in lang1:
+                                if l in lang2:
+                                    has_overlap = True
+                                    break
+                        
+                        if has_overlap:
                             will_delete = True
                             break
 
@@ -478,10 +531,11 @@ async def cleanup_dry_single_cmd(bot, message):
             status = "❌ DELETE (Low Q)" if will_delete else "✅ KEEP"
             quality_str = file['quality'].upper() if file['quality'] != 'Unknown' else 'N/A'
             res_str = file['resolution'].upper() if file['resolution'] != 'Unknown' else 'N/A'
-            lang_str = file['language'].upper()
+            # 🔧 IMPROVED: Show all languages found
+            lang_str = ", ".join([l.upper() for l in file['languages']])
 
             # Pre-format the text for this file
-            file_text = f"\n{idx+1}. {status}\n  📄 {file['name'][:55]}...\n  Quality: {quality_str} | Res: {res_str} | Lang: {lang_str}\n"
+            file_text = f"\n{idx+1}. {status}\n  📄 {file['name'][:55]}...\n  Quality: {quality_str} | Res: {res_str} | Langs: {lang_str}\n"
             formatted_files.append(file_text)
 
         # Store in cache for pagination
@@ -553,11 +607,11 @@ async def process_dry_batch(collection, task_id, msg, cancel_markup, total_docs,
         base_title = get_base_title(file.get('file_name', ''))
         if base_title:
             quality = extract_quality_info(file.get('file_name', ''))
-            lang = extract_language(file.get('file_name', ''))
+            langs = extract_language(file.get('file_name', ''))
             movies[base_title].append({
                 'name': file.get('file_name', ''),
                 'quality': quality['source'],
-                'language': lang,
+                'languages': langs,
                 'score': quality['quality_score']
             })
 
@@ -588,7 +642,17 @@ async def process_dry_batch(collection, task_id, msg, cancel_markup, total_docs,
                 if f['quality'] in LOW_QUALITY_SOURCES:
                     for hq in files:
                         if hq['quality'] in HIGH_QUALITY_SOURCES:
-                            if f['language'] == hq['language'] or f['language'] == 'unknown' or hq['language'] == 'unknown':
+                            lang1 = f['languages']
+                            lang2 = hq['languages']
+                            
+                            has_overlap = "unknown" in lang1 or "unknown" in lang2
+                            if not has_overlap:
+                                for l in lang1:
+                                    if l in lang2:
+                                        has_overlap = True
+                                        break
+                            
+                            if has_overlap:
                                 to_delete += 1
                                 break
 
@@ -661,12 +725,12 @@ async def process_confirm_batch(collection, task_id, msg, cancel_markup, total_d
         base_title = get_base_title(file.get('file_name', ''))
         if base_title:
             quality = extract_quality_info(file.get('file_name', ''))
-            lang = extract_language(file.get('file_name', ''))
+            langs = extract_language(file.get('file_name', ''))
             movies[base_title].append({
                 'file_id': file['_id'], 
                 'name': file.get('file_name', ''),
                 'quality': quality['source'], 
-                'language': lang,
+                'languages': langs,
                 'score': quality['quality_score']
             })
 
@@ -698,7 +762,17 @@ async def process_confirm_batch(collection, task_id, msg, cancel_markup, total_d
                     is_replaceable = False
                     for hq in files:
                         if hq['quality'] in HIGH_QUALITY_SOURCES:
-                            if f['language'] == hq['language'] or f['language'] == 'unknown' or hq['language'] == 'unknown':
+                            lang1 = f['languages']
+                            lang2 = hq['languages']
+                            
+                            has_overlap = "unknown" in lang1 or "unknown" in lang2
+                            if not has_overlap:
+                                for l in lang1:
+                                    if l in lang2:
+                                        has_overlap = True
+                                        break
+                            
+                            if has_overlap:
                                 is_replaceable = True
                                 break
 
