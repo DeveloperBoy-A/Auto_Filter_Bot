@@ -26,12 +26,12 @@ RESOLUTION_HIERARCHY = {
     "240p": 1, "140p": 1, "360p": 2, "480p": 3, "540p": 4, "720p": 5, "1080p": 6, "1440p": 7, "2160p": 8, "4k": 8,
 }
 
-# 🔧 IMPROVED LANGUAGES WITH MORE SHORT FORMS
+# 🔧 IMPROVED LANGUAGES
 LANGUAGES = {
     "hindi": [r"\bhindi\b", r"\bhin\b", r"\bhi\b"],
     "english": [r"\benglish\b", r"\beng\b", r"\ben\b"],
     "tamil": [r"\btamil\b", r"\btam\b", r"\bta\b"],
-    "telugu": [r"\btelugu\b", r"\btel\b", r"\nte\b"],
+    "telugu": [r"\btelugu\b", r"\btel\b", r"\bte\b"],
     "malayalam": [r"\bmalayalam\b", r"\bmal\b", r"\bml\b"],
     "kannada": [r"\bkannada\b", r"\bkan\b", r"\bkn\b"],
     "punjabi": [r"\bpunjabi\b", r"\bpan\b", r"\bpbi\b", r"\bpa\b"],
@@ -50,19 +50,18 @@ HIGH_QUALITY_SOURCES = [
     'hdrip', 'hd rip', 'bluray', 'blu ray', 'bdrip', 'bd rip', 'brrip', 'br rip'
 ]
 
-# 🔧 IMPROVED: Returns ALL languages found (not just first one)
+# 🔧 IMPROVED: Returns ALL languages found
 def extract_language(text: str) -> List[str]:
     """Extract ALL languages from text. Returns list of languages found."""
     text = text.lower()
     found_languages = []
     
-    # Har language (key) aur uske patterns (list) ke liye
     for lang, patterns in LANGUAGES.items():
         for pattern in patterns:
             if re.search(pattern, text):
                 if lang not in found_languages:
                     found_languages.append(lang)
-                break  # Move to next language once found
+                break
     
     return found_languages if found_languages else ["unknown"]
 
@@ -73,8 +72,6 @@ def extract_quality_info(filename: str, caption: str = "") -> dict:
     }
 
     for source, score in QUALITY_HIERARCHY.items():
-        # Yahan change kiya hai: \b hata kar [._\-\s] lagaya hai
-        # Ye space, dash, dot, aur underscore sabko handle karega
         pattern = rf'[._\-\s]{re.escape(source)}[._\-\s]|^{re.escape(source)}[._\-\s]|[._\-\s]{re.escape(source)}$'
         if re.search(pattern, text):
             quality_info['source'] = source
@@ -82,7 +79,6 @@ def extract_quality_info(filename: str, caption: str = "") -> dict:
             break
 
     for res, score in RESOLUTION_HIERARCHY.items():
-        # Yahan bhi wahi change
         pattern = rf'[._\-\s]{re.escape(res)}[._\-\s]|^{re.escape(res)}[._\-\s]|[._\-\s]{re.escape(res)}$'
         if re.search(pattern, text):
             quality_info['resolution'] = res
@@ -98,25 +94,26 @@ def is_low_quality_print(quality_info: dict) -> bool:
 def is_high_quality(quality_info: dict) -> bool:
     return quality_info.get('source') in HIGH_QUALITY_SOURCES
 
-# 🔧 RULE 3: SUBSET MATCH (Corrected)
+# ✅ FIX #3: IMPROVED should_delete_existing with quality score comparison
 def should_delete_existing(existing_quality: dict, new_quality: dict, existing_langs: List[str], new_langs: List[str]) -> bool:
+    """
+    ✅ IMPROVED: Now compares quality scores to ensure new file is actually better
+    """
     try:
-        # RULE 3 (CORRECTED): SUBSET CHECK
-        # LOW languages must be a subset of HIGH languages
-        # i.e., HIGH must have ALL languages that LOW has (and can have extra)
-        # 
-        # Case A: LOW={Tamil}, HIGH={Hindi, Tamil} → {Tamil} ⊆ {Hindi, Tamil} ✅ DELETE
-        # Case B: LOW={Hindi}, HIGH={Hindi, English} → {Hindi} ⊆ {Hindi, English} ✅ DELETE
-        # Case C: LOW={Hindi, English}, HIGH={Hindi} → {Hindi, English} ⊄ {Hindi} ❌ KEEP
-        # Case D: LOW={Hindi, Tamil}, HIGH={Hindi, English} → {Hindi, Tamil} ⊄ {Hindi, English} ❌ KEEP
+        # ✅ NEW: Compare quality scores first
+        existing_score = existing_quality.get('quality_score', 0)
+        new_score = new_quality.get('quality_score', 0)
+        
+        # If new file doesn't have better score, don't delete
+        if new_score <= existing_score:
+            return False
         
         existing_set = set(existing_langs)
         new_set = set(new_langs)
         
         # Check if existing (LOW) is a subset of new (HIGH)
-        # i.e., HIGH has all languages of LOW
         if not (existing_set <= new_set):
-            return False  # LOW has languages not in HIGH, can't delete
+            return False
 
         existing_source = existing_quality.get('source')
         new_source = new_quality.get('source')
@@ -125,10 +122,19 @@ def should_delete_existing(existing_quality: dict, new_quality: dict, existing_l
             return False
 
         # QUALITY CHECK: Low Quality delete hogi ONLY jab:
-        # 1. LOW language set is SUBSET of HIGH language set (rule above)
+        # 1. LOW language set is SUBSET of HIGH language set
         # 2. Existing is LOW quality AND New is HIGH quality
+        # 3. ✅ NEW: New file has BETTER quality score
         if existing_source in LOW_QUALITY_SOURCES and new_source in HIGH_QUALITY_SOURCES:
             return True
+
+        # ✅ NEW: Handle same-quality files
+        if existing_source == new_source:
+            existing_res = existing_quality.get('resolution_score', 0)
+            new_res = new_quality.get('resolution_score', 0)
+            if new_res > existing_res and (existing_set <= new_set):
+                logger.info(f"[QUALITY] Same source but better resolution - will delete")
+                return True
 
         return False
     except Exception as e:
@@ -141,10 +147,7 @@ def get_base_title(filename: str) -> str:
     text = re.sub(r'\.(mkv|mp4|avi|mov|wmv|flv|webm)$', '', text, flags=re.I)
     text = re.sub(r'[._-]+', ' ', text)
 
-    # Remove season/episode info but remember we extracted title
-    # s01, s001, season 1, season 01 etc
     text = re.sub(r'\bs\d{1,2}\b|\bseason\s*\d{1,2}\b', '', text, flags=re.I)
-    # e01, e001, episode 1, episode 01 etc
     text = re.sub(r'\be\d{1,2}\b|\bepisode\s*\d{1,2}\b', '', text, flags=re.I)
 
     for quality in list(QUALITY_HIERARCHY.keys()) + list(RESOLUTION_HIERARCHY.keys()):
@@ -162,9 +165,13 @@ def get_base_title(filename: str) -> str:
     text = re.sub(r'\s+', ' ', text).strip()
     return text
 
+# ✅ FIX #4: IMPROVED find_and_delete_lower_quality with better title matching
 async def find_and_delete_lower_quality(
     db_collection, new_filename: str, new_caption: str = "", file_id: Optional[str] = None
 ) -> Tuple[bool, str]:
+    """
+    ✅ IMPROVED: Better title matching and comprehensive comparison
+    """
     try:
         if not new_filename or not isinstance(new_filename, str):
             return False, "Invalid filename provided"
@@ -179,20 +186,34 @@ async def find_and_delete_lower_quality(
             return True, "Could not extract title for comparison"
 
         try:
-            words = [w for w in base_title.split() if len(w) > 1]
-            pattern = ".*".join([rf"\b{re.escape(w)}\b" for w in words[:5]]) if words else re.escape(base_title)
+            # ✅ IMPROVED: More flexible word matching
+            words = [w for w in base_title.split() if len(w) > 2]
+            
+            if len(words) > 0:
+                # ✅ Use only first 3-4 significant words (changed from 5)
+                significant_words = words[:4] if len(words) >= 4 else words
+                pattern = ".*".join([rf"{re.escape(w)}" for w in significant_words])
+            else:
+                pattern = re.escape(base_title)
+            
+            logger.debug(f"[QUALITY] Search pattern for '{base_title}': {pattern}")
+            
         except Exception as e:
             return False, f"Error building search pattern: {str(e)}"
 
+        # ✅ IMPROVED: Case-insensitive regex search
         search_query = {'file_name': {'$regex': pattern, '$options': 'i'}}
         if file_id:
             search_query['_id'] = {'$ne': file_id}
 
         similar_files = await db_collection.find(search_query).to_list(None)
+        logger.info(f"[QUALITY] Found {len(similar_files)} similar files for deletion check")
+        
         deleted_count = 0
         kept_files = []
 
         new_langs = extract_language(f"{new_filename} {new_caption or ''}")
+        logger.debug(f"[QUALITY] New file languages: {new_langs}")
 
         for existing_file in similar_files:
             try:
@@ -201,22 +222,30 @@ async def find_and_delete_lower_quality(
                 existing_quality = extract_quality_info(existing_filename, existing_caption or "")
 
                 existing_langs = extract_language(f"{existing_filename} {existing_caption or ''}")
+                
+                logger.debug(
+                    f"[QUALITY] Comparing:\n"
+                    f"  Existing: {existing_filename[:50]} | Quality: {existing_quality.get('source')} | Langs: {existing_langs}\n"
+                    f"  New: {new_filename[:50]} | Quality: {new_quality.get('source')} | Langs: {new_langs}"
+                )
 
                 if should_delete_existing(existing_quality, new_quality, existing_langs, new_langs):
                     try:
                         await db_collection.delete_one({'_id': existing_file['_id']})
                         deleted_count += 1
-                        langs_str = ", ".join(existing_langs)
+                        langs_str = ", ".join(existing_langs) if existing_langs else "Unknown"
                         logger.warning(
                             f"[QUALITY] ✅ DELETED lower quality file:\n"
                             f"  📄 {existing_filename[:70]}\n"
                             f"  🎬 Source: {existing_quality.get('source', 'N/A').upper()} | Langs: {langs_str}\n"
+                            f"  🔄 Replaced by: {new_filename[:70]}\n"
                         )
                     except Exception as e:
                         logger.error(f"[QUALITY] ❌ Error deleting file {existing_filename}: {e}")
                 else:
                     kept_files.append(existing_filename)
             except Exception as e:
+                logger.error(f"[QUALITY] Error processing file: {e}")
                 continue
 
         if deleted_count > 0:
@@ -227,6 +256,7 @@ async def find_and_delete_lower_quality(
     except Exception as e:
         logger.error(f"[QUALITY] ❌ Error in find_and_delete_lower_quality: {e}", exc_info=True)
         return False, f"Error during quality cleanup: {str(e)}"
+
 
 async def cleanup_duplicates(db_collection, base_title: str, keep_highest_quality: bool = True) -> Tuple[int, List[str]]:
     try:
