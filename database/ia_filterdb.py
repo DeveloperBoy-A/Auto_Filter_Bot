@@ -759,7 +759,15 @@ async def _fetch_and_save_cover(file_id: str, final_title: str, year: str | None
             logger.warning(f"[COVER] Background task error for '{final_title}': {e}")
 
 
-async def save_file(media, bot=None):
+async def save_file(media, bot=None, extracted_info=None):  # ✅ NEW: Added extracted_info parameter
+    """
+    Save media file to database with improved language handling
+    
+    Args:
+        media: Media object with file details
+        bot: Pyrogram bot instance
+        extracted_info: Pre-extracted media info containing language (optional)
+    """
     try:
         file_id, file_ref = unpack_new_file_id(media.file_id)
         original_name = str(media.file_name or "Unnamed File")
@@ -768,6 +776,13 @@ async def save_file(media, bot=None):
         text_to_scan = f"{original_name} {getattr(media, 'caption', '') or ''}"
 
         extracted = extract_languages_quality(text_to_scan)
+        
+        # ✅ FIX #2: Use pre-extracted language info if available
+        # This ensures language from caption is properly saved to database
+        if extracted_info and extracted_info.get("language") and extracted_info.get("language") != "N/A":
+            # Convert comma-separated language string to list
+            extracted["languages"] = [lang.strip() for lang in extracted_info["language"].split(",")]
+            logger.info(f"[LANGUAGE] Using pre-extracted languages: {extracted['languages']}")
         
         # --- SMART AUTO-ADD LOGIC ---
         # 1. Agar Resolution nahi mili, to automatically 720P add karo
@@ -855,7 +870,7 @@ async def save_file(media, bot=None):
         # [11] Audio Codec & Channels (Smart Overlap Handler)
         audio_tags = extracted.get("extra_tags", [])
         
-        # Agar DDP 5.1/7.1 mil gaya hai, to bewajah "DD 5.1" (jo '5.1' ki wajah se aa jata hai) ko hata do
+        # Agar DDP 5.1/7.1 mil gaya hai, to bewajah "DD 5.1" ko hata do
         if "DDP 5.1" in audio_tags and "DD 5.1" in audio_tags:
             audio_tags.remove("DD 5.1")
         if "DDP 7.1" in audio_tags and "DD 5.1" in audio_tags:
@@ -918,8 +933,8 @@ async def save_file(media, bot=None):
     except DuplicateKeyError:
         return False, 0
     except Exception as e:
-        logger.exception(f"[ERROR] {e}")
-        return False, 3
+        logger.error(f"Error saving file: {e}", exc_info=True)
+        return False, 0
 
 
 
