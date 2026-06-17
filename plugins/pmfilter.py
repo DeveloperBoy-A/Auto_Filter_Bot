@@ -988,32 +988,73 @@ async def cb_handler(client: Client, query: CallbackQuery):
         ident, keyword = query.data.split("#")
         await query.message.edit_text(f"<b>Fetching Files for your query {keyword} on DB... Please wait...</b>")
         files, total = await get_bad_files(keyword)
+        
         await query.message.edit_text("<b>ꜰɪʟᴇ ᴅᴇʟᴇᴛɪᴏɴ ᴘʀᴏᴄᴇꜱꜱ ᴡɪʟʟ ꜱᴛᴀʀᴛ ɪɴ 5 ꜱᴇᴄᴏɴᴅꜱ !</b>")
         await asyncio.sleep(5)
+        
         deleted = 0
+        failed_files = []
+        
         async with lock:
             try:
                 for file in files:
                     file_ids = file.file_id
                     file_name = file.file_name
+                    
+                    # Try deleting from Primary DB
                     result = await Media.collection.delete_one({
                         '_id': file_ids,
                     })
-                    if not result.deleted_count and MULTIPLE_DB:
+                    deleted_from_primary = result.deleted_count > 0
+                    
+                    # If not found in primary and MULTIPLE_DB enabled, try secondary
+                    deleted_from_secondary = False
+                    if not deleted_from_primary and MULTIPLE_DB:
                         result = await Media2.collection.delete_one({
                             '_id': file_ids,
                         })
-                    if result.deleted_count:
+                        deleted_from_secondary = result.deleted_count > 0
+                    
+                    # ✅ FIX: Count केवल तभी increment करें जब file actually delete हो
+                    if deleted_from_primary or deleted_from_secondary:
+                        deleted += 1
                         logger.info(
-                            f'ꜰɪʟᴇ ꜰᴏᴜɴᴅ ꜰᴏʀ ʏᴏᴜʀ ǫᴜᴇʀʏ {keyword}! ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ᴅᴇʟᴇᴛᴇᴅ {file_name} ꜰʀᴏᴍ ᴅᴀᴛᴀʙᴀꜱᴇ.')
-                    deleted += 1
+                            f'✅ ꜰɪʟᴇ ꜰᴏᴜɴᴅ ꜰᴏʀ ʏᴏᴜʀ ǫᴜᴇʀʏ {keyword}! ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ᴅᴇʟᴇᴛᴇᴅ {file_name} ꜰʀᴏᴍ ᴅᴀᴛᴀʙᴀꜱᴇ.')
+                    else:
+                        failed_files.append(file_name)
+                        logger.warning(
+                            f'❌ ꜰᴀɪʟᴇᴅ ᴛᴏ ᴅᴇʟᴇᴛᴇ {file_name} - ɴᴏᴛ ꜰᴏᴜɴᴅ ɪɴ ᴀɴʏ ᴅᴀᴛᴀʙᴀꜱᴇ.')
+                    
                     if deleted % 20 == 0:
                         await query.message.edit_text(f"<b>ᴘʀᴏᴄᴇꜱꜱ ꜱᴛᴀʀᴛᴇᴅ ꜰᴏʀ ᴅᴇʟᴇᴛɪɴɢ ꜰɪʟᴇꜱ ꜰʀᴏᴍ ᴅʙ. ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ᴅᴇʟᴇᴛᴇᴅ {str(deleted)} ꜰɪʟᴇꜱ ꜰʀᴏᴍ ᴅʙ ꜰᴏʀ ʏᴏᴜʀ ǫᴜᴇʀʏ {keyword} !\n\nᴘʟᴇᴀꜱᴇ ᴡᴀɪᴛ...</b>")
+                        
             except Exception as e:
-                print(f"Error In killfiledq -{e}")
+                print(f"Error in killfilesdq: {e}")
                 await query.message.edit_text(f'Error: {e}')
             else:
-                await query.message.edit_text(f"<b>ᴘʀᴏᴄᴇꜱꜱ ᴄᴏᴍᴘʟᴇᴛᴇᴅ ꜰᴏʀ ꜰɪʟᴇ ᴅᴇʟᴇᴛᴀᴛɪᴏɴ !\n\nꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ᴅᴇʟᴇᴛᴇᴅ {str(deleted)} ꜰɪʟᴇꜱ ꜰʀᴏᴍ ᴅʙ ꜰᴏʀ ʏᴏᴜʀ ǫᴜᴇʀʏ {keyword}.</b>")
+                # Final message with proper statistics
+                message_text = f"<b>ᴘʀᴏᴄᴇꜱꜱ ᴄᴏᴍᴘʟᴇᴛᴇᴅ!\n\n✅ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ᴅᴇʟᴇᴛᴇᴅ {str(deleted)} ꜰɪʟᴇꜱ ꜰʀᴏᴍ ᴅʙ ꜰᴏʀ ʏᴏᴜʀ ǫᴜᴇʀʏ {keyword}.</b>"
+                
+                if failed_files:
+                    message_text += f"\n\n❌ ꜰᴀɪʟᴇᴅ ({len(failed_files)} ꜰɪʟᴇꜱ): "
+                    # Show first 5 failed files
+                    message_text += ", ".join(failed_files[:5])
+                    if len(failed_files) > 5:
+                        message_text += f"... and {len(failed_files) - 5} more"
+                
+                await query.message.edit_text(message_text)
+
+                # ✅ OPTIONAL: Verify deletion from database
+                try:
+                    remaining_count_1 = await Media.count_documents({'file_name': {'$regex': keyword}})
+                    remaining_count_2 = 0
+                    if MULTIPLE_DB:
+                        remaining_count_2 = await Media2.count_documents({'file_name': {'$regex': keyword}})
+                    
+                    total_remaining = remaining_count_1 + remaining_count_2
+                    logger.info(f"Verification: Deleted={deleted}, Remaining in DB={total_remaining}")
+                except Exception as verify_error:
+                    logger.error(f"Verification error: {verify_error}")
 
     elif query.data.startswith("opnsetgrp"):
         ident, grp_id = query.data.split("#")
