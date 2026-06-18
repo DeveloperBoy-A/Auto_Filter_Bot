@@ -40,11 +40,18 @@ LANGUAGES = {
     "gujarati": [r"\bgujarati\b", r"\bguj\b", r"\bgujrat\b", r"\bgu\b"]
 }
 
+# ✅ IMPORTANT: LOW QUALITY SOURCES (Can be deleted)
 LOW_QUALITY_SOURCES = [
     'camrip', 'cam rip', 'hdcam', 'hd cam', 'hdtc', 'hd tc', 
     'hdts', 'hd ts', 'ts', 'tc', 'telesync', 'predvd', 'predvdrip', 'pre dvd', 'dvdscr', 'dvd scr'
 ]
 
+# ✅ IMPORTANT: MEDIUM QUALITY SOURCES (Can be deleted if HIGH comes)
+MEDIUM_QUALITY_SOURCES = [
+    'dvdrip', 'dvd rip', 'tvrip', 'tv rip', 'hdtv', 'hd tv'
+]
+
+# ✅ IMPORTANT: HIGH QUALITY SOURCES (NEVER delete these!)
 HIGH_QUALITY_SOURCES = [
     'webrip', 'web rip', 'web-dl', 'web dl', 'webdl', 
     'hdrip', 'hd rip', 'bluray', 'blu ray', 'bdrip', 'bd rip', 'brrip', 'br rip'
@@ -55,14 +62,14 @@ def extract_language(text: str) -> List[str]:
     """Extract ALL languages from text. Returns list of languages found."""
     text = text.lower()
     found_languages = []
-    
+
     for lang, patterns in LANGUAGES.items():
         for pattern in patterns:
             if re.search(pattern, text):
                 if lang not in found_languages:
                     found_languages.append(lang)
                 break
-    
+
     return found_languages if found_languages else ["unknown"]
 
 def extract_quality_info(filename: str, caption: str = "") -> dict:
@@ -94,49 +101,60 @@ def is_low_quality_print(quality_info: dict) -> bool:
 def is_high_quality(quality_info: dict) -> bool:
     return quality_info.get('source') in HIGH_QUALITY_SOURCES
 
-# ✅ FIX #3: IMPROVED should_delete_existing with quality score comparison
+# ✅ MODIFIED: NEVER DELETE HIGH QUALITY FILES
 def should_delete_existing(existing_quality: dict, new_quality: dict, existing_langs: List[str], new_langs: List[str]) -> bool:
     """
-    ✅ IMPROVED: Now compares quality scores to ensure new file is actually better
+    ✅ USER REQUIREMENT:
+    
+    DELETE करो:
+    - सभी LOW_QUALITY_SOURCES (CAMRip, DVDScr, HDTC, TS, TC, आदि)
+    - सभी MEDIUM_QUALITY_SOURCES (DVDRip, TVRip, HDTV)
+    - जब HIGH quality file available हो
+    - और language match हो
+    
+    NEVER DELETE करो:
+    - HIGH_QUALITY_SOURCES (HDRIP, BluRay, WebRip, WEB-DL)
+    - कभी भी नहीं, चाहे:
+      - Resolution बेहतर हो (1080P vs 480P)
+      - Language match हो
+      - कोई भी condition हो
     """
     try:
-        # ✅ NEW: Compare quality scores first
-        existing_score = existing_quality.get('quality_score', 0)
-        new_score = new_quality.get('quality_score', 0)
-        
-        # If new file doesn't have better score, don't delete
-        if new_score <= existing_score:
+        existing_source = existing_quality.get('source', '').lower()
+        new_source = new_quality.get('source', '').lower()
+
+        # 🔴 RULE 1: NEVER DELETE HIGH QUALITY FILES (कभी भी नहीं!)
+        if existing_source in HIGH_QUALITY_SOURCES:
+            logger.info(f"[QUALITY] ✅ KEEP FOREVER: {existing_source.upper()} is HIGH quality (NEVER delete)")
             return False
         
+        # ✅ RULE 2: Language must match for deletion
         existing_set = set(existing_langs)
         new_set = set(new_langs)
         
-        # Check if existing (LOW) is a subset of new (HIGH)
         if not (existing_set <= new_set):
+            logger.debug(f"[QUALITY] ❌ KEEP: Language mismatch {existing_set} not subset of {new_set}")
             return False
-
-        existing_source = existing_quality.get('source')
-        new_source = new_quality.get('source')
-
-        if not existing_source or not new_source:
-            return False
-
-        # QUALITY CHECK: Low Quality delete hogi ONLY jab:
-        # 1. LOW language set is SUBSET of HIGH language set
-        # 2. Existing is LOW quality AND New is HIGH quality
-        # 3. ✅ NEW: New file has BETTER quality score
-        if existing_source in LOW_QUALITY_SOURCES and new_source in HIGH_QUALITY_SOURCES:
-            return True
-
-        # ✅ NEW: Handle same-quality files
-        if existing_source == new_source:
-            existing_res = existing_quality.get('resolution_score', 0)
-            new_res = new_quality.get('resolution_score', 0)
-            if new_res > existing_res and (existing_set <= new_set):
-                logger.info(f"[QUALITY] Same source but better resolution - will delete")
+        
+        # ✅ RULE 3: Delete LOW quality (CAMRip, DVDScr, HDTC, TS, TC, आदि)
+        # जब HIGH or MEDIUM quality आए
+        if existing_source in LOW_QUALITY_SOURCES:
+            if new_source in HIGH_QUALITY_SOURCES or new_source in MEDIUM_QUALITY_SOURCES:
+                logger.info(f"[QUALITY] ✅ DELETE LOW: {existing_source.upper()} → {new_source.upper()}")
+                logger.info(f"[QUALITY] Reason: LOW quality file को बेहतर quality से replace किया")
                 return True
-
+        
+        # ✅ RULE 4: Delete MEDIUM quality (DVDRip, TVRip, HDTV)
+        # जब HIGH quality आए
+        elif existing_source in MEDIUM_QUALITY_SOURCES:
+            if new_source in HIGH_QUALITY_SOURCES:
+                logger.info(f"[QUALITY] ✅ DELETE MEDIUM: {existing_source.upper()} → {new_source.upper()}")
+                logger.info(f"[QUALITY] Reason: MEDIUM quality file को HIGH quality से replace किया")
+                return True
+        
+        logger.info(f"[QUALITY] ✅ KEEP: No deletion criteria met (safe to keep)")
         return False
+        
     except Exception as e:
         logger.error(f"Error in should_delete_existing: {e}")
         return False
@@ -165,12 +183,14 @@ def get_base_title(filename: str) -> str:
     text = re.sub(r'\s+', ' ', text).strip()
     return text
 
-# ✅ FIX #4: IMPROVED find_and_delete_lower_quality with better title matching
+# ✅ MODIFIED: Only searches and deletes LOW → HIGH/MEDIUM quality
 async def find_and_delete_lower_quality(
     db_collection, new_filename: str, new_caption: str = "", file_id: Optional[str] = None
 ) -> Tuple[bool, str]:
     """
-    ✅ IMPROVED: Better title matching and comprehensive comparison
+    ✅ MODIFIED: Only deletes LOW quality files when HIGH quality found
+    NEVER deletes HIGH quality files (WebRip, WEB-DL, BluRay, HDRip)
+    NEVER deletes based on resolution
     """
     try:
         if not new_filename or not isinstance(new_filename, str):
@@ -181,23 +201,28 @@ async def find_and_delete_lower_quality(
         if not new_quality['source']:
             return True, "No quality info found in new file, skipping cleanup"
 
+        # ✅ NEW: Only cleanup if new file is HIGH or MEDIUM quality
+        # Don't cleanup if new file is also LOW quality
+        new_source = new_quality.get('source', '').lower()
+        if not (new_source in HIGH_QUALITY_SOURCES or new_source in MEDIUM_QUALITY_SOURCES):
+            logger.info(f"[QUALITY] ℹ️  New file is LOW quality ({new_source}), skipping cleanup")
+            return True, "New file is low quality, not deleting anything"
+
         base_title = get_base_title(new_filename)
         if not base_title:
             return True, "Could not extract title for comparison"
 
         try:
-            # ✅ IMPROVED: More flexible word matching
             words = [w for w in base_title.split() if len(w) > 2]
-            
+
             if len(words) > 0:
-                # ✅ Use only first 3-4 significant words (changed from 5)
                 significant_words = words[:4] if len(words) >= 4 else words
                 pattern = ".*".join([rf"{re.escape(w)}" for w in significant_words])
             else:
                 pattern = re.escape(base_title)
-            
+
             logger.debug(f"[QUALITY] Search pattern for '{base_title}': {pattern}")
-            
+
         except Exception as e:
             return False, f"Error building search pattern: {str(e)}"
 
@@ -208,7 +233,7 @@ async def find_and_delete_lower_quality(
 
         similar_files = await db_collection.find(search_query).to_list(None)
         logger.info(f"[QUALITY] Found {len(similar_files)} similar files for deletion check")
-        
+
         deleted_count = 0
         kept_files = []
 
@@ -222,11 +247,11 @@ async def find_and_delete_lower_quality(
                 existing_quality = extract_quality_info(existing_filename, existing_caption or "")
 
                 existing_langs = extract_language(f"{existing_filename} {existing_caption or ''}")
-                
+
                 logger.debug(
                     f"[QUALITY] Comparing:\n"
                     f"  Existing: {existing_filename[:50]} | Quality: {existing_quality.get('source')} | Langs: {existing_langs}\n"
-                    f"  New: {new_filename[:50]} | Quality: {new_quality.get('source')} | Langs: {new_langs}"
+                    f"  New: {new_filename[:50]} | Quality: {new_source} | Langs: {new_langs}"
                 )
 
                 if should_delete_existing(existing_quality, new_quality, existing_langs, new_langs):
@@ -244,6 +269,8 @@ async def find_and_delete_lower_quality(
                         logger.error(f"[QUALITY] ❌ Error deleting file {existing_filename}: {e}")
                 else:
                     kept_files.append(existing_filename)
+                    logger.info(f"[QUALITY] ✅ KEPT: {existing_filename[:50]}")
+                    
             except Exception as e:
                 logger.error(f"[QUALITY] Error processing file: {e}")
                 continue
@@ -258,6 +285,7 @@ async def find_and_delete_lower_quality(
         return False, f"Error during quality cleanup: {str(e)}"
 
 
+# ✅ MODIFIED cleanup_duplicates function
 async def cleanup_duplicates(db_collection, base_title: str, keep_highest_quality: bool = True) -> Tuple[int, List[str]]:
     try:
         words = [w for w in base_title.split() if len(w) > 1]
@@ -278,7 +306,8 @@ async def cleanup_duplicates(db_collection, base_title: str, keep_highest_qualit
                 'file': file, 
                 'quality': quality, 
                 'languages': langs,
-                'score': quality['quality_score']
+                'score': quality['quality_score'],
+                'source': quality['source']
             })
 
         deleted_count = 0
@@ -286,36 +315,60 @@ async def cleanup_duplicates(db_collection, base_title: str, keep_highest_qualit
 
         if keep_highest_quality:
             for scored_file in scored_files:
-                file_source = scored_file['quality'].get('source')
+                file_source = scored_file['source']
 
-                if file_source in LOW_QUALITY_SOURCES:
-                    # RULE 3: SUBSET CHECK
-                    # LOW language set must be subset of HIGH language set
-                    is_replaceable = False
+                # ✅ RULE 1: NEVER DELETE HIGH QUALITY FILES
+                if file_source in HIGH_QUALITY_SOURCES:
+                    logger.info(f"[CLEANUP] KEEP: {file_source.upper()} is HIGH quality")
+                    continue
+
+                # ✅ RULE 2: Can delete MEDIUM → HIGH transition
+                if file_source in MEDIUM_QUALITY_SOURCES:
+                    has_high = any(f['source'] in HIGH_QUALITY_SOURCES for f in scored_files)
+                    if not has_high:
+                        continue
+                    
                     low_lang_set = set(scored_file['languages'])
+                    can_delete = False
                     
                     for hq_file in scored_files:
-                        if hq_file['quality'].get('source') in HIGH_QUALITY_SOURCES:
+                        if hq_file['source'] in HIGH_QUALITY_SOURCES:
                             high_lang_set = set(hq_file['languages'])
-                            
-                            # Check if LOW is subset of HIGH
-                            # i.e., HIGH has all languages of LOW
                             if low_lang_set <= high_lang_set:
-                                is_replaceable = True
+                                can_delete = True
                                 break
-
-                    if is_replaceable:
+                    
+                    if can_delete:
                         try:
                             file_to_delete = scored_file['file'].get('file_name', 'Unknown')
                             await db_collection.delete_one({'_id': scored_file['file']['_id']})
                             deleted_count += 1
                             deleted_files.append(file_to_delete)
-
-                            # 🔥 LOGS KE LIYE YAHAN ADD KIYA GAYA HAI
-                            logger.info(f"[CLEANUP SINGLE] 🗑️ Deleted File: {file_to_delete}")
-
+                            logger.info(f"[CLEANUP] DELETE: {file_to_delete}")
                         except Exception as e:
-                            logger.error(f"[CLEANUP SINGLE] ❌ Error deleting file: {e}")
+                            logger.error(f"[CLEANUP] Error deleting: {e}")
+
+                # ✅ RULE 3: Can delete LOW → HIGH/MEDIUM transition
+                elif file_source in LOW_QUALITY_SOURCES:
+                    low_lang_set = set(scored_file['languages'])
+                    can_delete = False
+                    
+                    for hq_file in scored_files:
+                        if hq_file['source'] in HIGH_QUALITY_SOURCES or hq_file['source'] in MEDIUM_QUALITY_SOURCES:
+                            high_lang_set = set(hq_file['languages'])
+                            if low_lang_set <= high_lang_set:
+                                can_delete = True
+                                break
+                    
+                    if can_delete:
+                        try:
+                            file_to_delete = scored_file['file'].get('file_name', 'Unknown')
+                            await db_collection.delete_one({'_id': scored_file['file']['_id']})
+                            deleted_count += 1
+                            deleted_files.append(file_to_delete)
+                            logger.info(f"[CLEANUP] DELETE: {file_to_delete}")
+                        except Exception as e:
+                            logger.error(f"[CLEANUP] Error deleting: {e}")
 
         return deleted_count, deleted_files
     except Exception as e:
@@ -375,7 +428,7 @@ async def send_dry_page(msg, task_id, page):
     if data['delete'] > 0:
         report += f"👉 Confirm & Delete:\n`/cleanup_confirm_single {data['movie_name']}`\n\n"
     else:
-        report += f"ℹ️ No files to delete (Rules applied)\n\n"
+        report += f"ℹ️ No files to delete (HIGH quality files are safe)\n\n"
 
     report += "⏱️ *This message will auto-delete in 5 mins.*"
 
@@ -526,7 +579,6 @@ async def cleanup_dry_single_cmd(bot, message):
             })
 
         files_info.sort(key=lambda x: x['score'], reverse=True)
-        has_high_quality = any(f['quality'] in HIGH_QUALITY_SOURCES for f in files_info)
 
         formatted_files = []
         to_delete = 0
@@ -534,16 +586,28 @@ async def cleanup_dry_single_cmd(bot, message):
         for idx, file in enumerate(files_info):
             will_delete = False
 
-            # 🔧 RULE 3: SUBSET CHECK
-            # LOW languages must be subset of HIGH languages
-            if file['quality'] in LOW_QUALITY_SOURCES:
+            # ✅ RULE 1: NEVER DELETE HIGH QUALITY
+            if file['quality'] in HIGH_QUALITY_SOURCES:
+                will_delete = False
+            
+            # ✅ RULE 2: Can delete MEDIUM → HIGH
+            elif file['quality'] in MEDIUM_QUALITY_SOURCES:
+                has_high = any(f['quality'] in HIGH_QUALITY_SOURCES for f in files_info)
+                if has_high:
+                    low_lang_set = set(file['languages'])
+                    for hq in files_info:
+                        if hq['quality'] in HIGH_QUALITY_SOURCES:
+                            high_lang_set = set(hq['languages'])
+                            if low_lang_set <= high_lang_set:
+                                will_delete = True
+                                break
+
+            # ✅ RULE 3: Can delete LOW → HIGH/MEDIUM
+            elif file['quality'] in LOW_QUALITY_SOURCES:
                 low_lang_set = set(file['languages'])
-                
                 for hq in files_info:
-                    if hq['quality'] in HIGH_QUALITY_SOURCES:
+                    if hq['quality'] in HIGH_QUALITY_SOURCES or hq['quality'] in MEDIUM_QUALITY_SOURCES:
                         high_lang_set = set(hq['languages'])
-                        
-                        # Check if LOW is subset of HIGH
                         if low_lang_set <= high_lang_set:
                             will_delete = True
                             break
@@ -551,13 +615,11 @@ async def cleanup_dry_single_cmd(bot, message):
             if will_delete:
                 to_delete += 1
 
-            status = "❌ DELETE (Low Q)" if will_delete else "✅ KEEP"
+            status = "❌ DELETE" if will_delete else "✅ KEEP"
             quality_str = file['quality'].upper() if file['quality'] != 'Unknown' else 'N/A'
             res_str = file['resolution'].upper() if file['resolution'] != 'Unknown' else 'N/A'
-            # Show all languages found
             lang_str = ", ".join([l.upper() for l in file['languages']])
 
-            # Pre-format the text for this file
             file_text = f"\n{idx+1}. {status}\n  📄 {file['name'][:55]}...\n  Quality: {quality_str} | Res: {res_str} | Langs: {lang_str}\n"
             formatted_files.append(file_text)
 
@@ -610,11 +672,11 @@ async def cleanup_confirm_single_cmd(bot, message):
             report = (
                 f"✅ **DELETE COMPLETED!**\n{'='*50}\n\n"
                 f"🎬 Movie: {movie_name}\n"
-                f"🗑️ Deleted: {deleted_count} files (Low Quality)\n\n"
+                f"🗑️ Deleted: {deleted_count} files (Low/Medium Quality)\n\n"
                 f"📋 **Deleted Files:**\n{deleted_preview}"
             )
         else:
-            report = f"ℹ️ **No files deleted**\n\n🎬 Movie: {movie_name}\nReason: No low-quality duplicates found based on strict rules."
+            report = f"ℹ️ **No files deleted**\n\n🎬 Movie: {movie_name}\nReason: No low-quality files found (HIGH quality files are safe)."
         await msg.edit_text(report)
     except Exception as e:
         await message.reply_text(f"❌ Error: {str(e)}")
@@ -662,15 +724,28 @@ async def process_dry_batch(collection, task_id, msg, cancel_markup, total_docs,
         if len(files) > 1:
             to_delete = 0
             for f in files:
-                if f['quality'] in LOW_QUALITY_SOURCES:
+                # ✅ RULE 1: NEVER DELETE HIGH QUALITY
+                if f['quality'] in HIGH_QUALITY_SOURCES:
+                    continue
+                
+                # ✅ RULE 2: Can delete MEDIUM → HIGH
+                if f['quality'] in MEDIUM_QUALITY_SOURCES:
+                    has_high = any(hq['quality'] in HIGH_QUALITY_SOURCES for hq in files)
+                    if has_high:
+                        low_lang_set = set(f['languages'])
+                        for hq in files:
+                            if hq['quality'] in HIGH_QUALITY_SOURCES:
+                                high_lang_set = set(hq['languages'])
+                                if low_lang_set <= high_lang_set:
+                                    to_delete += 1
+                                    break
+                
+                # ✅ RULE 3: Can delete LOW → HIGH/MEDIUM
+                elif f['quality'] in LOW_QUALITY_SOURCES:
                     low_lang_set = set(f['languages'])
-                    
                     for hq in files:
-                        if hq['quality'] in HIGH_QUALITY_SOURCES:
+                        if hq['quality'] in HIGH_QUALITY_SOURCES or hq['quality'] in MEDIUM_QUALITY_SOURCES:
                             high_lang_set = set(hq['languages'])
-                            
-                            # RULE 3: SUBSET CHECK
-                            # LOW languages must be subset of HIGH languages
                             if low_lang_set <= high_lang_set:
                                 to_delete += 1
                                 break
@@ -718,7 +793,7 @@ async def cleanup_dry_batch_cmd(bot, message):
 
         report = f"📊 **DRY RUN - BATCH MODE**\n{'='*50}\n\n"
         report += f"📁 Total Files Scanned: {total_docs}\n🎬 Total Unique Movies: {t_movies}\n"
-        report += f"📋 Movies with Low-Q Duplicates: {len(duplicate_movies)}\n\n"
+        report += f"📋 Movies with Low/Medium Quality Duplicates: {len(duplicate_movies)}\n\n"
         report += f"⚠️ **WOULD DELETE: {total_del} files**\n\n"
 
         if duplicate_movies:
@@ -728,6 +803,8 @@ async def cleanup_dry_batch_cmd(bot, message):
             if len(duplicate_movies) > 10:
                 report += f"... + {len(duplicate_movies) - 10} more\n\n"
             report += f"{'─'*50}\n\n👉 Confirm & Delete ALL:\n`/cleanup_confirm_batch`"
+        else:
+            report += "ℹ️ No low-quality duplicates found (HIGH quality files are safe)"
 
         await msg.edit_text(report)
     except Exception as e:
@@ -777,28 +854,42 @@ async def process_confirm_batch(collection, task_id, msg, cancel_markup, total_d
         if len(files) > 1:
             cleaned_this_movie = False
             for f in files:
-                if f['quality'] in LOW_QUALITY_SOURCES:
-                    is_replaceable = False
+                # ✅ RULE 1: NEVER DELETE HIGH QUALITY
+                if f['quality'] in HIGH_QUALITY_SOURCES:
+                    continue
+                
+                can_delete = False
+                
+                # ✅ RULE 2: Can delete MEDIUM → HIGH
+                if f['quality'] in MEDIUM_QUALITY_SOURCES:
+                    has_high = any(hq['quality'] in HIGH_QUALITY_SOURCES for hq in files)
+                    if has_high:
+                        low_lang_set = set(f['languages'])
+                        for hq in files:
+                            if hq['quality'] in HIGH_QUALITY_SOURCES:
+                                high_lang_set = set(hq['languages'])
+                                if low_lang_set <= high_lang_set:
+                                    can_delete = True
+                                    break
+                
+                # ✅ RULE 3: Can delete LOW → HIGH/MEDIUM
+                elif f['quality'] in LOW_QUALITY_SOURCES:
                     low_lang_set = set(f['languages'])
-                    
                     for hq in files:
-                        if hq['quality'] in HIGH_QUALITY_SOURCES:
+                        if hq['quality'] in HIGH_QUALITY_SOURCES or hq['quality'] in MEDIUM_QUALITY_SOURCES:
                             high_lang_set = set(hq['languages'])
-                            
-                            # RULE 3: SUBSET CHECK
-                            # LOW languages must be subset of HIGH languages
                             if low_lang_set <= high_lang_set:
-                                is_replaceable = True
+                                can_delete = True
                                 break
 
-                    if is_replaceable:
-                        try:
-                            await collection.delete_one({'_id': f['file_id']})
-                            total_deleted += 1
-                            deleted_files_list.append(f['name'])
-                            cleaned_this_movie = True
-                        except Exception:
-                            pass
+                if can_delete:
+                    try:
+                        await collection.delete_one({'_id': f['file_id']})
+                        total_deleted += 1
+                        deleted_files_list.append(f['name'])
+                        cleaned_this_movie = True
+                    except Exception:
+                        pass
 
             if cleaned_this_movie:
                 movies_cleaned += 1
@@ -849,7 +940,7 @@ async def cleanup_confirm_batch_cmd(bot, message):
                 f"📋 **Sample Deleted:**\n{deleted_preview}"
             )
         else:
-            report = f"ℹ️ **No files deleted**\n\nAll files are already optimal quality based on rules."
+            report = f"ℹ️ **No files deleted**\n\nAll files are already optimal quality (HIGH quality files are safe)."
 
         await msg.edit_text(report)
     except Exception as e:
