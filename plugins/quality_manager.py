@@ -120,8 +120,19 @@ def should_delete_existing(existing_quality: dict, new_quality: dict, existing_l
       - कोई भी condition हो
     """
     try:
-        existing_source = existing_quality.get('source', '').lower()
-        new_source = new_quality.get('source', '').lower()
+        # ✅ FIX: Safe handling of None values
+        existing_source = existing_quality.get('source') or ''
+        new_source = new_quality.get('source') or ''
+        
+        existing_source = existing_source.lower().strip() if existing_source else ''
+        new_source = new_source.lower().strip() if new_source else ''
+        
+        logger.debug(f"[QUALITY] Comparing: existing={existing_source} vs new={new_source}")
+        
+        # If quality not detected, keep file (safe approach)
+        if not existing_source or not new_source:
+            logger.info(f"[QUALITY] ⚠️  Quality not detected properly. Keeping file.")
+            return False
 
         # 🔴 RULE 1: NEVER DELETE HIGH QUALITY FILES (कभी भी नहीं!)
         if existing_source in HIGH_QUALITY_SOURCES:
@@ -139,24 +150,28 @@ def should_delete_existing(existing_quality: dict, new_quality: dict, existing_l
         # ✅ RULE 3: Delete LOW quality (CAMRip, DVDScr, HDTC, TS, TC, आदि)
         # जब HIGH or MEDIUM quality आए
         if existing_source in LOW_QUALITY_SOURCES:
-            if new_source in HIGH_QUALITY_SOURCES or new_source in MEDIUM_QUALITY_SOURCES:
-                logger.info(f"[QUALITY] ✅ DELETE LOW: {existing_source.upper()} → {new_source.upper()}")
-                logger.info(f"[QUALITY] Reason: LOW quality file को बेहतर quality से replace किया")
+            if new_source in HIGH_QUALITY_SOURCES:
+                logger.info(f"[QUALITY] ✅ DELETE LOW→HIGH: {existing_source.upper()} → {new_source.upper()}")
+                logger.info(f"[QUALITY] Reason: LOW quality file को HIGH quality से replace किया जा रहा है")
+                return True
+            elif new_source in MEDIUM_QUALITY_SOURCES:
+                logger.info(f"[QUALITY] ✅ DELETE LOW→MEDIUM: {existing_source.upper()} → {new_source.upper()}")
+                logger.info(f"[QUALITY] Reason: LOW quality file को MEDIUM quality से replace किया जा रहा है")
                 return True
         
         # ✅ RULE 4: Delete MEDIUM quality (DVDRip, TVRip, HDTV)
         # जब HIGH quality आए
         elif existing_source in MEDIUM_QUALITY_SOURCES:
             if new_source in HIGH_QUALITY_SOURCES:
-                logger.info(f"[QUALITY] ✅ DELETE MEDIUM: {existing_source.upper()} → {new_source.upper()}")
-                logger.info(f"[QUALITY] Reason: MEDIUM quality file को HIGH quality से replace किया")
+                logger.info(f"[QUALITY] ✅ DELETE MEDIUM→HIGH: {existing_source.upper()} → {new_source.upper()}")
+                logger.info(f"[QUALITY] Reason: MEDIUM quality file को HIGH quality से replace किया जा रहा है")
                 return True
         
         logger.info(f"[QUALITY] ✅ KEEP: No deletion criteria met (safe to keep)")
         return False
         
     except Exception as e:
-        logger.error(f"Error in should_delete_existing: {e}")
+        logger.error(f"[QUALITY] Error in should_delete_existing: {e}", exc_info=True)
         return False
 
 # 🔧 IMPROVED: Extract title with Season/Episode/Year handling
@@ -247,13 +262,20 @@ async def find_and_delete_lower_quality(
                 existing_quality = extract_quality_info(existing_filename, existing_caption or "")
 
                 existing_langs = extract_language(f"{existing_filename} {existing_caption or ''}")
+                existing_source = (existing_quality.get('source') or '').lower().strip()
 
-                logger.debug(
-                    f"[QUALITY] Comparing:\n"
-                    f"  Existing: {existing_filename[:50]} | Quality: {existing_quality.get('source')} | Langs: {existing_langs}\n"
-                    f"  New: {new_filename[:50]} | Quality: {new_source} | Langs: {new_langs}"
+                # ✅ NEW: Detailed logging for quality detection
+                logger.info(
+                    f"[QUALITY] Comparing files:\n"
+                    f"  Existing: {existing_filename[:60]}\n"
+                    f"    Quality: {existing_source.upper() if existing_source else 'UNKNOWN'}\n"
+                    f"    Languages: {existing_langs}\n"
+                    f"  New: {new_filename[:60]}\n"
+                    f"    Quality: {new_source.upper() if new_source else 'UNKNOWN'}\n"
+                    f"    Languages: {new_langs}"
                 )
 
+                # ✅ NEW: Log the deletion decision reason
                 if should_delete_existing(existing_quality, new_quality, existing_langs, new_langs):
                     try:
                         await db_collection.delete_one({'_id': existing_file['_id']})
@@ -262,17 +284,23 @@ async def find_and_delete_lower_quality(
                         logger.warning(
                             f"[QUALITY] ✅ DELETED lower quality file:\n"
                             f"  📄 {existing_filename[:70]}\n"
-                            f"  🎬 Source: {existing_quality.get('source', 'N/A').upper()} | Langs: {langs_str}\n"
+                            f"  🎬 Source: {existing_source.upper() if existing_source else 'UNKNOWN'} | Langs: {langs_str}\n"
                             f"  🔄 Replaced by: {new_filename[:70]}\n"
                         )
                     except Exception as e:
                         logger.error(f"[QUALITY] ❌ Error deleting file {existing_filename}: {e}")
                 else:
                     kept_files.append(existing_filename)
-                    logger.info(f"[QUALITY] ✅ KEPT: {existing_filename[:50]}")
+                    # ✅ NEW: Log why we kept it
+                    if existing_source in LOW_QUALITY_SOURCES:
+                        logger.info(f"[QUALITY] Keeping LOW quality: {existing_source.upper()} - Language check may have failed or new source issue")
+                    elif existing_source in MEDIUM_QUALITY_SOURCES:
+                        logger.info(f"[QUALITY] Keeping MEDIUM quality: {existing_source.upper()} - New source not HIGH quality")
+                    else:
+                        logger.info(f"[QUALITY] ✅ KEPT: {existing_filename[:50]}")
                     
             except Exception as e:
-                logger.error(f"[QUALITY] Error processing file: {e}")
+                logger.error(f"[QUALITY] Error processing file: {e}", exc_info=True)
                 continue
 
         if deleted_count > 0:
