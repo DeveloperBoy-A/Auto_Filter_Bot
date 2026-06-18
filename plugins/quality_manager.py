@@ -199,119 +199,149 @@ def get_base_title(filename: str) -> str:
     return text
 
 # ✅ MODIFIED: Only searches and deletes LOW → HIGH/MEDIUM quality
-async def find_and_delete_lower_quality(
+async def find_and_delete_lower_quality_SIMPLE(
     db_collection, new_filename: str, new_caption: str = "", file_id: Optional[str] = None
 ) -> Tuple[bool, str]:
     """
-    ✅ MODIFIED: Only deletes LOW quality files when HIGH quality found
-    NEVER deletes HIGH quality files (WebRip, WEB-DL, BluRay, HDRip)
-    NEVER deletes based on resolution
+    ✅ SIMPLIFIED: Direct approach without relying on pattern matching
+    
+    Simply check ALL files in DB:
+    1. If source is in LOW_QUALITY_SOURCES
+    2. AND base title matches
+    3. AND language subset matches
+    4. DELETE IT!
     """
     try:
-        if not new_filename or not isinstance(new_filename, str):
-            return False, "Invalid filename provided"
-
+        # Get new file quality
         new_quality = extract_quality_info(new_filename, new_caption or "")
-
-        if not new_quality['source']:
-            return True, "No quality info found in new file, skipping cleanup"
-
-        # ✅ NEW: Only cleanup if new file is HIGH or MEDIUM quality
-        # Don't cleanup if new file is also LOW quality
-        new_source = new_quality.get('source', '').lower()
-        if not (new_source in HIGH_QUALITY_SOURCES or new_source in MEDIUM_QUALITY_SOURCES):
-            logger.info(f"[QUALITY] ℹ️  New file is LOW quality ({new_source}), skipping cleanup")
-            return True, "New file is low quality, not deleting anything"
-
+        new_source = (new_quality.get('source') or '').lower().strip()
+        
+        # Only process if new file is HIGH or MEDIUM quality
+        if new_source not in HIGH_QUALITY_SOURCES and new_source not in MEDIUM_QUALITY_SOURCES:
+            logger.info(f"[QUALITY] New file is LOW quality ({new_source}), not processing")
+            return True, "New file is low quality"
+        
+        # Get base title
         base_title = get_base_title(new_filename)
         if not base_title:
-            return True, "Could not extract title for comparison"
-
-        try:
-            words = [w for w in base_title.split() if len(w) > 2]
-
-            if len(words) > 0:
-                significant_words = words[:4] if len(words) >= 4 else words
-                pattern = ".*".join([rf"{re.escape(w)}" for w in significant_words])
-            else:
-                pattern = re.escape(base_title)
-
-            logger.debug(f"[QUALITY] Search pattern for '{base_title}': {pattern}")
-
-        except Exception as e:
-            return False, f"Error building search pattern: {str(e)}"
-
-        # ✅ IMPROVED: Case-insensitive regex search
-        search_query = {'file_name': {'$regex': pattern, '$options': 'i'}}
-        if file_id:
-            search_query['_id'] = {'$ne': file_id}
-
-        similar_files = await db_collection.find(search_query).to_list(None)
-        logger.info(f"[QUALITY] Found {len(similar_files)} similar files for deletion check")
-
-        deleted_count = 0
-        kept_files = []
-
+            logger.warning(f"[QUALITY] Could not extract base title from {new_filename}")
+            return True, "Could not extract title"
+        
+        # Get new file languages
         new_langs = extract_language(f"{new_filename} {new_caption or ''}")
-        logger.debug(f"[QUALITY] New file languages: {new_langs}")
-
-        for existing_file in similar_files:
+        logger.info(f"[QUALITY] NEW FILE: {new_source.upper()} | Langs: {new_langs} | Base: '{base_title}'")
+        
+        # 🔴 DIRECT APPROACH: Get ALL files and check each
+        all_files = await db_collection.find({}).to_list(None)
+        
+        deleted_count = 0
+        deleted_files = []
+        
+        for file_in_db in all_files:
             try:
-                existing_filename = existing_file.get('file_name', '')
-                existing_caption = existing_file.get('caption', '')
+                existing_filename = file_in_db.get('file_name', '')
+                existing_caption = file_in_db.get('caption', '')
+                
+                # Skip if same file
+                if file_id and file_in_db.get('_id') == file_id:
+                    logger.debug(f"[QUALITY] Skipping same file: {existing_filename[:50]}")
+                    continue
+                
+                # Check if base title matches (simplified)
+                existing_base_title = get_base_title(existing_filename)
+                
+                # Simple title matching: at least 50% words match
+                existing_words = set(existing_base_title.split())
+                new_words = set(base_title.split())
+                
+                if not existing_words or not new_words:
+                    continue
+                
+                # Calculate match percentage
+                common_words = existing_words & new_words
+                match_percentage = len(common_words) / max(len(existing_words), len(new_words))
+                
+                if match_percentage < 0.5:
+                    logger.debug(f"[QUALITY] Title no match: {existing_base_title} ({match_percentage:.0%})")
+                    continue
+                
+                # Title matches! Now check quality
                 existing_quality = extract_quality_info(existing_filename, existing_caption or "")
-
-                existing_langs = extract_language(f"{existing_filename} {existing_caption or ''}")
                 existing_source = (existing_quality.get('source') or '').lower().strip()
-
-                # ✅ NEW: Detailed logging for quality detection
-                logger.info(
-                    f"[QUALITY] Comparing files:\n"
+                existing_langs = extract_language(f"{existing_filename} {existing_caption or ''}")
+                
+                logger.debug(
+                    f"[QUALITY] FOUND MATCH:\n"
                     f"  Existing: {existing_filename[:60]}\n"
-                    f"    Quality: {existing_source.upper() if existing_source else 'UNKNOWN'}\n"
-                    f"    Languages: {existing_langs}\n"
-                    f"  New: {new_filename[:60]}\n"
-                    f"    Quality: {new_source.upper() if new_source else 'UNKNOWN'}\n"
-                    f"    Languages: {new_langs}"
+                    f"    Source: {existing_source.upper() if existing_source else 'UNKNOWN'}\n"
+                    f"    Langs: {existing_langs}\n"
+                    f"    Match: {match_percentage:.0%}"
                 )
-
-                # ✅ NEW: Log the deletion decision reason
-                if should_delete_existing(existing_quality, new_quality, existing_langs, new_langs):
-                    try:
-                        await db_collection.delete_one({'_id': existing_file['_id']})
-                        deleted_count += 1
-                        langs_str = ", ".join(existing_langs) if existing_langs else "Unknown"
-                        logger.warning(
-                            f"[QUALITY] ✅ DELETED lower quality file:\n"
-                            f"  📄 {existing_filename[:70]}\n"
-                            f"  🎬 Source: {existing_source.upper() if existing_source else 'UNKNOWN'} | Langs: {langs_str}\n"
-                            f"  🔄 Replaced by: {new_filename[:70]}\n"
-                        )
-                    except Exception as e:
-                        logger.error(f"[QUALITY] ❌ Error deleting file {existing_filename}: {e}")
-                else:
-                    kept_files.append(existing_filename)
-                    # ✅ NEW: Log why we kept it
-                    if existing_source in LOW_QUALITY_SOURCES:
-                        logger.info(f"[QUALITY] Keeping LOW quality: {existing_source.upper()} - Language check may have failed or new source issue")
-                    elif existing_source in MEDIUM_QUALITY_SOURCES:
-                        logger.info(f"[QUALITY] Keeping MEDIUM quality: {existing_source.upper()} - New source not HIGH quality")
-                    else:
-                        logger.info(f"[QUALITY] ✅ KEPT: {existing_filename[:50]}")
+                
+                # 🔴 CHECK 1: HIGH quality files - NEVER delete
+                if existing_source in HIGH_QUALITY_SOURCES:
+                    logger.info(f"[QUALITY] ✅ KEEP HIGH: {existing_source.upper()} (never delete)")
+                    continue
+                
+                # 🔴 CHECK 2: LOW quality - DELETE if language matches
+                if existing_source in LOW_QUALITY_SOURCES:
+                    existing_set = set(existing_langs)
+                    new_set = set(new_langs)
                     
+                    if existing_set <= new_set:  # Language subset check
+                        logger.warning(
+                            f"[QUALITY] ✅ DELETE LOW QUALITY:\n"
+                            f"  📄 {existing_filename[:70]}\n"
+                            f"  Source: {existing_source.upper()}\n"
+                            f"  Reason: LOW quality file replaced by {new_source.upper()}"
+                        )
+                        
+                        try:
+                            await db_collection.delete_one({'_id': file_in_db['_id']})
+                            deleted_count += 1
+                            deleted_files.append(existing_filename)
+                        except Exception as e:
+                            logger.error(f"[QUALITY] Error deleting: {e}")
+                    else:
+                        logger.info(f"[QUALITY] ✅ KEEP LOW: Language mismatch {existing_set} not subset of {new_set}")
+                
+                # 🔴 CHECK 3: MEDIUM quality - DELETE if new is HIGH
+                elif existing_source in MEDIUM_QUALITY_SOURCES:
+                    if new_source in HIGH_QUALITY_SOURCES:
+                        existing_set = set(existing_langs)
+                        new_set = set(new_langs)
+                        
+                        if existing_set <= new_set:
+                            logger.warning(
+                                f"[QUALITY] ✅ DELETE MEDIUM QUALITY:\n"
+                                f"  📄 {existing_filename[:70]}\n"
+                                f"  Source: {existing_source.upper()}\n"
+                                f"  Reason: MEDIUM quality file replaced by {new_source.upper()}"
+                            )
+                            
+                            try:
+                                await db_collection.delete_one({'_id': file_in_db['_id']})
+                                deleted_count += 1
+                                deleted_files.append(existing_filename)
+                            except Exception as e:
+                                logger.error(f"[QUALITY] Error deleting: {e}")
+                        else:
+                            logger.info(f"[QUALITY] ✅ KEEP MEDIUM: Language mismatch")
+            
             except Exception as e:
                 logger.error(f"[QUALITY] Error processing file: {e}", exc_info=True)
                 continue
-
+        
         if deleted_count > 0:
-            return True, f"✅ Cleanup completed:\n 🗑️ Deleted: {deleted_count} file(s)\n ✨ Kept: {len(kept_files)} file(s)"
+            logger.info(f"[QUALITY] ✅ CLEANUP DONE: Deleted {deleted_count} LOW/MEDIUM quality files")
+            return True, f"✅ Deleted {deleted_count} files"
         else:
-            return True, "ℹ️ No lower quality files to delete"
-
+            logger.info(f"[QUALITY] No LOW/MEDIUM quality files to delete")
+            return True, "No lower quality files to delete"
+    
     except Exception as e:
-        logger.error(f"[QUALITY] ❌ Error in find_and_delete_lower_quality: {e}", exc_info=True)
-        return False, f"Error during quality cleanup: {str(e)}"
-
+        logger.error(f"[QUALITY] Error in find_and_delete_lower_quality: {e}", exc_info=True)
+        return False, f"Error: {str(e)}"
 
 # ✅ MODIFIED cleanup_duplicates function
 async def cleanup_duplicates(db_collection, base_title: str, keep_highest_quality: bool = True) -> Tuple[int, List[str]]:
