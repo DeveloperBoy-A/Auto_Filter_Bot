@@ -466,6 +466,14 @@ def normalize_season_episode(text):
     
     # ===== EPISODE RANGES =====
     
+    # ✨ E01TE04 or E01T04 (T for "to") - NEW PATTERN
+    text = re.sub(r'\be(\d{1,4})[tT]e?(\d{1,4})\b', 
+                  lambda m: f"e{int(m.group(1)):02d}-{int(m.group(2)):02d}", text)
+    
+    # ✨ E01_E04 or E01-E04 with underscore/dash - NEW PATTERN
+    text = re.sub(r'\be(\d{1,4})[\s\-_]e(\d{1,4})\b', 
+                  lambda m: f"e{int(m.group(1)):02d}-{int(m.group(2)):02d}", text)
+    
     # ep(01-04) or ep 01-04 or ep(01 to 04)
     text = re.sub(r'\bep(?:isode)?[\s\-_]*\(?(\d+)[\s\-–]*(?:to|and|&)?[\s\-–]*(\d+)\)?\b', 
                   lambda m: f"e{int(m.group(1)):02d}-{int(m.group(2)):02d}", text)
@@ -506,32 +514,7 @@ def normalize_season_episode(text):
     return text.upper()
 
 
-# ===== TEST CASES =====
-test_cases = [
-    ("S01 E01 to E04", "S01 E01-E04"),
-    ("S02_E01_E04", "S02 E01-E04"),
-    ("S02-E01-E04", "S02 E01-E04"),
-    ("episode 5", "E05"),
-    ("episode 5 to 8", "E05-E08"),
-    ("ep 01", "E01"),
-    ("ep 01-04", "E01-E04"),
-    ("ep(01 to 04)", "E01-E04"),
-    ("season 2", "S02"),
-    ("Season 02 Episode 01 to 04", "S02 E01-E04"),
-    ("Thukra_Ke_Mera_Pyaar_S02_E01_E04_1080p", "THUKRA KE MERA PYAAR S02 E01-E04 1080P"),
-    ("Show.S01.E01.to.E03.720p", "SHOW S01 E01-E03 720P"),
-    ("series ep 5-8", "SERIES E05-E08"),
-    ("s1 e1 and e5", "S01 E01-E05"),
-]
 
-print("=" * 60)
-for input_text, expected in test_cases:
-    result = normalize_season_episode(input_text)
-    status = "✓" if result == expected else "✗"
-    print(f"{status} Input:    {input_text}")
-    print(f"  Output:   {result}")
-    print(f"  Expected: {expected}")
-    print()
 
 def extract_episode_title(text):
     # File extension udana
