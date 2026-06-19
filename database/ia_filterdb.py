@@ -435,26 +435,103 @@ def extract_pure_title(original_name):
 # =========================================================
 # 3. CUSTOM SEASON & EPISODE NORMALIZER (ULTRA PRO MAX)
 # =========================================================
+
 def normalize_season_episode(text):
     text = text.lower()
 
+    # ===== SEASON + EPISODE RANGES =====
+    
+    # S02.E01 -> S02 E01
     text = re.sub(r'\bs(\d{1,2})\.e(\d{1,4})\b', r's\1 e\2', text)
-    text = re.sub(r'\bs(\d{1,2})e(\d{1,4})e(\d{1,4})\b', lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}-{int(m.group(3)):02d}", text)
-    text = re.sub(r'\bs(\d{1,2})[\s\-]*e(\d{1,4})[\s\-_]*(?:&|and|to)[\s\-_]*e?(\d{1,4})\b', lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}-{int(m.group(3)):02d}", text)
-    text = re.sub(r'\bs(\d{1,2})[\s\-]*e(\d{1,4})[\s\-_]+e?(\d{1,4})\b', lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}-{int(m.group(3)):02d}", text)
-    text = re.sub(r'\b(\d{1,2})[xX](\d{1,4})[\s\-_]+(?:\d{1,2}[xX])?(\d{1,4})\b', lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}-{int(m.group(3)):02d}", text)
-    text = re.sub(r'\bs(\d{1,2})[\s\-]+s?(\d{1,2})\b', lambda m: f"s{int(m.group(1)):02d}-{int(m.group(2)):02d}", text)
-    text = re.sub(r'\bep[\s\-_]*\(?(\d+)[\s\-–]+(\d+)\)?', lambda m: f"e{int(m.group(1)):02d}-{int(m.group(2)):02d}", text)
-    text = re.sub(r'\be(\d{1,4})[\s\-–]+e(\d{1,4})\b', lambda m: f"e{int(m.group(1)):02d}-{int(m.group(2)):02d}", text)
-    text = re.sub(r'\b(\d{2})[\s\-–]+(\d{2})\b', lambda m: f"e{int(m.group(1)):02d}-{int(m.group(2)):02d}" if int(m.group(1)) < 60 and int(m.group(2)) < 60 else m.group(0), text)
-    text = re.sub(r'\b(\d{1,2})[xX](\d{1,4})\b', lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}", text)
-    text = re.sub(r'\b(?:season|s)[\s\-_]*(\d{1,2})\b', lambda m: f"s{int(m.group(1)):02d}", text)
-    text = re.sub(r'\b(?:episode|ep|e)[\s\-_]*(\d{1,4})\b', lambda m: f"e{int(m.group(1)):02d}", text)
+    
+    # S02E01E04 or S02_E01_E04 or S02-E01-E04
+    text = re.sub(r'\bs(\d{1,2})[\s\-_]*e(\d{1,4})[\s\-_]*e(\d{1,4})\b', 
+                  lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}-{int(m.group(3)):02d}", text)
+    
+    # S02 E01 to E04 / S02 E01 and E04 / S02 E01 & E04
+    text = re.sub(r'\bs(\d{1,2})[\s\-_]*e(\d{1,4})[\s\-_]*(?:to|&|and)[\s\-_]*e?(\d{1,4})\b', 
+                  lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}-{int(m.group(3)):02d}", text)
+    
+    # S02-E01-E04 (multiple separators)
+    text = re.sub(r'\bs(\d{1,2})[\s\-_]+e(\d{1,4})[\s\-_]+e?(\d{1,4})\b', 
+                  lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}-{int(m.group(3)):02d}", text)
+    
+    # 2x01-04 or 2x01 04
+    text = re.sub(r'\b(\d{1,2})[xX](\d{1,4})[\s\-_]+(?:\d{1,2}[xX])?(\d{1,4})\b', 
+                  lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}-{int(m.group(3)):02d}", text)
+    
+    # Season range (S02-S04)
+    text = re.sub(r'\bs(\d{1,2})[\s\-_]+s?(\d{1,2})\b', 
+                  lambda m: f"s{int(m.group(1)):02d}-{int(m.group(2)):02d}", text)
+    
+    # ===== EPISODE RANGES =====
+    
+    # ep(01-04) or ep 01-04 or ep(01 to 04)
+    text = re.sub(r'\bep(?:isode)?[\s\-_]*\(?(\d+)[\s\-–]*(?:to|and|&)?[\s\-–]*(\d+)\)?\b', 
+                  lambda m: f"e{int(m.group(1)):02d}-{int(m.group(2)):02d}", text)
+    
+    # e01-e04 or e01 to e04
+    text = re.sub(r'\be(\d{1,4})[\s\-–]*(?:to|and|&)?[\s\-–]*e?(\d{1,4})\b', 
+                  lambda m: f"e{int(m.group(1)):02d}-{int(m.group(2)):02d}" if len(m.group(2)) > 0 else f"e{int(m.group(1)):02d}", text)
+    
+    # 01-04 (only if both numbers < 60)
+    text = re.sub(r'\b(\d{2})[\s\-–]+(\d{2})\b', 
+                  lambda m: f"e{int(m.group(1)):02d}-{int(m.group(2)):02d}" if int(m.group(1)) < 60 and int(m.group(2)) < 60 else m.group(0), text)
+    
+    # 2x01
+    text = re.sub(r'\b(\d{1,2})[xX](\d{1,4})\b', 
+                  lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}", text)
+    
+    # ===== STANDALONE PATTERNS =====
+    
+    # Season (season 2, s 2, season2, s2)
+    text = re.sub(r'\b(?:season)[\s\-_]*(\d{1,2})\b', 
+                  lambda m: f"s{int(m.group(1)):02d}", text)
+    text = re.sub(r'\bs[\s\-_]*(\d{1,2})\b', 
+                  lambda m: f"s{int(m.group(1)):02d}", text)
+    
+    # Episode (episode 5, ep 5, e 5, episode5)
+    text = re.sub(r'\b(?:episode)[\s\-_]*(\d{1,4})\b', 
+                  lambda m: f"e{int(m.group(1)):02d}", text)
+    text = re.sub(r'\bep(?:isode)?[\s\-_]*(\d{1,4})\b', 
+                  lambda m: f"e{int(m.group(1)):02d}", text)
+    text = re.sub(r'\be[\s\-_]*(\d{1,4})\b', 
+                  lambda m: f"e{int(m.group(1)):02d}", text)
+    
+    # ===== FINAL CLEANUP =====
+    
     text = re.sub(r'\bs(\d{2})e(\d{2,4})\b', r's\1 e\2', text)
-
     text = re.sub(r'\s+', ' ', text).strip()
+    
     return text.upper()
 
+
+# ===== TEST CASES =====
+test_cases = [
+    ("S01 E01 to E04", "S01 E01-E04"),
+    ("S02_E01_E04", "S02 E01-E04"),
+    ("S02-E01-E04", "S02 E01-E04"),
+    ("episode 5", "E05"),
+    ("episode 5 to 8", "E05-E08"),
+    ("ep 01", "E01"),
+    ("ep 01-04", "E01-E04"),
+    ("ep(01 to 04)", "E01-E04"),
+    ("season 2", "S02"),
+    ("Season 02 Episode 01 to 04", "S02 E01-E04"),
+    ("Thukra_Ke_Mera_Pyaar_S02_E01_E04_1080p", "THUKRA KE MERA PYAAR S02 E01-E04 1080P"),
+    ("Show.S01.E01.to.E03.720p", "SHOW S01 E01-E03 720P"),
+    ("series ep 5-8", "SERIES E05-E08"),
+    ("s1 e1 and e5", "S01 E01-E05"),
+]
+
+print("=" * 60)
+for input_text, expected in test_cases:
+    result = normalize_season_episode(input_text)
+    status = "✓" if result == expected else "✗"
+    print(f"{status} Input:    {input_text}")
+    print(f"  Output:   {result}")
+    print(f"  Expected: {expected}")
+    print()
 
 def extract_episode_title(text):
     # File extension udana
