@@ -583,7 +583,8 @@ def extract_languages_quality(text_to_scan):
     season_episode = None
     episode_title = None
 
-    full_match = re.search(r'\b(S\d{2})\s(E\d{2,4}(?:-\d{2,4})?)\b', normalized_se)
+    # ✅ FIXED: More flexible pattern for season/episode
+    full_match = re.search(r'\b(S\d{2})[\s\-]*?(E\d{2,4}(?:[\s\-]*E?[-\s]*\d{2,4})?)\b', normalized_se)
     if full_match:
         season_episode = full_match.group(0)
         episode_title = extract_episode_title(text_to_scan)
