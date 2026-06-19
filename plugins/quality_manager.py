@@ -199,7 +199,9 @@ def get_base_title(filename: str) -> str:
     return text
 
 # ✅ MODIFIED: Only searches and deletes LOW → HIGH/MEDIUM quality
-async def find_and_delete_lower_quality_SIMPLE(
+# ✅ SIMPLIFIED & DIRECT: Find and Delete LOW Quality Files
+
+async def find_and_delete_lower_quality(
     db_collection, new_filename: str, new_caption: str = "", file_id: Optional[str] = None
 ) -> Tuple[bool, str]:
     """
@@ -342,6 +344,8 @@ async def find_and_delete_lower_quality_SIMPLE(
     except Exception as e:
         logger.error(f"[QUALITY] Error in find_and_delete_lower_quality: {e}", exc_info=True)
         return False, f"Error: {str(e)}"
+
+
 
 # ✅ MODIFIED cleanup_duplicates function
 async def cleanup_duplicates(db_collection, base_title: str, keep_highest_quality: bool = True) -> Tuple[int, List[str]]:
