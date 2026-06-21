@@ -39,19 +39,19 @@ IGNORE_WORDS = {
 
 # Constants
 CAPTION_LANGUAGES = {
-    "hin": "Hindi", "hindi": "Hindi",
-    "tam": "Tamil", "tamil": "Tamil",
-    "kan": "Kannada", "kannada": "Kannada",
-    "tel": "Telugu", "telugu": "Telugu",
-    "mal": "Malayalam", "malayalam": "Malayalam",
-    "eng": "English", "english": "English",
-    "pun": "Punjabi", "punjabi": "Punjabi",
-    "ben": "Bengali", "bengali": "Bengali",
-    "mar": "Marathi", "marathi": "Marathi",
-    "guj": "Gujarati", "gujarati": "Gujarati",
-    "urd": "Urdu", "urdu": "Urdu",
-    "kor": "Korean", "korean": "Korean",
-    "jpn": "Japanese", "japanese": "Japanese",
+    r"\bhin\b": "Hindi", r"\bhindi\b": "Hindi",
+    r"\btam\b": "Tamil", r"\btamil\b": "Tamil",
+    r"\bkan\b": "Kannada", r"\bkannada\b": "Kannada",
+    r"\btel\b": "Telugu", r"\btelugu\b": "Telugu",
+    r"\bmal\b": "Malayalam", r"\bmalayalam\b": "Malayalam",
+    r"\beng\b": "English", r"\benglish\b": "English",
+    r"\bpun\b": "Punjabi", r"\bpunjabi\b": "Punjabi",
+    r"\bben\b": "Bengali", r"\bbengali\b": "Bengali",
+    r"\bmar\b": "Marathi", r"\bmarathi\b": "Marathi",
+    r"\bguj\b": "Gujarati", r"\bgujarati\b": "Gujarati",
+    r"\burd\b": "Urdu", r"\burdu\b": "Urdu",
+    r"\bkor\b": "Korean", r"\bkorean\b": "Korean",
+    r"\bjpn\b": "Japanese", r"\bjapanese\b": "Japanese",
 }
 
 OTT_PLATFORMS = {
