@@ -112,17 +112,31 @@ def extract_ott_platform(text: str) -> str:
     return " | ".join(platforms) if platforms else "N/A"
 
 def extract_season_episode(filename: str) -> Tuple[Optional[int], Optional[str]]:
+    """🎯 IMPROVED: Better episode extraction"""
     if m := EP_ONLY_RANGE.search(filename):
         return 1, f"{int(m.group(1))}-{int(m.group(2))}"
     for pattern in (RANGE_REGEX, SINGLE_REGEX, NAMED_REGEX):
         if m := pattern.search(filename):
             season = int(m.group(1))
             if pattern == RANGE_REGEX:
-                ep = f"{m.group(2)}-{m.group(3)}"
+                ep = f"{int(m.group(2)):02d}-{int(m.group(3)):02d}"
             else:
-                ep = m.group(2)
+                ep = f"{int(m.group(2)):02d}"
             return season, ep
     return None, None
+
+def extract_language(filename: str, caption: str = "") -> str:
+    """🎯 IMPROVED: Better language detection"""
+    combined_text = f"{filename} {caption}".lower()
+    
+    languages = set()
+    for pattern, lang_name in CAPTION_LANGUAGES.items():
+        if re.search(pattern, combined_text):
+            languages.add(lang_name)
+    
+    if languages:
+        return ", ".join(sorted(languages))
+    return "N/A"
 
 def schedule_update(bot, base_name, delay=5):
     if handle := pending_updates.get(base_name):
@@ -134,7 +148,9 @@ def schedule_update(bot, base_name, delay=5):
         delay,
         lambda: asyncio.create_task(update_movie_message(bot, base_name))
     )
+
 def extract_media_info(filename: str, caption: str):
+    """🎯 IMPROVED: Cleaner base_name extraction without garbage"""
     filename = normalize(clean_mentions_links(filename).title())
     caption_clean = clean_mentions_links(caption).lower() if caption else ""
     unified = f"{caption_clean} {filename.lower()}".strip()
@@ -144,26 +160,28 @@ def extract_media_info(filename: str, caption: str):
     processed_raw = base_raw = filename
     quality = get_qualities(caption_clean) or get_qualities(filename.lower()) or "N/A"
     ott_platform = extract_ott_platform(f"{filename} {caption_clean}")
-
-    lang_keys = {k for k in CAPTION_LANGUAGES if k in caption_clean or k in filename.lower()}
-    language = ", ".join(sorted({CAPTION_LANGUAGES[k] for k in lang_keys})) if lang_keys else "N/A"
+    language = extract_language(filename, caption_clean)
 
     season, episode = extract_season_episode(filename)
+    
     if season is not None:
         tag = "#SERIES"
-        if m := (RANGE_REGEX.search(filename) or SINGLE_REGEX.search(filename) or NAMED_REGEX.search(filename) or EP_ONLY_RANGE.search(filename)):
+        # Find where season/episode pattern ends
+        if m := (RANGE_REGEX.search(filename) or SINGLE_REGEX.search(filename) or 
+                 NAMED_REGEX.search(filename) or EP_ONLY_RANGE.search(filename)):
             match_str = m.group(0)
-            start_idx = filename.lower().find(match_str.lower())
-            end_idx = start_idx + len(match_str)
+            end_idx = filename.lower().find(match_str.lower()) + len(match_str)
+            base_raw = filename[:filename.lower().find(match_str.lower())].strip()
             processed_raw = filename[:end_idx]
-            base_raw = filename[:start_idx]
-            if year_match := YEAR_PATTERN.search(filename.lower()[end_idx:]):
-                y = year_match.group(0)
-                yi = filename.lower().find(y, end_idx)
-                if yi != -1:
-                    processed_raw = filename[:yi+4]
-                    base_raw += f" {y}"
+            
+            # Try to find year after season/episode
+            if year_match := YEAR_PATTERN.search(filename[end_idx:]):
+                year = year_match.group(0)
+                year_idx = filename.lower().find(year, end_idx)
+                if year_idx != -1:
+                    processed_raw = filename[:year_idx + 4]
     else:
+        # Movie mode: find year or quality cutoff
         if year_match := YEAR_PATTERN.search(unified):
             year = year_match.group(0)
             year_idx = filename.lower().find(year.lower())
@@ -175,67 +193,25 @@ def extract_media_info(filename: str, caption: str):
                 qual_str = qual_match.group(0)
                 qual_idx = filename.lower().find(qual_str.lower())
                 if qual_idx != -1:
-                    processed_raw = filename[:qual_idx]
+                    processed_raw = filename[:qual_idx].strip()
                     base_raw = processed_raw
 
+    # Clean base_name
     base_name = normalize(remove_ignored_words(normalize(base_raw)))
+    
+    # Add year if not present
+    if year and year not in base_name:
+        base_name += f" {year}"
+    
+    # Remove trailing parentheses with year
+    base_name = re.sub(r"\s*\(\d{4}\)\s*$", "", base_name).strip()
     if year and year not in base_name:
         base_name += f" {year}"
 
-    if base_name.endswith(")"):
-        base_name = re.sub(r"\s+\(\d{4}\)$", "", base_name)
-        if year:
-            base_name += f" {year}"
-
-    # -------------------------
-    # NEW: strip season/episode tokens from final base_name
-    # -------------------------
-    def _strip_season_episode_tokens(name: str) -> str:
-        """
-        Remove common season/episode markers from a title while preserving a trailing year.
-        Examples removed: S01, s01e02, 1x02, season 1, ep 02, episode 2, part 1
-        """
-        if not name:
-            return name
-
-        # Preserve trailing year (e.g. "Title (2020)" or "Title 2020")
-        year_match = re.search(r'\(?\b(19|20)\d{2}\b\)?\s*$', name)
-        year_part = ""
-        if year_match:
-            year_part = year_match.group(0)
-            name = name[:year_match.start()].strip()
-
-        # Common patterns to remove
-        patterns = [
-            r'\bS\d{1,2}E\d{1,2}\b',     # S01E02
-            r'\bS\d{1,2}\b',             # S01
-            r'\bE\d{1,2}\b',             # E02
-            r'\b\d{1,2}x\d{1,2}\b',      # 1x02
-            r'\bSeason\s*\d{1,2}\b',     # Season 1
-            r'\bEp(?:isode)?\.?\s*\d{1,3}\b',  # Ep02, Episode 2
-            r'\bEpisode\s*\d{1,3}\b',
-            r'\bPart\s*\d{1,2}\b'
-        ]
-
-        for p in patterns:
-            name = re.sub(p, ' ', name, flags=re.IGNORECASE)
-
-        # Remove leftover separators and extra whitespace
-        name = re.sub(r'[_\.\-]+', ' ', name)     # underscores/dots/hyphens
-        name = re.sub(r'\s+', ' ', name).strip()
-
-        # Reattach year in canonical form if we removed it earlier
-        if year_part:
-            y = re.search(r'(19|20)\d{2}', year_part)
-            if y:
-                name = f"{name} {y.group(0)}"
-
-        return name.strip()
-
-    base_name = _strip_season_episode_tokens(base_name)
-    # If stripping accidentally removed everything, fall back to a safer value
-    if not base_name:
-        base_name = normalize(remove_ignored_words(normalize(processed_raw))) or filename
+    # Final cleanup: remove any remaining garbage
+    base_name = re.sub(r'\s+', ' ', base_name).strip()
+    if not base_name or base_name.lower() == "n/a":
+        base_name = normalize(remove_ignored_words(filename)).strip() or filename
 
     return {
         "processed": normalize(processed_raw),
@@ -250,7 +226,6 @@ def extract_media_info(filename: str, caption: str):
     }
 
 
-
 @Client.on_message(filters.chat(CHANNELS) & MEDIA_FILTER)
 async def media_handler(bot, message):
     media = next(
@@ -263,11 +238,11 @@ async def media_handler(bot, message):
 
     media.file_type = next(ft for ft in ("document", "video", "audio") if hasattr(message, ft))
     media.caption = message.caption or ""
-    
-    # ✅ FIX #1: Extract language info BEFORE saving
+
+    # Extract language info BEFORE saving
     extracted_info = extract_media_info(media.file_name, media.caption or "")
-    
-    # ✅ FIX #1: Pass extracted_info to save_file
+
+    # Pass extracted_info to save_file
     success, info = await save_file(media, bot=bot, extracted_info=extracted_info)
     if not success:
         return
@@ -275,12 +250,10 @@ async def media_handler(bot, message):
     # === Quality Management Start ===
     try:
         quality_info = extract_quality_info(media.file_name, media.caption)
-        
-        # Log file upload with quality
+
         file_source = quality_info.get('source', 'Unknown').upper() if quality_info.get('source') else 'UNKNOWN'
         file_res = quality_info.get('resolution', 'Unknown').upper() if quality_info.get('resolution') else 'UNKNOWN'
-        
-        # ✅ FIX #1b: Add language to logging
+
         logger.info(
             f"[QUALITY UPLOAD] File saved:\n"
             f"  📄 {media.file_name[:70]}\n"
@@ -289,12 +262,10 @@ async def media_handler(bot, message):
             f"  📊 Score: {quality_info.get('quality_score', 0):.1f}\n"
             f"  🗣️  Language: {extracted_info.get('language', 'N/A')}"
         )
-        
-        # Check if high quality and cleanup
+
         if is_high_quality(quality_info):
             logger.info(f"[QUALITY] ✨ High quality file detected - checking for lower quality duplicates...")
-            
-            # --- First Database (DB1) Cleanup ---
+
             cleanup_success, cleanup_msg = await find_and_delete_lower_quality(
                 db_collection=Media.collection,
                 new_filename=media.file_name,
@@ -303,7 +274,6 @@ async def media_handler(bot, message):
             if cleanup_success:
                 logger.info(f"[QUALITY DB1] {cleanup_msg}")
 
-            # --- Second Database (DB2) Cleanup ---
             if MULTIPLE_DB:
                 cleanup_success2, cleanup_msg2 = await find_and_delete_lower_quality(
                     db_collection=Media2.collection,
@@ -318,10 +288,9 @@ async def media_handler(bot, message):
                 f"  Quality: {file_source} ({quality_info.get('quality_score', 0):.1f})\n"
                 f"  Note: Will be deleted ONLY if higher quality version uploaded later"
             )
-            
+
     except Exception as e:
         logger.error(f"[QUALITY] Error in quality management: {e}", exc_info=True)
-    # === Quality Management End ===
 
     # === Update Processing Start ===
     try:
@@ -329,7 +298,6 @@ async def media_handler(bot, message):
             await process_and_send_update(bot, media.file_name, media.caption)
     except Exception:
         logger.exception("Error processing media")
-
 
 
 async def process_and_send_update(bot, filename, caption):
@@ -351,7 +319,8 @@ async def _process_with_lock(bot, filename, caption, media_info, base_name, proc
         db.movie_updates = db.db.movie_updates
 
     movie_doc = await db.movie_updates.find_one({"_id": base_name})
-    error_tmdb=False
+    error_tmdb = False
+    
     file_data = {
         "filename": filename,
         "processed": processed,
@@ -365,10 +334,11 @@ async def _process_with_lock(bot, filename, caption, media_info, base_name, proc
     }
 
     if not movie_doc:
+        # Fetch movie details
         if TMDB_POSTER:
             details = await get_movie_detailsx(base_name)
             if not details or details.get("error") or (not details.get("poster_url") and not details.get("backdrop_url")):
-                error_tmdb=True
+                error_tmdb = True
                 logger.info("TMDB error switching to IMDB")
                 details = await get_movie_details(base_name) or {}
         else:
@@ -380,20 +350,29 @@ async def _process_with_lock(bot, filename, caption, media_info, base_name, proc
             genres = ", ".join(g for g in genre_list if g in STANDARD_GENRES) or "N/A"
         else:
             genres = ", ".join(g for g in raw_genres if g in STANDARD_GENRES) or "N/A"
+
+        # 🎯 IMPROVED: Better poster selection logic
+        if TMDB_POSTER and not error_tmdb and LANDSCAPE_POSTER and details.get("backdrop_url"):
+            selected_poster = details.get("backdrop_url")
+            is_backdrop = True
+        else:
+            selected_poster = details.get("poster_url") or ""
+            is_backdrop = False
+
         movie_doc = {
             "_id": base_name,
             "files": [file_data],
-            "poster_url": details.get("backdrop_url") if LANDSCAPE_POSTER and TMDB_POSTER and details.get("backdrop_url") and not error_tmdb else details.get("poster_url"),
+            "poster_url": selected_poster,
             "genres": genres,
             "rating": details.get("rating", "N/A"),
-            "imdb_url": details.get("url", "")if not TMDB_POSTER or error_tmdb else details.get("tmdb_url"),
+            "imdb_url": details.get("tmdb_url") if (TMDB_POSTER and not error_tmdb) else details.get("url", ""),
             "year": media_info["year"] or details.get("year"),
             "tag": media_info["tag"],
             "ott_platform": media_info["ott_platform"],
             "message_id": None,
             "is_photo": False,
             "error_tmdb": error_tmdb,
-            "is_backdrop": details.get("backdrop_url")
+            "is_backdrop": is_backdrop
         }
         try:
             await db.movie_updates.insert_one(movie_doc)
@@ -430,8 +409,7 @@ async def send_movie_update(bot, base_name):
                 return None
 
             text = generate_movie_message(movie_doc, base_name)
-            
-            # Movie Search Group button hata diya gaya hai
+
             buttons = InlineKeyboardMarkup([
                 [
                     InlineKeyboardButton(
@@ -487,8 +465,7 @@ async def update_movie_message(bot, base_name):
             return
 
         text = generate_movie_message(movie_doc, base_name)
-        
-        # Movie Search Group button hata diya gaya hai
+
         buttons = InlineKeyboardMarkup([
             [
                 InlineKeyboardButton(
@@ -500,7 +477,7 @@ async def update_movie_message(bot, base_name):
                 InlineKeyboardButton('♻️ Hᴏᴡ Tᴏ Dᴏᴡɴʟᴏᴀᴅ ♻️', url="https://t.me/newmovies_support/1236?single")
             ]
         ])
-        
+
         message_id = movie_doc.get("message_id")
         is_photo = movie_doc.get("is_photo", False)
 
@@ -568,7 +545,7 @@ def get_styled_text(text: str, style_type="bold_serif") -> str:
         'y': '𝐲', 'z': '𝐳',
         '0': '𝟎', '1': '𝟏', '2': '𝟐', '3': '𝟑', '4': '𝟒', '5': '𝟓', '6': '𝟔', '7': '𝟕', '8': '𝟖', '9': '𝟗'
     }
-    
+
     small_caps = {
         'A': 'ᴀ', 'B': 'ʙ', 'C': 'ᴄ', 'D': 'ᴅ', 'E': 'ᴇ', 'F': 'ꜰ', 'G': 'ɢ', 'H': 'ʜ',
         'I': 'ɪ', 'J': 'ᴊ', 'K': 'ᴋ', 'L': 'ʟ', 'M': 'ᴍ', 'N': 'ɴ', 'O': 'ᴏ', 'P': 'ᴘ',
@@ -587,6 +564,7 @@ def get_styled_text(text: str, style_type="bold_serif") -> str:
     return styled
 
 def generate_movie_message(movie_doc, base_name):
+    """🎯 IMPROVED: Better episode and language display"""
     all_qualities = set()
     all_languages = set()
     all_ott_platforms = set()
@@ -609,65 +587,57 @@ def generate_movie_message(movie_doc, base_name):
             episodes_by_season[season].add(episode)
 
     primary_tag = "#SERIES" if "#SERIES" in all_tags else "#MOVIE"
-    
-    # -------------------------
-    # SEASON & EPISODE STYLE
-    # -------------------------
+
+    # ===== SEASON & EPISODE DISPLAY (WITH BETTER FORMATTING) =====
     epi_block = ""
     if episodes_by_season:
         episode_lines = []
-        for season, episodes in sorted(episodes_by_season.items(), key=lambda x: int(x[0])):
-            sorted_eps = sorted(list(episodes), key=lambda x: int(x.split('-')[0]) if '-' in x else int(x))
-            ep_list = ", ".join(sorted_eps)
+        for season in sorted(episodes_by_season.keys(), key=lambda x: int(x)):
+            episodes = sorted(list(episodes_by_season[season]), 
+                            key=lambda x: int(x.split('-')[0]) if '-' in x else int(x))
+            ep_list = ", ".join(episodes)
+            
             line = (
-                f"<b>┇ 💠 Season {int(season):02}</b>\n"
-                f"<b>┇</b> ╰┈ ᴇᴘs: <code>{ep_list}</code>"
+                f"<b>┇ 💠 Season {int(season):02d}</b>\n"
+                f"<b>┇ </b>ᴇᴘɪsᴏᴅᴇs: <code>{ep_list}</code>"
             )
             episode_lines.append(line)
-        epi_str = "\n".join(episode_lines)
-        if epi_str:
-            epi_block = f"<b>┍━━━━━━━━━━━━━━━</b>\n{epi_str}\n<b>┕━━━━━━━━━━━━━━━</b>"
+        
+        if episode_lines:
+            epi_str = "\n".join(episode_lines)
+            epi_block = f"\n<b>━━━━━━━━━━━━━━━━━</b>\n{epi_str}\n<b>━━━━━━━━━━━━━━━━━</b>"
 
-    # -------------------------
-    # PREMIUM STYLING ENGINE
-    # -------------------------
-    # 1. Title -> 𝐏𝐮𝐬𝐡𝐩𝐚 𝟐 𝟐𝟎𝟐𝟒
+    # ===== STYLING =====
     styled_title = get_styled_text(base_name, style_type="bold_serif")
-    
-    # 2. Genres -> ᴀᴄᴛɪᴏɴ, ᴅʀᴀᴍᴀ
     raw_genres = movie_doc.get("genres", "N/A")
     styled_genres = get_styled_text(raw_genres, style_type="small_caps")
     
-    # 3. Languages -> ʜɪɴᴅɪ, ᴛᴀᴍɪʟ
     raw_languages = ", ".join(sorted(all_languages)) if all_languages else "N/A"
     styled_languages = get_styled_text(raw_languages, style_type="small_caps")
-
-    # 4. Quality -> 𝟽𝟸𝟶ᴘ, 𝟷𝟶𝟾𝟶ᴘ
+    
     raw_quality = ", ".join(sorted(all_qualities)) if all_qualities else "N/A"
     styled_quality = get_styled_text(raw_quality, style_type="small_caps")
-
-    # 5. OTT Platform -> ɴᴇᴛꜰʟɪx, ᴀᴍᴀᴢᴏɴ (NEW ✨)
+    
     raw_ott = ", ".join(sorted(all_ott_platforms)) if all_ott_platforms else "N/A"
     styled_ott = get_styled_text(raw_ott, style_type="small_caps")
 
-    # Final Formatting
+    # Final formatting
     return script.MOVIE_UPDATE_NOTIFY_TXT.format(
         poster_url=movie_doc.get("poster_url", ""),
         imdb_url=movie_doc.get("imdb_url", ""),
         filename=styled_title,
         tag=primary_tag,
         genres=styled_genres,
-        ott=styled_ott,              # <--- Styled OTT
+        ott=styled_ott,
         quality=styled_quality,
         language=styled_languages,
-        episodes=epi_block,
+        episodes=epi_block,  # Season/Episode section
         rating=movie_doc.get("rating", "N/A"),
         search_link=temp.B_LINK
     )
 
 
-
-# Replace this with your own channel ID
+# Channel button handler
 CHANNEL_ID = -1002413838031
 
 @Client.on_message(filters.channel & filters.media)
@@ -691,11 +661,7 @@ async def add_button(client, message):
         )
 
         try:
-            # Add the button to the message
             await message.edit_reply_markup(reply_markup=button)
-            await asyncio.sleep(0.5)  # Small delay to handle rapid messages
+            await asyncio.sleep(0.5)
         except Exception as e:
             print(f"Failed to add button: {e}")
-
-
-
