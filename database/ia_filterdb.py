@@ -517,23 +517,22 @@ def normalize_season_episode(text):
 
 
 def extract_episode_title(text):
-    # File extension udana
     text = re.sub(r'\.[a-z0-9]{2,4}$', '', text, flags=re.IGNORECASE)
-
-    # Stop words ki list (Yahan aakar title capture hona ruk jayega)
+    
+    # Aur jyada strict stop words aur emojis add kiye
     stop_keywords = [
         r'19\d{2}', r'20\d{2}', r'2160p', r'1080p', r'720p', r'480p',
         r'web[- ]?dl', r'webrip', r'bluray', r'hdrip', r'x264', r'x265', r'hevc', r'avc',
-        r'aac', r'ac3', r'ddp', r'hindi', r'english', r'tamil', r'telugu', r'malayalam',
-        r'dual', r'multi', r'av1', r'complete', r'combined'
+        r'aac', r'ac3', r'ddp', r'hindi', r'english', r'tamil', r'telugu',
+        r'dual', r'multi', r'combined', r'complete', r'jhs', r'netflix', r'amazon', r'🗃️'
     ]
     stop_pattern = '|'.join(stop_keywords)
-
-    # Lookahead: Stop at any stop_keyword, end of string, OR brackets `[` `(` `@`
-    lookahead = rf'(?=\b(?:{stop_pattern})\b|$|\[|\(|@)'
+    
+    # 🗃️ emoji aur ajeeb symbols par turant ruk jayega
+    lookahead = rf'(?=\b(?:{stop_pattern})\b|$|\[|\(|@|🗃️)'
 
     patterns = [
-        r'(?:S\d{1,2}[\s._\-]*E\d{1,4})[\s._\-]+(.+?)' + lookahead,
+        r'(?:S\d{1,2}[\s._\-]*E\d{1,4}[-\d]*)[\s._\-]+(.+?)' + lookahead,
         r'(?:Episode|Ep)[\s._\-]*\d+[\s._\-]+(.+?)' + lookahead
     ]
 
@@ -541,22 +540,22 @@ def extract_episode_title(text):
         match = re.search(pattern, text, re.IGNORECASE)
         if match:
             title = match.group(1)
-            # Junk characters clean karna
-            title = re.sub(r'[._\-]+', ' ', title)
-            title = re.sub(r'[\[\]\(\)]', '', title)
-            title = re.sub(r'\s+', ' ', title).strip()
-
-            # Ignore karna agar title sirf numbers ho ya empty ho
-            if len(title) > 2 and not re.fullmatch(r'[\d\s\-]+', title):
+            title = re.sub(r'[\s._\-()\[\]]+', ' ', title).strip()
+            
+            # Agar title mein sirf numbers ya symbols bhare hain, toh usko ignore karo
+            if len(title) > 2 and not re.fullmatch(r'[\d\s\-🗃️]+', title):
                 return title.title()
 
     return None
+
 
 # =========================================================
 # 4. UPDATED DATA EXTRACTOR
 # =========================================================
 def extract_languages_quality(text_to_scan):
-    scan_lower = text_to_scan.lower()
+    # 🔥 Underscore aur dots ko space mein badlo taaki regex boundary (\b) fail na ho
+    scan_text = re.sub(r'[._]+', ' ', text_to_scan)
+    scan_lower = scan_text.lower()
 
     year_match = re.search(r'\b(19\d{2}|20[0-2]\d)\b', text_to_scan)
     year = year_match.group(1) if year_match else None
@@ -838,12 +837,17 @@ async def save_file(media, bot=None, extracted_info=None):  # ✅ NEW: Added ext
 
         extracted = extract_languages_quality(text_to_scan)
         
-        # ✅ FIX #2: Use pre-extracted language info if available
-        # This ensures language from caption is properly saved to database
+        # ✅ FIX #2: Merge pre-extracted language info without overwriting existing data
         if extracted_info and extracted_info.get("language") and extracted_info.get("language") != "N/A":
-            # Convert comma-separated language string to list
-            extracted["languages"] = [lang.strip() for lang in extracted_info["language"].split(",")]
-            logger.info(f"[LANGUAGE] Using pre-extracted languages: {extracted['languages']}")
+            # Channel se aayi languages ko list mein badlo
+            channel_langs = [lang.strip() for lang in extracted_info["language"].split(",")]
+            
+            # Agar language pehle se list mein nahi hai, toh hi add karo (Duplicate bachane ke liye)
+            for lang in channel_langs:
+                if lang not in extracted.get("languages", []):
+                    extracted["languages"].append(lang)
+            
+            logger.info(f"[LANGUAGE] Merged languages successfully: {extracted['languages']}")
         
         # --- SMART AUTO-ADD LOGIC ---
         # 1. Agar Resolution nahi mili, to automatically 720P add karo
