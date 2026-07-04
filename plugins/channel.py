@@ -71,8 +71,8 @@ STANDARD_GENRES = {
 }
 
 # Precompiled regex patterns
-CLEAN_PATTERN = re.compile(r'@[^ \n\r\t\.,:;!?()\[\]{}<>\\/"\'=_%]+|\bwww\.[^\s\]\)]+|\([\@^]+\)|\[[\@^]+\]')
-NORMALIZE_PATTERN = re.compile(r"[._]+|[()\[\]{}:;'–!,.?_]")
+CLEAN_PATTERN = re.compile(r'@[^ \n\r\t\.,:;!?()\[\]{}<>\\/"\'=_%]+|\bwww\.[^\s\]\)]+|\([\@^]+\)|\[[\@^]+-\]')
+NORMALIZE_PATTERN = re.compile(r"[._]+|[()\[\]{}:;'–!,.?_-]")
 QUALITY_PATTERN = re.compile(
     r"\b(?:HDCam|HDTC|CamRip|TS|TC|TeleSync|DVDScr|DVDRip|PreDVD|"
     r"WEBRip|WEB-DL|TVRip|HDTV|WEB DL|WebDl|BluRay|BRRip|BDRip|"
@@ -198,18 +198,24 @@ def extract_media_info(filename: str, caption: str):
 
     # Clean base_name
     base_name = normalize(remove_ignored_words(normalize(base_raw)))
-    
+
+    # Remove leading symbols like -, _, :, etc.
+    base_name = re.sub(r"^[\s\-–—_:]+", "", base_name)
+
+    # Remove wrapping brackets
+    base_name = re.sub(r"^[【\[\(\{<]+", "", base_name)
+    base_name = re.sub(r"[】\]\)\}>]+$", "", base_name)
+
     # Add year if not present
     if year and year not in base_name:
         base_name += f" {year}"
-    
-    # Remove trailing parentheses with year
-    base_name = re.sub(r"\s*\(\d{4}\)\s*$", "", base_name).strip()
-    if year and year not in base_name:
-        base_name += f" {year}"
 
-    # Final cleanup: remove any remaining garbage
-    base_name = re.sub(r'\s+', ' ', base_name).strip()
+    # Remove trailing "(2026)"
+    base_name = re.sub(r"\s*\(\d{4}\)\s*$", "", base_name).strip()
+
+    # Final cleanup
+    base_name = re.sub(r"\s+", " ", base_name).strip()
+
     if not base_name or base_name.lower() == "n/a":
         base_name = normalize(remove_ignored_words(filename)).strip() or filename
 
