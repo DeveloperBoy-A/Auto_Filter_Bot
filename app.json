@@ -26,7 +26,11 @@
     "AUTH_USERS": { "description": "Users allowed for inline search. Separate by space.", "required": false },
     "AUTH_CHANNEL": { "description": "ID of channel for mandatory subscription.", "required": false },
     "DATABASE_URI": { "description": "MongoDB URI from https://www.mongodb.com.", "required": true },
-    "DATABASE_URI2": { "description": "Second MongoDB URI for multiple DB mode.", "required": true },
+    "DATABASE_URI2": { "description": "2nd MongoDB URI (only needed if MULTIPLE_DB is True).", "required": false },
+    "DATABASE_URI3": { "description": "3rd MongoDB URI (optional, only used if MULTIPLE_DB is True).", "required": false },
+    "DATABASE_URI4": { "description": "4th MongoDB URI (optional, only used if MULTIPLE_DB is True).", "required": false },
+    "DATABASE_URI5": { "description": "5th MongoDB URI (optional, only used if MULTIPLE_DB is True).", "required": false },
+    "MULTIPLE_DB": { "description": "Set to True to enable multiple-database mode (up to 5 DBs). Fill DATABASE_URI2/3/4/5 as needed.", "required": false },
     "DATABASE_NAME": { "description": "MongoDB database name.", "required": false },
     "COLLECTION_NAME": { "description": "Collection name, default Telegram_files.", "value": "Telegram_files", "required": false },
     "PORT": { "description": "Port to run web server (Koyeb requirement)", "value": "8080", "required": true }
