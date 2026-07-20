@@ -15,7 +15,7 @@ from database.config_db import mdb
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, ReplyKeyboardMarkup
 from pyrogram import Client, filters, enums
 from pyrogram.errors import FloodWait, ChatAdminRequired, UserNotParticipant
-from database.ia_filterdb import Media, Media2, get_file_details, unpack_new_file_id, get_bad_files, get_cover_url
+from database.ia_filterdb import Media, Media2, MEDIA_DBS, delete_file_by_id, delete_files_by_query, get_file_details, unpack_new_file_id, get_bad_files, get_cover_url
 from database.users_chats_db import db
 from info import *
 from utils import get_settings, save_group_settings, is_subscribed, is_req_subscribed, get_size, get_shortlink, is_check_admin, temp, get_readable_time, get_time, generate_settings_text, log_error, clean_filename
@@ -524,51 +524,31 @@ async def delete(bot, message):
         return
 
     file_id, file_ref = unpack_new_file_id(media.file_id)
-    if await Media.count_documents({'file_id': file_id}):
-        result = await Media.collection.delete_one({
-            '_id': file_id,
-        })
-    else:
-        result = await Media2.collection.delete_one({
-            '_id': file_id,
-        })
-    if result.deleted_count:
-        await msg.edit('Fɪʟᴇ ɪs sᴜᴄᴄᴇssғᴜʟʟʏ ᴅᴇʟᴇᴛᴇᴅ ғʀᴏᴍ ᴅᴀᴛᴀʙᴀsᴇ ✅')
-    else:
+
+    # 1. Sabse pehle exact file_id se try karo (sabhi configured DBs mein)
+    deleted_count = await delete_file_by_id(file_id)
+
+    if not deleted_count:
+        # 2. Fallback: cleaned file_name + size + mime se try karo
         file_name = re.sub(r"(_|\-|\.|\+)", " ", str(media.file_name))
-        result = await Media.collection.delete_many({
+        deleted_count = await delete_files_by_query({
             'file_name': file_name,
             'file_size': media.file_size,
             'mime_type': media.mime_type
-            })
-        if result.deleted_count:
-            await msg.edit('Fɪʟᴇ ɪs sᴜᴄᴄᴇssғᴜʟʟʏ ᴅᴇʟᴇᴛᴇᴅ ғʀᴏᴍ ᴅᴀᴛᴀʙᴀsᴇ ✅')
-        else:
-            result = await Media2.collection.delete_many({
-                'file_name': file_name,
-                'file_size': media.file_size,
-                'mime_type': media.mime_type
-            })
-            if result.deleted_count:
-                await msg.edit('Fɪʟᴇ ɪs sᴜᴄᴄᴇssғᴜʟʟʏ ᴅᴇʟᴇᴛᴇᴅ ғʀᴏᴍ ᴅᴀᴛᴀʙᴀsᴇ')
-            else:
-                result = await Media.collection.delete_many({
-                    'file_name': media.file_name,
-                    'file_size': media.file_size,
-                    'mime_type': media.mime_type
-                })
-                if result.deleted_count:
-                    await msg.edit('Fɪʟᴇ ɪs sᴜᴄᴄᴇssғᴜʟʟʏ ᴅᴇʟᴇᴛᴇᴅ ғʀᴏᴍ ᴅᴀᴛᴀʙᴀsᴇ ✅')
-                else:
-                    result = await Media2.collection.delete_many({
-                        'file_name': media.file_name,
-                        'file_size': media.file_size,
-                        'mime_type': media.mime_type
-                    })
-                    if result.deleted_count:
-                        await msg.edit('Fɪʟᴇ ɪs sᴜᴄᴄᴇssғᴜʟʟʏ ᴅᴇʟᴇᴛᴇᴅ ғʀᴏᴍ ᴅᴀᴛᴀʙᴀsᴇ ✅')
-                    else:
-                        await msg.edit('Fɪʟᴇ ɴᴏᴛ ғᴏᴜɴᴅ ɪɴ ᴅᴀᴛᴀʙᴀsᴇ ❌')
+        })
+
+    if not deleted_count:
+        # 3. Fallback: raw file_name + size + mime se try karo
+        deleted_count = await delete_files_by_query({
+            'file_name': media.file_name,
+            'file_size': media.file_size,
+            'mime_type': media.mime_type
+        })
+
+    if deleted_count:
+        await msg.edit('Fɪʟᴇ ɪs sᴜᴄᴄᴇssғᴜʟʟʏ ᴅᴇʟᴇᴛᴇᴅ ғʀᴏᴍ ᴅᴀᴛᴀʙᴀsᴇ ✅')
+    else:
+        await msg.edit('Fɪʟᴇ ɴᴏᴛ ғᴏᴜɴᴅ ɪɴ ᴅᴀᴛᴀʙᴀsᴇ ❌')
 
 
 @Client.on_message(filters.command('deleteall') & filters.user(ADMINS))
@@ -1384,8 +1364,6 @@ async def reset_trial(client, message):
     except Exception as e:
         await message.reply_text(f"An error occurred: {e}")
 
-from motor.motor_asyncio import AsyncIOMotorClient
-
 @Client.on_message(filters.command("cleandb") & filters.user(ADMINS))
 async def clean_db_command(client, message):
     await message.reply_text("🧹 Cleaning database(s)... Please wait ⏳")
@@ -1400,22 +1378,13 @@ async def clean_db_command(client, message):
 
         summary = []
 
-        # === Clean DB1 ===
-        mongo1 = AsyncIOMotorClient(DATABASE_URI)
-        db1 = mongo1[DATABASE_NAME]
-        col1 = db1[COLLECTION_NAME]
-        result1 = await col1.update_many({}, {"$unset": fields_to_unset})
-        summary.append(f"🗃️ DB1 — Matched: <code>{result1.matched_count}</code>, Modified: <code>{result1.modified_count}</code>")
+        # === Clean every configured DB (1 to 5, based on MEDIA_DBS) ===
+        for idx, media_cls in enumerate(MEDIA_DBS, start=1):
+            result = await media_cls.collection.update_many({}, {"$unset": fields_to_unset})
+            summary.append(f"🗃️ DB{idx} — Matched: <code>{result.matched_count}</code>, Modified: <code>{result.modified_count}</code>")
 
-        # === Clean DB2 (only if MULTIPLE_DB is True) ===
-        if MULTIPLE_DB:
-            mongo2 = AsyncIOMotorClient(DATABASE_URI2)
-            db2 = mongo2[DATABASE_NAME]
-            col2 = db2[COLLECTION_NAME]
-            result2 = await col2.update_many({}, {"$unset": fields_to_unset})
-            summary.append(f"🗃️ DB2 — Matched: <code>{result2.matched_count}</code>, Modified: <code>{result2.modified_count}</code>")
-        else:
-            summary.append("⚙️ MULTIPLE_DB = False → Skipped cleaning DB2.")
+        if len(MEDIA_DBS) == 1:
+            summary.append("⚙️ MULTIPLE_DB = False → Sirf DB1 hi configured/cleaned hua.")
 
         await message.reply_text(
             "✅ <b>Cleanup Complete!</b>\n\n" + "\n".join(summary)
