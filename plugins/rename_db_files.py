@@ -10,10 +10,10 @@ from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, 
 # Tumhare main database aur info file se imports
 from database.ia_filterdb import (
     Media, Media2,
+    MEDIA_DBS,
     extract_pure_title,
     extract_languages_quality,
     RELEASE_TAG,
-    MULTIPLE_DB,
 )
 from info import ADMINS
 
@@ -179,9 +179,11 @@ async def process_rename_db(client: Client, status_msg: Message, user_id: int, d
     total = 0
     cancelled = False
 
-    collections_to_process = [("Primary DB", Media.collection)]
-    if MULTIPLE_DB:
-        collections_to_process.append(("Secondary DB", Media2.collection))
+    _db_labels = ["Primary DB", "Secondary DB", "Tertiary DB", "Quaternary DB", "Quinary DB"]
+    collections_to_process = [
+        (_db_labels[i] if i < len(_db_labels) else f"DB {i + 1}", media_cls.collection)
+        for i, media_cls in enumerate(MEDIA_DBS)
+    ]
 
     # ✅ Process start log
     logger.info("✅ Process start log: Starting batch processing.")
