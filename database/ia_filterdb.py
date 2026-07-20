@@ -1189,6 +1189,7 @@ def expand_query(query):
     query = query.lower()
     patterns = [query]
 
+    # टाइटल अलग करें (बिना सीजन और एपिसोड के)
     title = re.sub(r'\b(s\d+|e\d+|season[\s-]*\d+|episode[\s-]*\d+|ep[\s-]*\d+)\b', '', query)
     title = re.sub(r'[\s._-]+', ' ', title).strip()
 
@@ -1198,23 +1199,42 @@ def expand_query(query):
     s_num = int(s_match.group(1) or s_match.group(2)) if s_match else None
     e_num = int(e_match.group(1) or e_match.group(2) or e_match.group(3)) if e_match else None
 
+    # CASE 1: जब यूजर सीजन और एपिसोड दोनों लिखे (जैसे: money heist s02 e03)
     if s_num and e_num:
         variations = [
-            f"s{s_num:02d}e{e_num:02d}", f"s{s_num:02d} e{e_num:02d}", 
-            f"s{s_num}e{e_num}", f"s{s_num:02d}", f"e{e_num:02d}"
+            f"s{s_num:02d}e{e_num:02d}", 
+            f"s{s_num:02d} e{e_num:02d}", 
+            f"s{s_num}e{e_num}"
         ]
         for v in variations:
             patterns.append(f"{title} {v}".strip())
+
+    # CASE 2: जब यूजर केवल सीजन लिखे (जैसे: money heist s01)
     elif s_num:
-        variations = [f"s{s_num:02d}", f"s{s_num}", f"season {s_num}"]
-        for v in variations:
-            patterns.append(f"{title} {v}".strip())
-    elif e_num:
-        variations = [f"e{e_num:02d}", f"e{e_num}", f"episode {e_num}"]
+        variations = [
+            f"s{s_num:02d}", 
+            f"s{s_num}", 
+            f"season {s_num}"
+        ]
         for v in variations:
             patterns.append(f"{title} {v}".strip())
 
+    # CASE 3: जब यूजर केवल एपिसोड लिखे (जैसे: money heist e02 या सिर्फ e02)
+    elif e_num:
+        variations = [
+            f"e{e_num:02d}", 
+            f"e{e_num}", 
+            f"episode {e_num}"
+        ]
+        for v in variations:
+            # यदि टाइटल मौजूद है तो टाइटल के साथ जोड़ें, अन्यथा केवल एपिसोड पैटर्न रखें
+            if title:
+                patterns.append(f"{title} {v}".strip())
+            else:
+                patterns.append(v)
+
     return list(set(patterns))
+
 
 # ----------------- 4. मुख्य सर्च और सॉर्टिंग फंक्शन -----------------
 
@@ -1285,10 +1305,17 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
 
     first_word = original_query.split()[0] if original_query.split() else original_query
 
+    # यूजर की क्वेरी से सीजन और एपिसोड नंबर निकालना सॉर्टिंग के लिए
+    target_s, target_e = extract_season_episode(original_query)
+
     if is_series:
         files = sorted(
             files,
             key=lambda x: (
+                # 1. यदि यूजर ने विशिष्ट एपिसोड माँगा है (जैसे s02 e03), तो सटीक मैच सबसे ऊपर हो
+                not (target_e > 0 and extract_season_episode(x.file_name)[1] == target_e and extract_season_episode(x.file_name)[0] == target_s),
+                # 2. यदि यूजर ने केवल सीजन माँगा है (जैसे s01), तो सीजन मैच सबसे ऊपर हो
+                not (target_s > 0 and target_e == 0 and extract_season_episode(x.file_name)[0] == target_s),
                 not (re.match(rf"^[\s._\-\[\(]*{re.escape(original_query)}", x.file_name.lower())),
                 not (re.match(rf"^[\s._\-\[\(]*{re.escape(first_word)}", x.file_name.lower())),
                 -extract_season_episode(x.file_name)[0],      
