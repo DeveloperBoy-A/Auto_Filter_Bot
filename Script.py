@@ -60,7 +60,10 @@ class script(object):
 
 
 
-    MULTI_STATUS_TXT = """<b><blockquote>🌿 ᴍᴀɪɴᴛᴀɪɴᴇᴅ ʙʏ : 𝐃𝐞𝐯𝐞𝐥𝐨𝐩𝐞𝐫_𝐁𝐨𝐲™(𝓐𝓷𝓴𝓲𝓽_𝓜𝓮𝓮𝓷𝓪😝)</a></blockquote>
+    # Multi-DB stats templates — built to support 2 to 5 databases dynamically.
+    # p_ttishow.py loops MULTI_STATUS_DB_BLOCK_TXT once per configured database
+    # and stitches header + blocks + footer together.
+    MULTI_STATUS_HEADER_TXT = """<b><blockquote>🌿 ᴍᴀɪɴᴛᴀɪɴᴇᴅ ʙʏ : 𝐃𝐞𝐯𝐞𝐥𝐨𝐩𝐞𝐫_𝐁𝐨𝐲™(𝓐𝓷𝓴𝓲𝓽_𝓜𝓮𝓮𝓷𝓪😝)</a></blockquote>
 
 ╭──[ 👨‍❤️‍👨 ᴜsᴇʀs ᴅᴀᴛᴀʙᴀsᴇ 👨‍❤️‍👨 ] ──⍟
 │
@@ -68,27 +71,26 @@ class script(object):
 ├⋟ ᴀʟʟ ɢʀᴏᴜᴘs ⋟ {1}
 ├⋟ ᴘʀᴇᴍɪᴜᴍ ᴜꜱᴇʀꜱ ⋟ {2}
 │
-├────[ 🗃 ᴅᴀᴛᴀʙᴀsᴇ 1 🗃 ]────⍟
+"""
+
+    # {0}=db number, {1}=file count, {2}=used storage, {3}=cluster storage, {4}=free storage
+    MULTI_STATUS_DB_BLOCK_TXT = """├────[ 🗃 ᴅᴀᴛᴀʙᴀsᴇ {0} 🗃 ]────⍟
 │
-├⋟ ᴀʟʟ ꜰɪʟᴇs ⋟ {3}
-├⋟ ᴜsᴇᴅ sᴛᴏʀᴀɢᴇ ⋟ {4}
-├⋟ ᴄʟᴜsᴛᴇʀ sᴛᴏʀᴀɢᴇ ⋟ {5}
-├⋟ ꜰʀᴇᴇ sᴛᴏʀᴀɢᴇ ⋟ {6}
+├⋟ ᴀʟʟ ꜰɪʟᴇs ⋟ {1}
+├⋟ ᴜsᴇᴅ sᴛᴏʀᴀɢᴇ ⋟ {2}
+├⋟ ᴄʟᴜsᴛᴇʀ sᴛᴏʀᴀɢᴇ ⋟ {3}
+├⋟ ꜰʀᴇᴇ sᴛᴏʀᴀɢᴇ ⋟ {4}
 │
-├────[ 🗃️ ᴅᴀᴛᴀʙᴀsᴇ 2 🗃️ ]────⍟   
+"""
+
+    # {0}=uptime, {1}=ram%, {2}=cpu%, {3}=grand total files across all DBs
+    MULTI_STATUS_FOOTER_TXT = """├────[ 🤖 ʙᴏᴛ ᴅᴇᴛᴀɪʟs 🤖 ]────⍟
 │
-├⋟ ᴀʟʟ ꜰɪʟᴇs ⋟ {7}  
-├⋟ ᴜsᴇᴅ sᴛᴏʀᴀɢᴇ ⋟ {8}
-├⋟ ᴄʟᴜsᴛᴇʀ sᴛᴏʀᴀɢᴇ ⋟ {9}
-├⋟ ꜰʀᴇᴇ sᴛᴏʀᴀɢᴇ ⋟ {10}
+├⋟ ᴜᴘᴛɪᴍᴇ ⋟ {0}
+├⋟ ʀᴀᴍ ⋟ {1}%
+├⋟ ᴄᴘᴜ ⋟ {2}%
 │
-├────[ 🤖 ʙᴏᴛ ᴅᴇᴛᴀɪʟs 🤖 ]────⍟   
-│
-├⋟ ᴜᴘᴛɪᴍᴇ ⋟ {11}
-├⋟ ʀᴀᴍ ⋟ {12}%
-├⋟ ᴄᴘᴜ ⋟ {13}%   
-│
-├⋟ » ᴛᴏᴛᴀʟ ꜰɪʟᴇs ⋟ {14}
+├⋟ » ᴛᴏᴛᴀʟ ꜰɪʟᴇs ⋟ {3}
 │
 ╰─────────────────────⍟</b>"""
 
