@@ -211,10 +211,14 @@ async def _upload_cover(bot, image_url: str) -> str | None:
         return image_url
 
 
-# ---------------- Global DB cache ----------------
-_db_stats_cache = {"timestamp": None, "primary_size": 0.0}
+# ---------------- Global DB cache (per-database, keyed by db object id) ----------------
+_db_stats_cache: Dict[int, dict] = {}
 
-# ---------------- DB Setup ----------------
+# Safe threshold (MB) below the free-tier ~512MB cap. Once a database crosses
+# this, new files auto-switch to the next configured database in the list.
+DB_SIZE_LIMIT_MB = 460
+
+# ---------------- DB Setup (up to 5 databases) ----------------
 client = AsyncIOMotorClient(DATABASE_URI)
 db = client[DATABASE_NAME]
 instance = Instance.from_db(db)
@@ -222,6 +226,18 @@ instance = Instance.from_db(db)
 client2 = AsyncIOMotorClient(DATABASE_URI2)
 db2 = client2[DATABASE_NAME]
 instance2 = Instance.from_db(db2)
+
+client3 = AsyncIOMotorClient(DATABASE_URI3)
+db3 = client3[DATABASE_NAME]
+instance3 = Instance.from_db(db3)
+
+client4 = AsyncIOMotorClient(DATABASE_URI4)
+db4 = client4[DATABASE_NAME]
+instance4 = Instance.from_db(db4)
+
+client5 = AsyncIOMotorClient(DATABASE_URI5)
+db5 = client5[DATABASE_NAME]
+instance5 = Instance.from_db(db5)
 
 # ---------------- Media Models ----------------
 @instance.register
@@ -255,28 +271,128 @@ class Media2(Document):
         indexes = ("$file_name",)
         collection_name = COLLECTION_NAME
 
+
+@instance3.register
+class Media3(Document):
+    file_id = fields.StrField(attribute="_id")
+    file_ref = fields.StrField(allow_none=True)
+    file_name = fields.StrField(required=True)
+    file_size = fields.IntField(required=True)
+    file_type = fields.StrField(allow_none=True)
+    mime_type = fields.StrField(allow_none=True)
+    caption = fields.StrField(allow_none=True)
+    cover = fields.StrField(allow_none=True)
+
+    class Meta:
+        indexes = ("$file_name",)
+        collection_name = COLLECTION_NAME
+
+
+@instance4.register
+class Media4(Document):
+    file_id = fields.StrField(attribute="_id")
+    file_ref = fields.StrField(allow_none=True)
+    file_name = fields.StrField(required=True)
+    file_size = fields.IntField(required=True)
+    file_type = fields.StrField(allow_none=True)
+    mime_type = fields.StrField(allow_none=True)
+    caption = fields.StrField(allow_none=True)
+    cover = fields.StrField(allow_none=True)
+
+    class Meta:
+        indexes = ("$file_name",)
+        collection_name = COLLECTION_NAME
+
+
+@instance5.register
+class Media5(Document):
+    file_id = fields.StrField(attribute="_id")
+    file_ref = fields.StrField(allow_none=True)
+    file_name = fields.StrField(required=True)
+    file_size = fields.IntField(required=True)
+    file_type = fields.StrField(allow_none=True)
+    mime_type = fields.StrField(allow_none=True)
+    caption = fields.StrField(allow_none=True)
+    cover = fields.StrField(allow_none=True)
+
+    class Meta:
+        indexes = ("$file_name",)
+        collection_name = COLLECTION_NAME
+
+
+# ---------------- Generic multi-DB list (only genuinely configured DBs) ----------------
+# TOTAL_DATABASES (info.py) reflects how many *distinct* DATABASE_URI values were
+# actually supplied (1 to 5). We slice the full class/client lists down to that
+# count so every loop below automatically works whether 1, 2, 3, 4, or 5 DBs are
+# configured — nothing here needs to change if you add DATABASE_URI3/4/5 later.
+_ALL_MEDIA_CLASSES = [Media, Media2, Media3, Media4, Media5]
+_ALL_DB_CLIENTS = [client, client2, client3, client4, client5]
+
+MEDIA_DBS = _ALL_MEDIA_CLASSES[:TOTAL_DATABASES]
+DB_CLIENTS = _ALL_DB_CLIENTS[:TOTAL_DATABASES]
+
+_DB_LABELS = ["Primary DB", "Secondary DB", "Tertiary DB", "Quaternary DB", "Quinary DB"]
+
+
 # ---------------- DB Size Checker ----------------
 async def check_db_size(db_instance):
+    """
+    Return current logical+index size (MB) for the given motor Database object.
+    Cached per-database (keyed by object identity) for up to 10 minutes, and
+    refreshed early once a database gets close to the size limit.
+    """
     try:
+        key = id(db_instance)
         now = datetime.utcnow()
-        cache_stale_by_time = _db_stats_cache["timestamp"] is None or (
-            now - _db_stats_cache["timestamp"] > timedelta(minutes=10)
-        )
-        refresh_if_size_threshold = _db_stats_cache["primary_size"] >= 10.0
-        if not cache_stale_by_time and not refresh_if_size_threshold:
-            return _db_stats_cache["primary_size"]
+        cached = _db_stats_cache.get(key)
+        if cached:
+            cache_stale_by_time = (now - cached["timestamp"]) > timedelta(minutes=10)
+            near_limit = cached["size_mb"] >= DB_SIZE_LIMIT_MB - 10
+            if not cache_stale_by_time and not near_limit:
+                return cached["size_mb"]
         stats = await db_instance.command("dbstats")
         db_logical_size = stats["dataSize"]
         db_index_size = stats["indexSize"]
         db_logical_size_mb = db_logical_size / (1024 * 1024)
         db_index_size_mb = db_index_size / (1024 * 1024)
         db_size_mb = db_logical_size_mb + db_index_size_mb
-        _db_stats_cache["primary_size"] = db_size_mb
-        _db_stats_cache["timestamp"] = now
+        _db_stats_cache[key] = {"timestamp": now, "size_mb": db_size_mb}
         return db_size_mb
     except Exception as e:
         logger.error(f"Error Checking Database Size: {e}")
         return 0
+
+
+async def get_active_media_db():
+    """
+    Walk through MEDIA_DBS (in configured order) and return the first one that
+    still has room under DB_SIZE_LIMIT_MB. This is what decides where a brand
+    new file gets saved, and where "latest uploads" get read from. If every
+    configured database is full, falls back to the last one in the list.
+    """
+    for media_cls in MEDIA_DBS:
+        size_mb = await check_db_size(media_cls.collection.database)
+        if size_mb < DB_SIZE_LIMIT_MB:
+            return media_cls
+    return MEDIA_DBS[-1]
+
+
+async def delete_file_by_id(file_id: str) -> int:
+    """Delete a single file by its _id from whichever configured DB holds it."""
+    for media_cls in MEDIA_DBS:
+        result = await media_cls.collection.delete_one({"_id": file_id})
+        if result.deleted_count:
+            return result.deleted_count
+    return 0
+
+
+async def delete_files_by_query(query: dict) -> int:
+    """Delete every file matching `query` across all configured DBs."""
+    total = 0
+    for media_cls in MEDIA_DBS:
+        result = await media_cls.collection.delete_many(query)
+        total += result.deleted_count
+    return total
 
 # ---------------- File ID Helper ----------------
 def encode_file_id(s: bytes) -> str:
@@ -780,14 +896,14 @@ async def _fetch_and_save_cover(file_id: str, final_title: str, year: str | None
                 cover_url = _COVER_CACHE[lock_key]
                 logger.info(f"[COVER] Reused cover from memory cache for '{final_title}'")
             else:
-                # 2. Agar cache mein nahi hai, tabhi Database check karo
-                existing = await Media.find_one(
-                    {"file_name": {"$regex": rf"^{re.escape(final_title)}", "$options": "i"}, "cover": {"$ne": None}}
-                )
-                if not existing and MULTIPLE_DB:
-                    existing = await Media2.find_one(
+                # 2. Agar cache mein nahi hai, tabhi Database check karo (sabhi configured DBs mein)
+                existing = None
+                for media_cls in MEDIA_DBS:
+                    existing = await media_cls.find_one(
                         {"file_name": {"$regex": rf"^{re.escape(final_title)}", "$options": "i"}, "cover": {"$ne": None}}
                     )
+                    if existing:
+                        break
 
                 if existing and existing.cover:
                     cover_url = existing.cover
@@ -809,10 +925,10 @@ async def _fetch_and_save_cover(file_id: str, final_title: str, year: str | None
                     else:
                         return
 
-            # Sirf is particular file_id ke liye cover DB me update karo
-            await Media.collection.update_one({"_id": file_id}, {"$set": {"cover": cover_url}})
-            if MULTIPLE_DB:
-                await Media2.collection.update_one({"_id": file_id}, {"$set": {"cover": cover_url}})
+            # Sirf is particular file_id ke liye cover DB me update karo (jis DB mein file hai wahi update hoga,
+            # baaki DBs par matched_count 0 hoga aur kuch nahi hota)
+            for media_cls in MEDIA_DBS:
+                await media_cls.collection.update_one({"_id": file_id}, {"$set": {"cover": cover_url}})
             logger.info(f"[COVER] DB updated | file_id={file_id}")
 
         except Exception as e:
@@ -980,8 +1096,19 @@ async def save_file(media, bot=None, extracted_info=None):  # ✅ NEW: Added ext
                 bot=bot
             ))
 
+        # Duplicate check across ALL configured DBs (file might already live in a
+        # different DB than the one we're about to save into)
+        for media_cls in MEDIA_DBS:
+            if await media_cls.count_documents({"_id": file_id}):
+                return False, 0
+
+        # Auto-route: pick whichever configured DB still has room. Once the
+        # active one crosses DB_SIZE_LIMIT_MB, new files automatically start
+        # landing in the next configured DB.
+        target_media = await get_active_media_db()
+
         # DB Commit
-        record = Media(
+        record = target_media(
             file_id=file_id,
             file_ref=file_ref,
             file_name=file_name,
@@ -1127,18 +1254,19 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
 
     fetch_limit = max(500, offset + max_results * 2)  # Increased for better pagination
 
-    if MULTIPLE_DB:
-        count1, count2, files = await asyncio.gather(
-            Media.count_documents(filter_mongo),
-            Media2.count_documents(filter_mongo),
-            Media.find(filter_mongo).sort("$natural", -1).limit(fetch_limit).to_list(length=fetch_limit)
-        )
-        total_results = count1 + count2
-        if len(files) < fetch_limit:
-            remaining = fetch_limit - len(files)
-            files2 = await Media2.find(filter_mongo).sort("$natural", -1).limit(remaining).to_list(length=remaining)
-            files.extend(files2)
-        
+    if len(MEDIA_DBS) > 1:
+        counts = await asyncio.gather(*[m.count_documents(filter_mongo) for m in MEDIA_DBS])
+        total_results = sum(counts)
+
+        files = await MEDIA_DBS[0].find(filter_mongo).sort("$natural", -1).limit(fetch_limit).to_list(length=fetch_limit)
+        remaining = fetch_limit - len(files)
+        for media_cls in MEDIA_DBS[1:]:
+            if remaining <= 0:
+                break
+            more_files = await media_cls.find(filter_mongo).sort("$natural", -1).limit(remaining).to_list(length=remaining)
+            files.extend(more_files)
+            remaining -= len(more_files)
+
         # Remove duplicate files by file_id
         seen_ids = set()
         unique_files = []
@@ -1213,30 +1341,23 @@ async def get_bad_files(query, file_type=None):
         filter = {'file_name': regex}
     if file_type:
         filter['file_type'] = file_type
-    cursor1 = Media.find(filter).sort('$natural', -1)
-    files1 = await cursor1.to_list(length=(await Media.count_documents(filter)))
-    if MULTIPLE_DB:
-        cursor2 = Media2.find(filter).sort('$natural', -1)
-        files2 = await cursor2.to_list(length=(await Media2.count_documents(filter)))
-        files = files1 + files2
-    else:
-        files = files1
+    files = []
+    for media_cls in MEDIA_DBS:
+        cursor = media_cls.find(filter).sort('$natural', -1)
+        files.extend(await cursor.to_list(length=(await media_cls.count_documents(filter))))
     total_results = len(files)
     return files, total_results
 
 async def update_cover_url(file_id: str, cover_url: str) -> bool:
     try:
-        result = await Media.collection.update_one(
-            {"_id": file_id},
-            {"$set": {"cover": cover_url}}
-        )
-        if result.modified_count:
-            return True
-        result2 = await Media2.collection.update_one(
-            {"_id": file_id},
-            {"$set": {"cover": cover_url}}
-        )
-        return bool(result2.modified_count)
+        for media_cls in MEDIA_DBS:
+            result = await media_cls.collection.update_one(
+                {"_id": file_id},
+                {"$set": {"cover": cover_url}}
+            )
+            if result.modified_count:
+                return True
+        return False
     except Exception as e:
         logger.error(f"[COVER] update_cover_url error: {e}")
         return False
@@ -1255,27 +1376,20 @@ async def get_cover_url(file_id: str) -> str | None:
 
 async def get_file_details(query):
     filter = {"file_id": query}
-    cursor = Media.find(filter)
-    filedetails = await cursor.to_list(length=1)
-    if not filedetails:
-        cursor2 = Media2.find(filter)
-        filedetails = await cursor2.to_list(length=1)
+    filedetails = []
+    for media_cls in MEDIA_DBS:
+        cursor = media_cls.find(filter)
+        filedetails = await cursor.to_list(length=1)
+        if filedetails:
+            break
     return filedetails
 
 
 async def dreamxbotz_fetch_media(limit: int) -> list:
     try:
-        if MULTIPLE_DB:
-            db_size = await check_db_size(Media)
-            if db_size > 407:
-                cursor = Media2.find().sort("$natural", -1).limit(limit)
-                files = await cursor.to_list(length=limit)
-            else:
-                cursor = Media.find().sort("$natural", -1).limit(limit)
-                files = await cursor.to_list(length=limit)
-        else:
-            cursor = Media.find().sort("$natural", -1).limit(limit)
-            files = await cursor.to_list(length=limit)
+        target_media = MEDIA_DBS[0] if len(MEDIA_DBS) == 1 else await get_active_media_db()
+        cursor = target_media.find().sort("$natural", -1).limit(limit)
+        files = await cursor.to_list(length=limit)
 
         cleaned_files = []
         for file in files:
