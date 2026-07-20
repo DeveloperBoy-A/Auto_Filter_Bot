@@ -10,7 +10,7 @@ from pathlib import Path
 import importlib.util
 import pytz
 from aiohttp import web
-from database.ia_filterdb import Media, Media2
+from database.ia_filterdb import Media, Media2, MEDIA_DBS
 from database.users_chats_db import db
 from info import *
 from utils import temp
@@ -99,10 +99,10 @@ async def dreamxbotz_start():
     b_users, b_chats = await db.get_banned()
     temp.BANNED_USERS = b_users
     temp.BANNED_CHATS = b_chats
-    await Media.ensure_indexes()
-    if MULTIPLE_DB:
-        await Media2.ensure_indexes()
-        print("Multiple Database Mode On. Now Files Will Be Save In Second DB If First DB Is Full")
+    for media_cls in MEDIA_DBS:
+        await media_cls.ensure_indexes()
+    if len(MEDIA_DBS) > 1:
+        print(f"Multiple Database Mode On ({len(MEDIA_DBS)} DBs). Files will auto-switch to the next DB once the current one is full.")
     else:
         print("Single DB Mode On ! Files Will Be Save In First Database")
     me = await dreamxbotz.get_me()
