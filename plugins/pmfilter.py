@@ -8,7 +8,7 @@ from rapidfuzz import process
 from dreamxbotz.util.file_properties import get_name, get_hash
 from urllib.parse import quote_plus
 import logging
-from database.ia_filterdb import Media, Media2, get_file_details, get_search_results, get_bad_files
+from database.ia_filterdb import Media, Media2, MEDIA_DBS, delete_file_by_id, get_file_details, get_search_results, get_bad_files
 from database.config_db import mdb
 from pyrogram.errors import FloodWait, UserIsBlocked, MessageNotModified, PeerIdInvalid, ChatAdminRequired, UserNotParticipant
 from pyrogram import Client, filters, enums
@@ -931,9 +931,8 @@ async def cb_handler(client: Client, query: CallbackQuery):
         await query.answer(url=f"href='https://telegram.me/{temp.U_NAME}?start=file_{query.message.chat.id}_{file.file_id}")
 
     elif query.data.startswith("autofilter_delete"):
-        await Media.collection.drop()
-        if MULTIPLE_DB:    
-            await Media2.collection.drop()
+        for media_cls in MEDIA_DBS:
+            await media_cls.collection.drop()
         await query.answer("Eᴠᴇʀʏᴛʜɪɴɢ's Gᴏɴᴇ")
         await query.message.edit('ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ᴅᴇʟᴇᴛᴇᴅ ᴀʟʟ ɪɴᴅᴇxᴇᴅ ꜰɪʟᴇꜱ ✅')
 
@@ -1000,23 +999,12 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 for file in files:
                     file_ids = file.file_id
                     file_name = file.file_name
-                    
-                    # Try deleting from Primary DB
-                    result = await Media.collection.delete_one({
-                        '_id': file_ids,
-                    })
-                    deleted_from_primary = result.deleted_count > 0
-                    
-                    # If not found in primary and MULTIPLE_DB enabled, try secondary
-                    deleted_from_secondary = False
-                    if not deleted_from_primary and MULTIPLE_DB:
-                        result = await Media2.collection.delete_one({
-                            '_id': file_ids,
-                        })
-                        deleted_from_secondary = result.deleted_count > 0
-                    
+
+                    # Try deleting from whichever configured DB actually holds it
+                    deleted_count = await delete_file_by_id(file_ids)
+
                     # ✅ FIX: Count केवल तभी increment करें जब file actually delete हो
-                    if deleted_from_primary or deleted_from_secondary:
+                    if deleted_count:
                         deleted += 1
                         logger.info(
                             f'✅ ꜰɪʟᴇ ꜰᴏᴜɴᴅ ꜰᴏʀ ʏᴏᴜʀ ǫᴜᴇʀʏ {keyword}! ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ᴅᴇʟᴇᴛᴇᴅ {file_name} ꜰʀᴏᴍ ᴅᴀᴛᴀʙᴀꜱᴇ.')
@@ -1046,12 +1034,10 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
                 # ✅ OPTIONAL: Verify deletion from database
                 try:
-                    remaining_count_1 = await Media.count_documents({'file_name': {'$regex': keyword}})
-                    remaining_count_2 = 0
-                    if MULTIPLE_DB:
-                        remaining_count_2 = await Media2.count_documents({'file_name': {'$regex': keyword}})
-                    
-                    total_remaining = remaining_count_1 + remaining_count_2
+                    remaining_counts = await asyncio.gather(
+                        *[media_cls.count_documents({'file_name': {'$regex': keyword}}) for media_cls in MEDIA_DBS]
+                    )
+                    total_remaining = sum(remaining_counts)
                     logger.info(f"Verification: Deleted={deleted}, Remaining in DB={total_remaining}")
                 except Exception as verify_error:
                     logger.error(f"Verification error: {verify_error}")
@@ -1969,6 +1955,8 @@ async def auto_filter(client, msg, spoll=False):
         dxb = await message.reply_text(text=cap, reply_markup=InlineKeyboardMarkup(btn), disable_web_page_preview=True, parse_mode=enums.ParseMode.HTML)
         await m.delete()
         await handle_auto_delete(dxb)
+ 
+
  #______________________________________________________AUTO_FILTER____________________________________________________________
 
 async def old_auto_filter(client, msg, spoll=False):
