@@ -3,7 +3,7 @@ import logging
 import asyncio
 import math
 from typing import Optional, Tuple, List
-from database.ia_filterdb import Media, Media2
+from database.ia_filterdb import Media, Media2, MEDIA_DBS
 from info import MULTIPLE_DB, ADMINS
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -565,9 +565,9 @@ async def quality_report_cmd(bot, message):
 
         msg = await message.reply_text("📊 Calculating total files...\n⏳ Please wait...", reply_markup=cancel_markup)
 
-        total_docs = await Media.collection.estimated_document_count()
-        if MULTIPLE_DB:
-            total_docs += await Media2.collection.estimated_document_count()
+        total_docs = 0
+        for media_cls in MEDIA_DBS:
+            total_docs += await media_cls.collection.estimated_document_count()
 
         if total_docs == 0:
             return await msg.edit_text("❌ No files in database")
@@ -605,14 +605,11 @@ async def quality_report_cmd(bot, message):
                         pass
             return True
 
-        if not await process_cursor(Media.collection):
-            return await msg.edit_text("🛑 **Process Cancelled by Admin!**")
-
-        if MULTIPLE_DB:
-            if not await process_cursor(Media2.collection):
+        for media_cls in MEDIA_DBS:
+            if not await process_cursor(media_cls.collection):
                 return await msg.edit_text("🛑 **Process Cancelled by Admin!**")
 
-        report = f"📊 **QUALITY REPORT (DB1 & DB2)**\n{'='*50}\n\n📁 **Total Files:** {total_docs}\n\n🎬 **Source Quality Distribution:**\n{'─'*50}\n"
+        report = f"📊 **QUALITY REPORT ({len(MEDIA_DBS)} DB{'s' if len(MEDIA_DBS) > 1 else ''})**\n{'='*50}\n\n📁 **Total Files:** {total_docs}\n\n🎬 **Source Quality Distribution:**\n{'─'*50}\n"
         quality_order = ['camrip', 'hdcam', 'hdtc', 'hdts', 'ts', 'tc', 'predvd', 'dvdscr', 'dvdrip', 'tvrip', 'hdtv', 'webrip', 'web-dl', 'webdl', 'hdrip', 'bluray', 'bdrip', 'brrip', 'unknown']
 
         for quality in quality_order:
@@ -656,10 +653,9 @@ async def cleanup_dry_single_cmd(bot, message):
         words = [w for w in base_title.split() if len(w) > 1]
         search_pattern = ".*".join([rf"\b{re.escape(w)}\b" for w in words[:5]]) if words else re.escape(base_title)
 
-        similar_files = await Media.collection.find({'file_name': {'$regex': search_pattern, '$options': 'i'}}).to_list(None)
-        if MULTIPLE_DB:
-            similar_files2 = await Media2.collection.find({'file_name': {'$regex': search_pattern, '$options': 'i'}}).to_list(None)
-            similar_files.extend(similar_files2)
+        similar_files = []
+        for media_cls in MEDIA_DBS:
+            similar_files.extend(await media_cls.collection.find({'file_name': {'$regex': search_pattern, '$options': 'i'}}).to_list(None))
 
         if not similar_files:
             return await msg.edit_text(f"❌ No files found for: {movie_name}")
@@ -754,12 +750,12 @@ async def cleanup_confirm_single_cmd(bot, message):
         if not base_title:
             return await msg.edit_text(f"❌ Could not extract title from: {movie_name}")
 
-        deleted_count, deleted_files = await cleanup_duplicates(db_collection=Media.collection, base_title=base_title, keep_highest_quality=True)
-
-        if MULTIPLE_DB:
-            d_count2, d_files2 = await cleanup_duplicates(db_collection=Media2.collection, base_title=base_title, keep_highest_quality=True)
-            deleted_count += d_count2
-            deleted_files.extend(d_files2)
+        deleted_count = 0
+        deleted_files = []
+        for media_cls in MEDIA_DBS:
+            d_count, d_files = await cleanup_duplicates(db_collection=media_cls.collection, base_title=base_title, keep_highest_quality=True)
+            deleted_count += d_count
+            deleted_files.extend(d_files)
 
         if deleted_count > 0:
             deleted_preview = ""
@@ -865,9 +861,9 @@ async def cleanup_dry_batch_cmd(bot, message):
 
         msg = await message.reply_text("📊 Calculating total files...\n⏳ Please wait...", reply_markup=cancel_markup)
 
-        total_docs = await Media.collection.estimated_document_count()
-        if MULTIPLE_DB:
-            total_docs += await Media2.collection.estimated_document_count()
+        total_docs = 0
+        for media_cls in MEDIA_DBS:
+            total_docs += await media_cls.collection.estimated_document_count()
 
         if total_docs == 0:
             return await msg.edit_text("❌ No files in database")
@@ -877,16 +873,11 @@ async def cleanup_dry_batch_cmd(bot, message):
         total_del = 0
         duplicate_movies = []
 
-        status1, mov1, del1, dup1 = await process_dry_batch(Media.collection, task_id, msg, cancel_markup, total_docs, p_state)
-        if not status1:
-            return await msg.edit_text("🛑 **Process Cancelled by Admin!**")
-        t_movies += mov1; total_del += del1; duplicate_movies.extend(dup1)
-
-        if MULTIPLE_DB:
-            status2, mov2, del2, dup2 = await process_dry_batch(Media2.collection, task_id, msg, cancel_markup, total_docs, p_state)
-            if not status2:
+        for media_cls in MEDIA_DBS:
+            status, mov, delc, dup = await process_dry_batch(media_cls.collection, task_id, msg, cancel_markup, total_docs, p_state)
+            if not status:
                 return await msg.edit_text("🛑 **Process Cancelled by Admin!**")
-            t_movies += mov2; total_del += del2; duplicate_movies.extend(dup2)
+            t_movies += mov; total_del += delc; duplicate_movies.extend(dup)
 
         duplicate_movies.sort(key=lambda x: x['to_delete'], reverse=True)
 
@@ -1005,25 +996,20 @@ async def cleanup_confirm_batch_cmd(bot, message):
 
         msg = await message.reply_text("📊 Calculating total files...\n⏳ Please wait...", reply_markup=cancel_markup)
 
-        total_docs = await Media.collection.estimated_document_count()
-        if MULTIPLE_DB:
-            total_docs += await Media2.collection.estimated_document_count()
+        total_docs = 0
+        for media_cls in MEDIA_DBS:
+            total_docs += await media_cls.collection.estimated_document_count()
 
         p_state = {'count': 0}
         total_del = 0
         movies_clean = 0
         del_files = []
 
-        status1, clean1, files1 = await process_confirm_batch(Media.collection, task_id, msg, cancel_markup, total_docs, p_state)
-        if not status1:
-            return await msg.edit_text("🛑 **Process Cancelled by Admin!**")
-        movies_clean += clean1; del_files.extend(files1); total_del += len(files1)
-
-        if MULTIPLE_DB:
-            status2, clean2, files2 = await process_confirm_batch(Media2.collection, task_id, msg, cancel_markup, total_docs, p_state)
-            if not status2:
+        for media_cls in MEDIA_DBS:
+            status, clean, files = await process_confirm_batch(media_cls.collection, task_id, msg, cancel_markup, total_docs, p_state)
+            if not status:
                 return await msg.edit_text("🛑 **Process Cancelled by Admin!**")
-            movies_clean += clean2; del_files.extend(files2); total_del += len(files2)
+            movies_clean += clean; del_files.extend(files); total_del += len(files)
 
         if total_del > 0:
             deleted_preview = ""
