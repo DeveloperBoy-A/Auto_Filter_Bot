@@ -80,9 +80,12 @@ DATABASE_URI = environ.get('DATABASE_URI', "")  # MongoDB URI for the database
 DATABASE_NAME = environ.get('DATABASE_NAME', "DeveloperBoy-A") # Database name (default: cluster)
 COLLECTION_NAME = environ.get('COLLECTION_NAME', 'My_Tg_files') # Collection name (default: dreamcinezone_files)
 
-# If MULTIPLE_DB Is True Then Fill DATABASE_URI2 Value Else You Will Get Error.
+# If MULTIPLE_DB Is True Then Fill DATABASE_URI2 (and optionally URI3/4/5) Value Else You Will Get Error.
 MULTIPLE_DB = is_enabled(os.environ.get('MULTIPLE_DB', "False"), False) # Type True For Turn On MULTIPLE DB FUNTION 
-DATABASE_URI2 = environ.get('DATABASE_URI2', "")  # MongoDB URI for the second database (if MULTIPLE_DB is True)
+DATABASE_URI2 = environ.get('DATABASE_URI2', "")  # MongoDB URI for the 2nd database (if MULTIPLE_DB is True)
+DATABASE_URI3 = environ.get('DATABASE_URI3', "")  # MongoDB URI for the 3rd database (optional, MULTIPLE_DB True)
+DATABASE_URI4 = environ.get('DATABASE_URI4', "")  # MongoDB URI for the 4th database (optional, MULTIPLE_DB True)
+DATABASE_URI5 = environ.get('DATABASE_URI5', "")  # MongoDB URI for the 5th database (optional, MULTIPLE_DB True)
 
 # ============================
 # Movie Notification & Update Settings
@@ -283,9 +286,25 @@ Bot_cmds = {
 if MULTIPLE_DB == False:
     DATABASE_URI = DATABASE_URI
     DATABASE_URI2 = DATABASE_URI
+    DATABASE_URI3 = DATABASE_URI
+    DATABASE_URI4 = DATABASE_URI
+    DATABASE_URI5 = DATABASE_URI
+    DATABASE_URIS = [DATABASE_URI]
 else:
     DATABASE_URI = DATABASE_URI
-    DATABASE_URI2 = DATABASE_URI2
+    DATABASE_URI2 = DATABASE_URI2 or DATABASE_URI
+    DATABASE_URI3 = DATABASE_URI3 or DATABASE_URI
+    DATABASE_URI4 = DATABASE_URI4 or DATABASE_URI
+    DATABASE_URI5 = DATABASE_URI5 or DATABASE_URI
+    # Sirf wahi URIs list mein aayenge jo genuinely alag (distinct) hain,
+    # taaki ek hi cluster par baar baar duplicate operations na ho.
+    DATABASE_URIS = [DATABASE_URI]
+    for _extra_uri in (DATABASE_URI2, DATABASE_URI3, DATABASE_URI4, DATABASE_URI5):
+        if _extra_uri and _extra_uri not in DATABASE_URIS:
+            DATABASE_URIS.append(_extra_uri)
+
+# Total number of distinct MongoDB clusters currently in use (1 to 5)
+TOTAL_DATABASES = len(DATABASE_URIS)
 
 # ============================
 # Logs Configuration
