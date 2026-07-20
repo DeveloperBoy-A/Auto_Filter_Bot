@@ -3,7 +3,7 @@ from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from pyrogram.errors.exceptions.bad_request_400 import MessageTooLong, PeerIdInvalid
 from info import ADMINS,MULTIPLE_DB, LOG_CHANNEL, OWNER_LNK, MELCOW_PHOTO
 from database.users_chats_db import db, db2
-from database.ia_filterdb import Media, Media2, db as db_stats, db2 as db2_stats, client, client2
+from database.ia_filterdb import Media, Media2, MEDIA_DBS, db as db_stats, client
 from utils import get_size, temp, get_settings, get_readable_time
 from Script import script
 from pyrogram.errors import ChatAdminRequired
@@ -163,68 +163,62 @@ async def get_stats(bot, message):
     try:
         msg = await message.reply("📊ᴀᴄᴄᴇꜱꜱɪɴɢ ꜱᴛᴀᴛᴜꜱ ᴅᴇᴛᴀɪʟꜱ...")
 
-        # ---------- Users / Premium / Files ----------
+        # ---------- Users / Premium ----------
         total_users = await db.total_users_count()
         totl_chats = await db.total_chat_count()
         premium = await db.all_premium_users()
-        file1 = await Media.count_documents()
 
         # ---------- Cluster Limit ----------
-        DB_SIZE = 512 * 1024 * 1024  # 512 MB
-
-        # ---------- PRIMARY DB REAL STATS ----------
-        dbstats = await db_stats.command("dbStats")
-        current_db_size = dbstats['storageSize'] + dbstats['indexSize']
-
-        # Use current DB size for cluster
-        db_size = current_db_size  # Cluster = DB_SIZE fixed
-        free = max(DB_SIZE - current_db_size, 0)
+        DB_SIZE = 512 * 1024 * 1024  # 512 MB (free-tier cap)
 
         uptime = get_readable_time(time() - botStartTime)
         ram = psutil.virtual_memory().percent
         cpu = psutil.cpu_percent()
 
-        if MULTIPLE_DB == False:
+        # ---------- Single DB (fast path, keeps old layout) ----------
+        if len(MEDIA_DBS) == 1:
+            file1 = await Media.count_documents()
+            dbstats = await db_stats.command("dbStats")
+            current_db_size = dbstats['storageSize'] + dbstats['indexSize']
+            free = max(DB_SIZE - current_db_size, 0)
+
             await msg.edit(script.STATUS_TXT.format(
                 total_users,
                 totl_chats,
                 premium,
                 file1,
-                get_size(current_db_size),  # Used Storage
-                get_size(DB_SIZE),          # Cluster Storage
-                get_size(free),             # Free Storage
+                get_size(current_db_size),
+                get_size(DB_SIZE),
+                get_size(free),
                 uptime,
                 ram,
                 cpu
             ))
             return
 
-        # ---------- SECONDARY DB ----------
-        file2 = await Media2.count_documents()
+        # ---------- Multiple DBs (2 to 5) — built dynamically from Script.py templates ----------
+        db_blocks = []
+        grand_total_files = 0
+        for idx, media_cls in enumerate(MEDIA_DBS, start=1):
+            file_count = await media_cls.count_documents()
+            grand_total_files += file_count
 
-        db2stats = await db2_stats.command("dbStats")
-        current_db2_size = db2stats['storageSize'] + db2stats['indexSize']
+            stats = await media_cls.collection.database.command("dbStats")
+            used = stats['storageSize'] + stats['indexSize']
+            free = max(DB_SIZE - used, 0)
 
-        db2_size = current_db2_size  # Cluster = DB_SIZE fixed
-        free2 = max(DB_SIZE - current_db2_size, 0)
+            db_blocks.append(script.MULTI_STATUS_DB_BLOCK_TXT.format(
+                idx,
+                file_count,
+                get_size(used),
+                get_size(DB_SIZE),
+                get_size(free)
+            ))
 
-        await msg.edit(script.MULTI_STATUS_TXT.format(
-            total_users,
-            totl_chats,
-            premium,
-            file1,
-            get_size(current_db_size),  # DB1 Used
-            get_size(DB_SIZE),          # DB1 Cluster
-            get_size(free),             # DB1 Free
-            file2,
-            get_size(current_db2_size), # DB2 Used
-            get_size(DB_SIZE),          # DB2 Cluster
-            get_size(free2),            # DB2 Free
-            uptime,
-            ram,
-            cpu,
-            int(file1) + int(file2)     # Total files
-        ))
+        header = script.MULTI_STATUS_HEADER_TXT.format(total_users, totl_chats, premium)
+        footer = script.MULTI_STATUS_FOOTER_TXT.format(uptime, ram, cpu, grand_total_files)
+
+        await msg.edit(header + "".join(db_blocks) + footer)
 
     except Exception as e:
         print(f"Error In stats :- {e}")
