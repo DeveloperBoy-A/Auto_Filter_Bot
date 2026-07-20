@@ -10,7 +10,7 @@ from plugins.quality_manager import extract_quality_info, is_high_quality, find_
 from pyrogram import Client, filters, enums
 from info import CHANNELS, MOVIE_UPDATE_CHANNEL, LINK_PREVIEW, ABOVE_PREVIEW, BAD_WORDS, ADMINS, LANDSCAPE_POSTER, TMDB_POSTER, MULTIPLE_DB
 from Script import script
-from database.ia_filterdb import save_file, Media, Media2
+from database.ia_filterdb import save_file, Media, Media2, MEDIA_DBS
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from utils import temp
 from pymongo.errors import PyMongoError, DuplicateKeyError
@@ -272,22 +272,14 @@ async def media_handler(bot, message):
         if is_high_quality(quality_info):
             logger.info(f"[QUALITY] ✨ High quality file detected - checking for lower quality duplicates...")
 
-            cleanup_success, cleanup_msg = await find_and_delete_lower_quality(
-                db_collection=Media.collection,
-                new_filename=media.file_name,
-                new_caption=media.caption
-            )
-            if cleanup_success:
-                logger.info(f"[QUALITY DB1] {cleanup_msg}")
-
-            if MULTIPLE_DB:
-                cleanup_success2, cleanup_msg2 = await find_and_delete_lower_quality(
-                    db_collection=Media2.collection,
+            for idx, media_cls in enumerate(MEDIA_DBS, start=1):
+                cleanup_success, cleanup_msg = await find_and_delete_lower_quality(
+                    db_collection=media_cls.collection,
                     new_filename=media.file_name,
                     new_caption=media.caption
                 )
-                if cleanup_success2:
-                    logger.info(f"[QUALITY DB2] {cleanup_msg2}")
+                if cleanup_success:
+                    logger.info(f"[QUALITY DB{idx}] {cleanup_msg}")
         else:
             logger.info(
                 f"[QUALITY] ℹ️  Lower/Standard quality file uploaded:\n"
