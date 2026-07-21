@@ -1178,17 +1178,29 @@ def extract_season_episode(name):
 def is_series_file(name) -> bool:
     """
     File name ke andar Season/Episode jaisa pattern hai ya nahi, ye check karta hai.
-    True  -> Series/Web-Series ka file lagta hai (S01E01, Season 2, etc.)
+    True  -> Series/Web-Series ka file lagta hai
+             (S01E01, Season 2, 1x05, EP03, S01-S05, E01-E10, Complete Series, etc.)
     False -> Movie ka file lagta hai
     """
     name = str(name).lower()
-    if re.search(r"\bs\d{1,2}[\s._-]*e\d{1,4}\b", name):
-        return True
-    if re.search(r"\bseason[\s._-]*\d{1,2}\b", name):
-        return True
-    if re.search(r"\bs\d{1,2}\b", name) and re.search(r"\be(?:p(?:isode)?)?[\s._-]*\d{1,4}\b", name):
-        return True
-    return False
+
+    series_patterns = [
+        r"\bs\d{1,2}[\s._-]*e\d{1,4}\b",                                              # S01E01, S1E1
+        r"\bs\d{1,2}\s*-\s*s?\d{1,2}\b",                                              # S01-S05, S01-05 (season range)
+        r"\be(?:p(?:isode)?)?[\s._-]*\d{1,4}\s*-\s*(?:e(?:p(?:isode)?)?[\s._-]*)?\d{1,4}\b",  # E01-E10, EP01-10, Episode 1-24
+        r"\b\d{1,2}x\d{1,3}\b",                                                       # 1x05, 01x01
+        r"\bseason[\s._-]*\d{1,2}\b",                                                 # Season 1
+        r"\bweb[\s._-]?series\b",                                                     # Web Series
+        r"\bseries\b",                                                                # Series
+        r"\bs\d{1,2}\b",                                                              # lone S01 (season pack)
+        r"\bepisode[\s._-]*\d{1,4}\b",                                                # Episode 5
+        r"\bep[\s._-]*\d{1,4}\b",                                                     # EP05
+        r"\ball\s*episodes?\b",                                                       # All Episodes
+        r"\bcomplete\b.*\b(?:season|series)\b",                                       # Complete ... Season/Series
+        r"\b(?:season|series)\b.*\bcomplete\b",                                       # Season/Series ... Complete
+    ]
+
+    return any(re.search(p, name) for p in series_patterns)
 
 # ----------------- 3. क्वेरी नॉर्मलाइजेशन और स्मार्ट एक्सपेंशन -----------------
 
