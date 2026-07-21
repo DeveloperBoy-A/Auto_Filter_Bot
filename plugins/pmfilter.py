@@ -41,6 +41,15 @@ BUTTONS0 = {}
 BUTTONS1 = {}
 BUTTONS2 = {}
 SPELL_CHECK = {}
+MEDIA_TYPE = {}  # key -> "movie" | "series"  (Movie/Series filter selection)
+
+
+def movie_series_row(key):
+    """🎬 Mᴏᴠɪᴇ / 📺 Sᴇʀɪᴇs filter button row, added on top of Quality/Language/Season."""
+    return [
+        InlineKeyboardButton("🎬 Mᴏᴠɪᴇ", callback_data=f"mtype#movie#{key}"),
+        InlineKeyboardButton("📺 Sᴇʀɪᴇs", callback_data=f"mtype#series#{key}")
+    ]
 
 
 @Client.on_message(filters.group & filters.text & filters.incoming)
@@ -162,7 +171,7 @@ async def next_page(bot, query):
     if not search:
         await query.answer(script.OLD_ALRT_TXT.format(query.from_user.first_name), show_alert=True)
         return
-    files, n_offset, total = await get_search_results(query.message.chat.id, search, offset=offset, filter=True)
+    files, n_offset, total = await get_search_results(query.message.chat.id, search, offset=offset, filter=True, media_type=MEDIA_TYPE.get(key))
     try:
         n_offset = int(n_offset)
     except:
@@ -191,6 +200,7 @@ async def next_page(bot, query):
                            "Sᴇᴀsᴏɴ",  callback_data=f"seasons#{key}")
                    ]
                    )
+        btn.insert(0, movie_series_row(key))
         btn.insert(0,
                    [
                        InlineKeyboardButton(
@@ -213,6 +223,7 @@ async def next_page(bot, query):
                            "Sᴇᴀsᴏɴ",  callback_data=f"seasons#{key}")
                    ]
                    )
+        btn.insert(0, movie_series_row(key))
         btn.insert(0, [
             InlineKeyboardButton(
                 "⚜️ 𝐑𝐞𝐦𝐨𝐯𝐞 𝐚𝐝𝐬 ⚜️", url=f"https://t.me/{temp.U_NAME}?start=premium"),
@@ -438,7 +449,7 @@ async def filter_qualities_cb_handler(client: Client, query: CallbackQuery):
     if qual != "homepage":
         search = f"{search} {qual}"
     BUTTONS[key] = search
-    files, offset, total_results = await get_search_results(chat_id, search, offset=0, filter=True)
+    files, offset, total_results = await get_search_results(chat_id, search, offset=0, filter=True, media_type=MEDIA_TYPE.get(key))
     if not files:
         await query.answer("🚫 ɴᴏ ꜰɪʟᴇꜱ ᴡᴇʀᴇ ꜰᴏᴜɴᴅ 🚫", show_alert=1)
         return
@@ -462,6 +473,7 @@ async def filter_qualities_cb_handler(client: Client, query: CallbackQuery):
                            "Sᴇᴀsᴏɴ",  callback_data=f"seasons#{key}")
                    ]
                    )
+        btn.insert(0, movie_series_row(key))
         btn.insert(0,
                    [
                        InlineKeyboardButton(
@@ -481,6 +493,7 @@ async def filter_qualities_cb_handler(client: Client, query: CallbackQuery):
                            "Sᴇᴀsᴏɴ",  callback_data=f"seasons#{key}")
                    ]
                    )
+        btn.insert(0, movie_series_row(key))
         btn.insert(0,
                    [
                        InlineKeyboardButton(
@@ -597,7 +610,7 @@ async def filter_languages_cb_handler(client: Client, query: CallbackQuery):
     if lang != "homepage":
         search = f"{search} {lang}"
     BUTTONS[key] = search
-    files, offset, total_results = await get_search_results(chat_id, search, offset=0, filter=True)
+    files, offset, total_results = await get_search_results(chat_id, search, offset=0, filter=True, media_type=MEDIA_TYPE.get(key))
     if not files:
         await query.answer("🚫 ɴᴏ ꜰɪʟᴇꜱ ᴡᴇʀᴇ ꜰᴏᴜɴᴅ 🚫", show_alert=1)
         return
@@ -621,6 +634,7 @@ async def filter_languages_cb_handler(client: Client, query: CallbackQuery):
                            "Sᴇᴀsᴏɴ",  callback_data=f"seasons#{key}")
                    ]
                    )
+        btn.insert(0, movie_series_row(key))
         btn.insert(0,
                    [
                        InlineKeyboardButton(
@@ -640,6 +654,7 @@ async def filter_languages_cb_handler(client: Client, query: CallbackQuery):
                        InlineKeyboardButton(
                            "Sᴇᴀsᴏɴ",  callback_data=f"seasons#{key}")
                    ])
+        btn.insert(0, movie_series_row(key))
         btn.insert(0,
                    [
                        InlineKeyboardButton(
@@ -746,7 +761,7 @@ async def filter_seasons_cb_handler(client: Client, query: CallbackQuery):
 
     chat_id = query.message.chat.id
     req = query.from_user.id
-    files, n_offset, total_results = await get_search_results(chat_id, query_input, offset=0, filter=True)
+    files, n_offset, total_results = await get_search_results(chat_id, query_input, offset=0, filter=True, media_type=MEDIA_TYPE.get(key))
     if not files:
         return await query.answer("🚫 ɴᴏ ꜰɪʟᴇꜱ ꜰᴏᴜɴᴅ 🚫", show_alert=True)
 
@@ -774,6 +789,7 @@ async def filter_seasons_cb_handler(client: Client, query: CallbackQuery):
             InlineKeyboardButton("Sᴇᴀꜱᴏɴ", callback_data=f"seasons#{key}"),
         ],
     )
+    btn.insert(0, movie_series_row(key))
     btn.insert(
         0,
         [
@@ -828,6 +844,137 @@ async def filter_seasons_cb_handler(client: Client, query: CallbackQuery):
     else:
         try:
             await query.edit_message_reply_markup(InlineKeyboardMarkup(btn))
+        except MessageNotModified:
+            pass
+    await query.answer()
+
+
+# movie / series filter
+
+
+@Client.on_callback_query(filters.regex(r"^mtype#"))
+async def media_type_cb_handler(client: Client, query: CallbackQuery):
+    _, mtype, key = query.data.split("#")
+    curr_time = datetime.now(pytz.timezone('Asia/Kolkata')).time()
+    try:
+        if int(query.from_user.id) not in [query.message.reply_to_message.from_user.id, 0]:
+            return await query.answer(
+                f"⚠️ ʜᴇʟʟᴏ {query.from_user.first_name},\n"
+                f"ᴛʜɪꜱ ɪꜱ ɴᴏᴛ ʏᴏᴜʀ ᴍᴏᴠɪᴇ ʀᴇǫᴜᴇꜱᴛ,\nʀᴇǫᴜᴇꜱᴛ ʏᴏᴜʀ'ꜱ...",
+                show_alert=True,
+            )
+    except:
+        pass
+
+    search = BUTTONS.get(key) if BUTTONS.get(key) is not None else FRESH.get(key)
+    if not search:
+        await query.answer(script.OLD_ALRT_TXT.format(query.from_user.first_name), show_alert=True)
+        return
+
+    req = query.from_user.id
+    chat_id = query.message.chat.id
+    message = query.message
+
+    if mtype == "homepage":
+        MEDIA_TYPE.pop(key, None)
+    else:
+        MEDIA_TYPE[key] = mtype
+
+    files, offset, total_results = await get_search_results(chat_id, search, offset=0, filter=True, media_type=MEDIA_TYPE.get(key))
+    if not files:
+        label = "🎬 ᴍᴏᴠɪᴇ" if mtype == "movie" else "📺 sᴇʀɪᴇs"
+        await query.answer(f"🚫 ɴᴏ {label} ꜰɪʟᴇꜱ ᴡᴇʀᴇ ꜰᴏᴜɴᴅ 🚫", show_alert=1)
+        MEDIA_TYPE.pop(key, None)
+        return
+
+    temp.GETALL[key] = files
+    settings = await get_settings(message.chat.id)
+    if settings.get('button'):
+        btn = [
+            [
+                InlineKeyboardButton(text=f"🔗 {get_size(file.file_size)} ≽ " + clean_filename(
+                    file.file_name), callback_data=f'file#{file.file_id}'),
+            ]
+            for file in files
+        ]
+        btn.insert(0,
+                   [
+                       InlineKeyboardButton(
+                           f'Qᴜᴀʟɪᴛʏ', callback_data=f"qualities#{key}"),
+                       InlineKeyboardButton(
+                           "Lᴀɴɢᴜᴀɢᴇ", callback_data=f"languages#{key}"),
+                       InlineKeyboardButton(
+                           "Sᴇᴀsᴏɴ",  callback_data=f"seasons#{key}")
+                   ]
+                   )
+        btn.insert(0, movie_series_row(key))
+        btn.insert(0,
+                   [
+                       InlineKeyboardButton(
+                           "⚜️ 𝐑𝐞𝐦𝐨𝐯𝐞 𝐚𝐝𝐬 ⚜️", url=f"https://t.me/{temp.U_NAME}?start=premium"),
+                       InlineKeyboardButton(
+                           "Sᴇɴᴅ Aʟʟ", callback_data=f"sendfiles#{key}")
+                   ])
+    else:
+        btn = []
+        btn.insert(0,
+                   [
+                       InlineKeyboardButton(
+                           f'Qᴜᴀʟɪᴛʏ', callback_data=f"qualities#{key}"),
+                       InlineKeyboardButton(
+                           "Lᴀɴɢᴜᴀɢᴇ", callback_data=f"languages#{key}"),
+                       InlineKeyboardButton(
+                           "Sᴇᴀsᴏɴ",  callback_data=f"seasons#{key}")
+                   ]
+                   )
+        btn.insert(0, movie_series_row(key))
+        btn.insert(0,
+                   [
+                       InlineKeyboardButton(
+                           "⚜️ 𝐑𝐞𝐦𝐨𝐯𝐞 𝐚𝐝𝐬 ⚜️", url=f"https://t.me/{temp.U_NAME}?start=premium"),
+                       InlineKeyboardButton(
+                           "Sᴇɴᴅ Aʟʟ", callback_data=f"sendfiles#{key}")
+                   ])
+
+    if offset != "":
+        try:
+            if settings['max_btn']:
+                btn.append(
+                    [InlineKeyboardButton("ᴘᴀɢᴇ", callback_data="pages"), InlineKeyboardButton(
+                        text=f"1/{math.ceil(int(total_results)/10)}", callback_data="pages"), InlineKeyboardButton(text="ɴᴇxᴛ ⋟", callback_data=f"next_{req}_{key}_{offset}")]
+                )
+            else:
+                btn.append(
+                    [InlineKeyboardButton("ᴘᴀɢᴇ", callback_data="pages"), InlineKeyboardButton(
+                        text=f"1/{math.ceil(int(total_results)/int(MAX_B_TN))}", callback_data="pages"), InlineKeyboardButton(text="ɴᴇxᴛ ⋟", callback_data=f"next_{req}_{key}_{offset}")]
+                )
+        except KeyError:
+            await save_group_settings(query.message.chat.id, 'max_btn', True)
+            btn.append(
+                [InlineKeyboardButton("ᴘᴀɢᴇ", callback_data="pages"), InlineKeyboardButton(
+                    text=f"1/{math.ceil(int(total_results)/10)}", callback_data="pages"), InlineKeyboardButton(text="ɴᴇxᴛ ⋟", callback_data=f"next_{req}_{key}_{offset}")]
+            )
+    else:
+        btn.append(
+            [InlineKeyboardButton(
+                text="↭ ɴᴏ ᴍᴏʀᴇ ᴘᴀɢᴇꜱ ᴀᴠᴀɪʟᴀʙʟᴇ ↭", callback_data="pages")]
+        )
+
+    if not settings["button"]:
+        cur_time = datetime.now(pytz.timezone('Asia/Kolkata')).time()
+        time_difference = timedelta(hours=cur_time.hour, minutes=cur_time.minute, seconds=(cur_time.second+(cur_time.microsecond/1000000))) - \
+            timedelta(hours=curr_time.hour, minutes=curr_time.minute, seconds=(
+                curr_time.second+(curr_time.microsecond/1000000)))
+        remaining_seconds = "{:.2f}".format(time_difference.total_seconds())
+        dreamx_title = clean_search_text(search)
+        cap = await get_cap(settings, remaining_seconds, files, query, total_results, dreamx_title, offset=1)
+        try:
+            await query.message.edit_text(text=cap, reply_markup=InlineKeyboardMarkup(btn), disable_web_page_preview=True)
+        except MessageNotModified:
+            pass
+    else:
+        try:
+            await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(btn))
         except MessageNotModified:
             pass
     await query.answer()
@@ -1846,6 +1993,7 @@ async def auto_filter(client, msg, spoll=False):
         InlineKeyboardButton("Lᴀɴɢᴜᴀɢᴇ", callback_data=f"languages#{key}"),
         InlineKeyboardButton("Sᴇᴀsᴏɴ",  callback_data=f"seasons#{key}")
     ])
+    btn.insert(0, movie_series_row(key))
     btn.insert(0, [
         InlineKeyboardButton("⚜️ 𝐑𝐞𝐦𝐨𝐯𝐞 𝐚𝐝𝐬 ⚜️", url=f"https://t.me/{temp.U_NAME}?start=premium"),
         InlineKeyboardButton("Sᴇɴᴅ Aʟʟ", callback_data=f"sendfiles#{key}")
@@ -2060,6 +2208,7 @@ async def old_auto_filter(client, msg, spoll=False):
                        InlineKeyboardButton("Sᴇᴀsᴏɴ",  callback_data=f"seasons#{key}")
                    ]
                    )
+        btn.insert(0, movie_series_row(key))
         btn.insert(0,
                    [
                        InlineKeyboardButton("⚜️ 𝐑𝐞𝐦𝐨𝐯𝐞 𝐚𝐝𝐬 ⚜️", url=f"https://t.me/{temp.U_NAME}?start=premium"),
@@ -2074,6 +2223,7 @@ async def old_auto_filter(client, msg, spoll=False):
                        InlineKeyboardButton("Sᴇᴀsᴏɴ",  callback_data=f"seasons#{key}")
                    ]
                    )
+        btn.insert(0, movie_series_row(key))
         btn.insert(0,
                    [
                        InlineKeyboardButton("⚜️ 𝐑𝐞𝐦𝐨𝐯𝐞 𝐚𝐝𝐬 ⚜️", url=f"https://t.me/{temp.U_NAME}?start=premium"),
