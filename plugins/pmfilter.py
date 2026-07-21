@@ -856,6 +856,7 @@ async def filter_seasons_cb_handler(client: Client, query: CallbackQuery):
 async def media_type_cb_handler(client: Client, query: CallbackQuery):
     _, mtype, key = query.data.split("#")
     curr_time = datetime.now(pytz.timezone('Asia/Kolkata')).time()
+
     try:
         if int(query.from_user.id) not in [query.message.reply_to_message.from_user.id, 0]:
             return await query.answer(
@@ -880,116 +881,203 @@ async def media_type_cb_handler(client: Client, query: CallbackQuery):
     else:
         MEDIA_TYPE[key] = mtype
 
-    files, offset, total_results = await get_search_results(chat_id, search, offset=0, filter=True, media_type=MEDIA_TYPE.get(key))
+    # Loading notification
+    try:
+        if mtype == "movie":
+            await query.answer(
+                "🎬 Filtering Movies... Please wait.",
+                show_alert=False,
+                cache_time=0
+            )
+        elif mtype == "series":
+            await query.answer(
+                "📺 Filtering Series... Please wait.",
+                show_alert=False,
+                cache_time=0
+            )
+        else:
+            await query.answer(
+                "🔍 Filtering... Please wait.",
+                show_alert=False,
+                cache_time=0
+            )
+    except Exception:
+        pass
+
+    files, offset, total_results = await get_search_results(
+        chat_id,
+        search,
+        offset=0,
+        filter=True,
+        media_type=MEDIA_TYPE.get(key)
+    )
+
     if not files:
         label = "🎬 ᴍᴏᴠɪᴇ" if mtype == "movie" else "📺 sᴇʀɪᴇs"
-        await query.answer(f"🚫 ɴᴏ {label} ꜰɪʟᴇꜱ ᴡᴇʀᴇ ꜰᴏᴜɴᴅ 🚫", show_alert=1)
+        await query.answer(f"🚫 ɴᴏ {label} ꜰɪʟᴇꜱ ᴡᴇʀᴇ ꜰᴏᴜɴᴅ 🚫", show_alert=True)
         MEDIA_TYPE.pop(key, None)
         return
 
     temp.GETALL[key] = files
+
     settings = await get_settings(message.chat.id)
+
     if settings.get('button'):
         btn = [
             [
-                InlineKeyboardButton(text=f"🔗 {get_size(file.file_size)} ≽ " + clean_filename(
-                    file.file_name), callback_data=f'file#{file.file_id}'),
+                InlineKeyboardButton(
+                    text=f"🔗 {get_size(file.file_size)} ≽ " + clean_filename(file.file_name),
+                    callback_data=f'file#{file.file_id}'
+                ),
             ]
             for file in files
         ]
-        btn.insert(0,
-                   [
-                       InlineKeyboardButton(
-                           f'Qᴜᴀʟɪᴛʏ', callback_data=f"qualities#{key}"),
-                       InlineKeyboardButton(
-                           "Lᴀɴɢᴜᴀɢᴇ", callback_data=f"languages#{key}"),
-                       InlineKeyboardButton(
-                           "Sᴇᴀsᴏɴ",  callback_data=f"seasons#{key}")
-                   ]
-                   )
+
+        btn.insert(0, [
+            InlineKeyboardButton("Qᴜᴀʟɪᴛʏ", callback_data=f"qualities#{key}"),
+            InlineKeyboardButton("Lᴀɴɢᴜᴀɢᴇ", callback_data=f"languages#{key}"),
+            InlineKeyboardButton("Sᴇᴀsᴏɴ", callback_data=f"seasons#{key}")
+        ])
+
         btn.insert(0, movie_series_row(key))
-        btn.insert(0,
-                   [
-                       InlineKeyboardButton(
-                           "⚜️ 𝐑𝐞𝐦𝐨𝐯𝐞 𝐚𝐝𝐬 ⚜️", url=f"https://t.me/{temp.U_NAME}?start=premium"),
-                       InlineKeyboardButton(
-                           "Sᴇɴᴅ Aʟʟ", callback_data=f"sendfiles#{key}")
-                   ])
+
+        btn.insert(0, [
+            InlineKeyboardButton(
+                "⚜️ 𝐑𝐞𝐦𝐨𝐯𝐞 𝐚𝐝𝐬 ⚜️",
+                url=f"https://t.me/{temp.U_NAME}?start=premium"
+            ),
+            InlineKeyboardButton(
+                "Sᴇɴᴅ Aʟʟ",
+                callback_data=f"sendfiles#{key}"
+            )
+        ])
+
     else:
         btn = []
-        btn.insert(0,
-                   [
-                       InlineKeyboardButton(
-                           f'Qᴜᴀʟɪᴛʏ', callback_data=f"qualities#{key}"),
-                       InlineKeyboardButton(
-                           "Lᴀɴɢᴜᴀɢᴇ", callback_data=f"languages#{key}"),
-                       InlineKeyboardButton(
-                           "Sᴇᴀsᴏɴ",  callback_data=f"seasons#{key}")
-                   ]
-                   )
+
+        btn.insert(0, [
+            InlineKeyboardButton("Qᴜᴀʟɪᴛʏ", callback_data=f"qualities#{key}"),
+            InlineKeyboardButton("Lᴀɴɢᴜᴀɢᴇ", callback_data=f"languages#{key}"),
+            InlineKeyboardButton("Sᴇᴀsᴏɴ", callback_data=f"seasons#{key}")
+        ])
+
         btn.insert(0, movie_series_row(key))
-        btn.insert(0,
-                   [
-                       InlineKeyboardButton(
-                           "⚜️ 𝐑𝐞𝐦𝐨𝐯𝐞 𝐚𝐝𝐬 ⚜️", url=f"https://t.me/{temp.U_NAME}?start=premium"),
-                       InlineKeyboardButton(
-                           "Sᴇɴᴅ Aʟʟ", callback_data=f"sendfiles#{key}")
-                   ])
+
+        btn.insert(0, [
+            InlineKeyboardButton(
+                "⚜️ 𝐑𝐞𝐦𝐨𝐯𝐞 𝐚𝐝𝐬 ⚜️",
+                url=f"https://t.me/{temp.U_NAME}?start=premium"
+            ),
+            InlineKeyboardButton(
+                "Sᴇɴᴅ Aʟʟ",
+                callback_data=f"sendfiles#{key}"
+            )
+        ])
 
     if offset != "":
         try:
             if settings['max_btn']:
-                btn.append(
-                    [InlineKeyboardButton("ᴘᴀɢᴇ", callback_data="pages"), InlineKeyboardButton(
-                        text=f"1/{math.ceil(int(total_results)/10)}", callback_data="pages"), InlineKeyboardButton(text="ɴᴇxᴛ ⋟", callback_data=f"next_{req}_{key}_{offset}")]
-                )
+                btn.append([
+                    InlineKeyboardButton("ᴘᴀɢᴇ", callback_data="pages"),
+                    InlineKeyboardButton(
+                        text=f"1/{math.ceil(int(total_results)/10)}",
+                        callback_data="pages"
+                    ),
+                    InlineKeyboardButton(
+                        text="ɴᴇxᴛ ⋟",
+                        callback_data=f"next_{req}_{key}_{offset}"
+                    )
+                ])
             else:
-                btn.append(
-                    [InlineKeyboardButton("ᴘᴀɢᴇ", callback_data="pages"), InlineKeyboardButton(
-                        text=f"1/{math.ceil(int(total_results)/int(MAX_B_TN))}", callback_data="pages"), InlineKeyboardButton(text="ɴᴇxᴛ ⋟", callback_data=f"next_{req}_{key}_{offset}")]
-                )
+                btn.append([
+                    InlineKeyboardButton("ᴘᴀɢᴇ", callback_data="pages"),
+                    InlineKeyboardButton(
+                        text=f"1/{math.ceil(int(total_results)/int(MAX_B_TN))}",
+                        callback_data="pages"
+                    ),
+                    InlineKeyboardButton(
+                        text="ɴᴇxᴛ ⋟",
+                        callback_data=f"next_{req}_{key}_{offset}"
+                    )
+                ])
         except KeyError:
             await save_group_settings(query.message.chat.id, 'max_btn', True)
-            btn.append(
-                [InlineKeyboardButton("ᴘᴀɢᴇ", callback_data="pages"), InlineKeyboardButton(
-                    text=f"1/{math.ceil(int(total_results)/10)}", callback_data="pages"), InlineKeyboardButton(text="ɴᴇxᴛ ⋟", callback_data=f"next_{req}_{key}_{offset}")]
-            )
+
+            btn.append([
+                InlineKeyboardButton("ᴘᴀɢᴇ", callback_data="pages"),
+                InlineKeyboardButton(
+                    text=f"1/{math.ceil(int(total_results)/10)}",
+                    callback_data="pages"
+                ),
+                InlineKeyboardButton(
+                    text="ɴᴇxᴛ ⋟",
+                    callback_data=f"next_{req}_{key}_{offset}"
+                )
+            ])
     else:
-        btn.append(
-            [InlineKeyboardButton(
-                text="↭ ɴᴏ ᴍᴏʀᴇ ᴘᴀɢᴇꜱ ᴀᴠᴀɪʟᴀʙʟᴇ ↭", callback_data="pages")]
-        )
+        btn.append([
+            InlineKeyboardButton(
+                text="↭ ɴᴏ ᴍᴏʀᴇ ᴘᴀɢᴇꜱ ᴀᴠᴀɪʟᴀʙʟᴇ ↭",
+                callback_data="pages"
+            )
+        ])
 
     if not settings["button"]:
         cur_time = datetime.now(pytz.timezone('Asia/Kolkata')).time()
-        time_difference = timedelta(hours=cur_time.hour, minutes=cur_time.minute, seconds=(cur_time.second+(cur_time.microsecond/1000000))) - \
-            timedelta(hours=curr_time.hour, minutes=curr_time.minute, seconds=(
-                curr_time.second+(curr_time.microsecond/1000000)))
+        time_difference = timedelta(
+            hours=cur_time.hour,
+            minutes=cur_time.minute,
+            seconds=(cur_time.second + (cur_time.microsecond / 1000000))
+        ) - timedelta(
+            hours=curr_time.hour,
+            minutes=curr_time.minute,
+            seconds=(curr_time.second + (curr_time.microsecond / 1000000))
+        )
+
         remaining_seconds = "{:.2f}".format(time_difference.total_seconds())
         dreamx_title = clean_search_text(search)
-        cap = await get_cap(settings, remaining_seconds, files, query, total_results, dreamx_title, offset=1)
+
+        cap = await get_cap(
+            settings,
+            remaining_seconds,
+            files,
+            query,
+            total_results,
+            dreamx_title,
+            offset=1
+        )
+
         try:
-            await query.message.edit_text(text=cap, reply_markup=InlineKeyboardMarkup(btn), disable_web_page_preview=True)
+            await query.message.edit_text(
+                text=cap,
+                reply_markup=InlineKeyboardMarkup(btn),
+                disable_web_page_preview=True
+            )
         except MessageNotModified:
             pass
+
     else:
         try:
-            await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(btn))
+            await query.edit_message_reply_markup(
+                reply_markup=InlineKeyboardMarkup(btn)
+            )
         except MessageNotModified:
             pass
+
     await query.answer()
 
-
-
-# -------- AUTO DELETE -------- #
-async def send_auto_delete(client, chat_id, text, reply_markup, seconds=60):
-    try:
-        msg = await client.send_message(chat_id, text, reply_markup=reply_markup)
-        await asyncio.sleep(seconds)
-        await msg.delete()
-    except Exception as e:
-        print(e)
-
+  
+  
+# -------- AUTO DELETE -------- #  
+async def send_auto_delete(client, chat_id, text, reply_markup, seconds=60):  
+    try:  
+        msg = await client.send_message(chat_id, text, reply_markup=reply_markup)  
+        await asyncio.sleep(seconds)  
+        await msg.delete()  
+    except Exception as e:  
+        print(e)  
+  
+  
 
 @Client.on_callback_query()
 async def cb_handler(client: Client, query: CallbackQuery):
