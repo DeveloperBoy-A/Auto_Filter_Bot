@@ -1290,7 +1290,7 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
     elif media_type == "series":
         filter_mongo = {"$and": [filter_mongo, {"file_name": SERIES_REGEX}]}
 
-    fetch_limit = max(500, offset + max_results * 2)  # Increased for better pagination
+    fetch_limit = max(300, offset + max_results * 2)  # Increased for better pagination
 
     if len(MEDIA_DBS) > 1:
         counts = await asyncio.gather(*[m.count_documents(filter_mongo) for m in MEDIA_DBS])
