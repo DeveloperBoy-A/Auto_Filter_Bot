@@ -1175,6 +1175,27 @@ def extract_season_episode(name):
     episode = int(e.group(1)) if e else 0
     return season, episode
 
+SERIES_PATTERNS = [
+    r"\bs\d{1,2}[\s._-]*e\d{1,4}\b",                                              # S01E01, S1E1
+    r"\bs\d{1,2}\s*-\s*s?\d{1,2}\b",                                              # S01-S05, S01-05 (season range)
+    r"\be(?:p(?:isode)?)?[\s._-]*\d{1,4}\s*-\s*(?:e(?:p(?:isode)?)?[\s._-]*)?\d{1,4}\b",  # E01-E10, EP01-10, Episode 1-24
+    r"\b\d{1,2}x\d{1,3}\b",                                                       # 1x05, 01x01
+    r"\bseason[\s._-]*\d{1,2}\b",                                                 # Season 1
+    r"\bweb[\s._-]?series\b",                                                     # Web Series
+    r"\bseries\b",                                                                # Series
+    r"\bs\d{1,2}\b",                                                              # lone S01 (season pack)
+    r"\bepisode[\s._-]*\d{1,4}\b",                                                # Episode 5
+    r"\bep[\s._-]*\d{1,4}\b",                                                     # EP05
+    r"\ball\s*episodes?\b",                                                       # All Episodes
+    r"\bcomplete\b.*\b(?:season|series)\b",                                       # Complete ... Season/Series
+    r"\b(?:season|series)\b.*\bcomplete\b",                                       # Season/Series ... Complete
+]
+
+# Ek hi combined regex — DB query ($regex) aur Python dono jagah reuse hota hai,
+# taaki "sirf top 500 fetch hoke phir filter" wali limitation na aaye aur
+# pagination/total count DB level pe hi sahi aaye.
+SERIES_REGEX = re.compile("|".join(f"(?:{p})" for p in SERIES_PATTERNS), re.IGNORECASE)
+
 def is_series_file(name) -> bool:
     """
     File name ke andar Season/Episode jaisa pattern hai ya nahi, ye check karta hai.
@@ -1182,25 +1203,7 @@ def is_series_file(name) -> bool:
              (S01E01, Season 2, 1x05, EP03, S01-S05, E01-E10, Complete Series, etc.)
     False -> Movie ka file lagta hai
     """
-    name = str(name).lower()
-
-    series_patterns = [
-        r"\bs\d{1,2}[\s._-]*e\d{1,4}\b",                                              # S01E01, S1E1
-        r"\bs\d{1,2}\s*-\s*s?\d{1,2}\b",                                              # S01-S05, S01-05 (season range)
-        r"\be(?:p(?:isode)?)?[\s._-]*\d{1,4}\s*-\s*(?:e(?:p(?:isode)?)?[\s._-]*)?\d{1,4}\b",  # E01-E10, EP01-10, Episode 1-24
-        r"\b\d{1,2}x\d{1,3}\b",                                                       # 1x05, 01x01
-        r"\bseason[\s._-]*\d{1,2}\b",                                                 # Season 1
-        r"\bweb[\s._-]?series\b",                                                     # Web Series
-        r"\bseries\b",                                                                # Series
-        r"\bs\d{1,2}\b",                                                              # lone S01 (season pack)
-        r"\bepisode[\s._-]*\d{1,4}\b",                                                # Episode 5
-        r"\bep[\s._-]*\d{1,4}\b",                                                     # EP05
-        r"\ball\s*episodes?\b",                                                       # All Episodes
-        r"\bcomplete\b.*\b(?:season|series)\b",                                       # Complete ... Season/Series
-        r"\b(?:season|series)\b.*\bcomplete\b",                                       # Season/Series ... Complete
-    ]
-
-    return any(re.search(p, name) for p in series_patterns)
+    return bool(SERIES_REGEX.search(str(name).lower()))
 
 # ----------------- 3. क्वेरी नॉर्मलाइजेशन और स्मार्ट एक्सपेंशन -----------------
 
@@ -1279,6 +1282,14 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
     if file_type:
         filter_mongo["file_type"] = file_type
 
+    # ✅ Movie / Series filter — DB query level pe hi apply karo (post-fetch nahi),
+    # taaki count_documents() aur pagination poore collection ke hisaab se sahi aaye,
+    # sirf top fetch_limit files tak seemit na ho.
+    if media_type == "movie":
+        filter_mongo = {"$and": [filter_mongo, {"file_name": {"$not": SERIES_REGEX}}]}
+    elif media_type == "series":
+        filter_mongo = {"$and": [filter_mongo, {"file_name": SERIES_REGEX}]}
+
     fetch_limit = max(500, offset + max_results * 2)  # Increased for better pagination
 
     if len(MEDIA_DBS) > 1:
@@ -1307,14 +1318,6 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
             Media.count_documents(filter_mongo),
             Media.find(filter_mongo).sort("$natural", -1).limit(fetch_limit).to_list(length=fetch_limit)
         )
-
-    # ✅ Movie / Series filter (post-fetch, based on filename pattern)
-    if media_type == "movie":
-        files = [f for f in files if not is_series_file(f.file_name)]
-        total_results = len(files)
-    elif media_type == "series":
-        files = [f for f in files if is_series_file(f.file_name)]
-        total_results = len(files)
 
     is_series = any(re.search(r"s\d{1,2}.*e\d{1,4}", str(file.file_name).lower()) for file in files)
 
