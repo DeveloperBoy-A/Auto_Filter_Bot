@@ -70,21 +70,14 @@ async def broadcast_cancel(bot, query):
         await query.message.edit("🛑 Trying to cancel groups broadcasting...")
 
 # ----------------- Send message helper -----------------
+
 async def send_message(bot, chat_id, reply_msg, pin=False):
     try:
-        reply_markup = reply_msg.reply_markup
-        sent = None
-
-        if reply_msg.text:
-            sent = await bot.send_message(chat_id=chat_id, text=reply_msg.text, reply_markup=reply_markup)
-        elif reply_msg.photo:
-            sent = await bot.send_photo(chat_id=chat_id, photo=reply_msg.photo.file_id, caption=reply_msg.caption, reply_markup=reply_markup)
-        elif reply_msg.video:
-            sent = await bot.send_video(chat_id=chat_id, video=reply_msg.video.file_id, caption=reply_msg.caption, reply_markup=reply_markup)
-        elif reply_msg.document:
-            sent = await bot.send_document(chat_id=chat_id, document=reply_msg.document.file_id, caption=reply_msg.caption, reply_markup=reply_markup)
-        else:
-            return None, "Error"
+        # .copy() function message ki saari formatting (bold, italic, spoiler, buttons) same rakhta hai
+        sent = await reply_msg.copy(
+            chat_id=chat_id,
+            reply_markup=reply_msg.reply_markup
+        )
 
         if pin:
             try:
@@ -95,7 +88,7 @@ async def send_message(bot, chat_id, reply_msg, pin=False):
 
     except Exception as e:
         err = str(e).lower()
-        if "blocked" in err:
+        if "blocked" in err or "user_is_blocked" in err:
             return None, "Blocked"
         elif "chat not found" in err or "deleted" in err:
             return None, "Deleted"
