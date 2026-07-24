@@ -1,4 +1,4 @@
-FROM python:3.12.2
+FROM python:3.12.2-slim
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends mediainfo libmediainfo0v5 ca-certificates && \
