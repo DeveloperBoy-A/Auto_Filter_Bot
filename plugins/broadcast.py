@@ -70,18 +70,25 @@ async def broadcast_cancel(bot, query):
         await query.message.edit("🛑 Trying to cancel groups broadcasting...")
 
 # ----------------- Send message helper -----------------
-
 async def send_message(bot, chat_id, reply_msg, pin=False):
     try:
-        # .copy() function message ki saari formatting (bold, italic, spoiler, buttons) same rakhta hai
-        sent = await reply_msg.copy(
+        # bot.copy_message direct Telegram API ko call karta hai jisse 
+        # Text Spoiler, Media Spoiler, Bold, Italic sab 100% waisa hi copy hoga
+        sent = await bot.copy_message(
             chat_id=chat_id,
+            from_chat_id=reply_msg.chat.id,
+            message_id=reply_msg.id,
             reply_markup=reply_msg.reply_markup
         )
 
         if pin:
             try:
-                await sent.pin(disable_notification=True)
+                # Client method use karke pin karenge
+                await bot.pin_chat_message(
+                    chat_id=chat_id,
+                    message_id=sent.id,
+                    disable_notification=True
+                )
             except:
                 pass
         return sent, "Success"
@@ -94,6 +101,7 @@ async def send_message(bot, chat_id, reply_msg, pin=False):
             return None, "Deleted"
         else:
             return None, "Error"
+
 
 # ----------------- User Broadcast (Batch + Async + Persistent) -----------------
 @Client.on_message(filters.command("broadcast") & filters.user(ADMINS) & filters.reply)
