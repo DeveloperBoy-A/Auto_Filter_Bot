@@ -660,6 +660,14 @@ def extract_episode_title(text):
             
             # Agar title mein sirf numbers ya symbols bhare hain, toh usko ignore karo
             if len(title) > 2 and not re.fullmatch(r'[\d\s\-🗃️]+', title):
+                # ✅ FIX: Reject leftover range/connector junk like "25 To 25",
+                # "To 25", "21 And 25" — these are NOT real episode titles,
+                # they're remnants of an episode-RANGE (e.g. "EP21-25 To 25")
+                # that season_episode already captured. Without this check,
+                # such junk was getting appended to the saved filename,
+                # producing malformed duplicates like "S02 E21-25 To 25".
+                if re.fullmatch(r'\s*\d{1,4}\s*(?:to|and|&|-)?\s*\d{0,4}\s*', title, flags=re.IGNORECASE):
+                    continue
                 return title.title()
 
     return None
@@ -685,7 +693,11 @@ def extract_languages_quality(text_to_scan):
     full_match = re.search(r'\b(S\d{2})[\s\-]*?(E\d{2,4}(?:[\s\-]*E?[-\s]*\d{2,4})?)\b', normalized_se)
     if full_match:
         season_episode = full_match.group(0)
-        episode_title = extract_episode_title(text_to_scan)
+        # ✅ FIX: Skip episode-title extraction for ranges/packs (e.g. "E21-25")
+        # — batch releases don't have a single episode title, and attempting
+        # this was the source of malformed duplicates like "S02 E21-25 To 25".
+        if not re.search(r'E\d{1,4}\s*-\s*\d{1,4}', season_episode, flags=re.IGNORECASE):
+            episode_title = extract_episode_title(text_to_scan)
     else:
         s_match = re.search(r'\b(S\d{2}(?:-\d{2})?)\b', normalized_se)
         e_match = re.search(r'\b(E\d{2,4}(?:-\d{2,4})?)\b', normalized_se)
@@ -694,7 +706,8 @@ def extract_languages_quality(text_to_scan):
             season_episode = f"{s_match.group(1)} {e_match.group(1)}"
         elif e_match:
             season_episode = e_match.group(1)
-            episode_title = extract_episode_title(text_to_scan)
+            if not re.search(r'E\d{1,4}\s*-\s*\d{1,4}', season_episode, flags=re.IGNORECASE):
+                episode_title = extract_episode_title(text_to_scan)
         elif s_match:
             season_episode = s_match.group(1)
             
@@ -1120,6 +1133,17 @@ async def save_file(media, bot=None, extracted_info=None):  # ✅ NEW: Added ext
         )
         await record.commit()
         logger.info(f"[SAVED] {file_name}")
+
+        # ✅ FIX: Overwrite media.file_name with the properly reconstructed
+        # name (the exact same string that was just saved to DB above / shown
+        # in the [SAVED] log). channel.py's quality-detection, duplicate
+        # cleanup, and its own logging all read media.file_name AFTER this
+        # call returns — so this one line makes all of them automatically use
+        # the correct, tag-complete name instead of the raw/inconsistent
+        # Telegram filename (which was causing UNKNOWN quality + broken
+        # duplicate matching on episode-range / underscore uploads).
+        media.file_name = file_name
+
         return True, 1
 
     except DuplicateKeyError:
