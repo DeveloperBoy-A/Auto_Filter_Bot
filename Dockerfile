@@ -1,13 +1,15 @@
 FROM python:3.12.2-slim
 
+# Yahan humne 'git' add kar diya hai
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends mediainfo libmediainfo0v5 ca-certificates && \
+    apt-get install -y --no-install-recommends mediainfo libmediainfo0v5 ca-certificates git && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /DreamxBotz
 
 COPY requirements.txt .
+
 RUN pip install --no-cache-dir --upgrade pip --root-user-action=ignore && \
     pip install --no-cache-dir -r requirements.txt --root-user-action=ignore
 
