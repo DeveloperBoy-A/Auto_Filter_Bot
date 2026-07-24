@@ -80,10 +80,12 @@ QUALITY_PATTERN = re.compile(
     re.IGNORECASE
 )
 YEAR_PATTERN = re.compile(r"(?<![A-Za-z0-9])(?:19|20)\d{2}(?![A-Za-z0-9])")
-RANGE_REGEX = re.compile(r'\bS(\d{1,2})[^\w\n\r]*E(?:p(?:isode)?)?0*(\d{1,2})\s*(?:to|-)\s*(?:E(?:p(?:isode)?)?)?0*(\d{1,2})',re.IGNORECASE)
-SINGLE_REGEX = re.compile(r'\bS(\d{1,2})[^\w\n\r]*E(?:p(?:isode)?)?0*(\d{1,3})', re.IGNORECASE)
-NAMED_REGEX = re.compile(r'Season\s*0*(\d{1,2})[\s\-,:]*Ep(?:isode)?\s*0*(\d{1,3})', re.IGNORECASE)
-EP_ONLY_RANGE = re.compile(r'\b(?:EP|Episode)0*(\d{1,3})\s*-\s*0*(\d{1,3})\b',re.IGNORECASE)
+
+# 🎯 NEW: Improved Regex for Underscores & Ranges
+RANGE_REGEX = re.compile(r'\bS(\d{1,2})[\s_.-]*E(?:p(?:isode)?)?[\s_.-]*0*(\d{1,3})[\s_.-]*(?:to|-|_)[\s_.-]*(?:E(?:p(?:isode)?)?)?[\s_.-]*0*(\d{1,3})', re.IGNORECASE)
+SINGLE_REGEX = re.compile(r'\bS(\d{1,2})[\s_.-]*E(?:p(?:isode)?)?[\s_.-]*0*(\d{1,3})', re.IGNORECASE)
+NAMED_REGEX = re.compile(r'Season[\s_.-]*0*(\d{1,2})[\s_.-]*Ep(?:isode)?[\s_.-]*0*(\d{1,3})', re.IGNORECASE)
+EP_ONLY_RANGE = re.compile(r'\b(?:EP|Episode)[\s_.-]*0*(\d{1,3})[\s_.-]*(?:to|-|_)[\s_.-]*(?:EP|Episode)?[\s_.-]*0*(\d{1,3})\b', re.IGNORECASE)
 
 
 MEDIA_FILTER = filters.document | filters.video | filters.audio
@@ -150,53 +152,60 @@ def schedule_update(bot, base_name, delay=5):
     )
 
 def extract_media_info(filename: str, caption: str):
-    """🎯 IMPROVED: Cleaner base_name extraction without garbage"""
-    filename = normalize(clean_mentions_links(filename).title())
+    """🎯 IMPROVED: Cleaner base_name extraction safely supporting ranges & underscores"""
+    # 1. Mentions/Links clean karo, par Hyphens aur Underscores ko Regex ke liye bacha kar rakho
+    clean_raw = clean_mentions_links(filename).title()
     caption_clean = clean_mentions_links(caption).lower() if caption else ""
-    unified = f"{caption_clean} {filename.lower()}".strip()
-
-    season = episode = year = None
-    tag = "#MOVIE"
-    processed_raw = base_raw = filename
-    quality = get_qualities(caption_clean) or get_qualities(filename.lower()) or "N/A"
-    ott_platform = extract_ott_platform(f"{filename} {caption_clean}")
-    language = extract_language(filename, caption_clean)
-
-    season, episode = extract_season_episode(filename)
     
+    # 2. Episodes ko extract karo PEHLE, normalize hone se pehle!
+    season, episode = extract_season_episode(clean_raw)
+    
+    # 3. Ab normalize karo baaki strings/quality nikalne ke liye
+    filename_norm = normalize(clean_raw)
+    unified = f"{caption_clean} {filename_norm.lower()}".strip()
+
+    year = None
+    tag = "#MOVIE"
+    processed_raw = clean_raw
+    base_raw = clean_raw
+    quality = get_qualities(caption_clean) or get_qualities(filename_norm.lower()) or "N/A"
+    ott_platform = extract_ott_platform(f"{filename_norm} {caption_clean}")
+    language = extract_language(filename_norm, caption_clean)
+
     if season is not None:
         tag = "#SERIES"
-        # Find where season/episode pattern ends
-        if m := (RANGE_REGEX.search(filename) or SINGLE_REGEX.search(filename) or 
-                 NAMED_REGEX.search(filename) or EP_ONLY_RANGE.search(filename)):
+        # Cut-off point raw string me dhundho (jisme abhi underscores/hyphens safe hain)
+        if m := (RANGE_REGEX.search(clean_raw) or SINGLE_REGEX.search(clean_raw) or 
+                 NAMED_REGEX.search(clean_raw) or EP_ONLY_RANGE.search(clean_raw)):
             match_str = m.group(0)
-            end_idx = filename.lower().find(match_str.lower()) + len(match_str)
-            base_raw = filename[:filename.lower().find(match_str.lower())].strip()
-            processed_raw = filename[:end_idx]
+            end_idx = clean_raw.lower().find(match_str.lower()) + len(match_str)
             
+            base_raw = clean_raw[:clean_raw.lower().find(match_str.lower())].strip()
+            processed_raw = clean_raw[:end_idx]
+
             # Try to find year after season/episode
-            if year_match := YEAR_PATTERN.search(filename[end_idx:]):
+            if year_match := YEAR_PATTERN.search(clean_raw[end_idx:]):
                 year = year_match.group(0)
-                year_idx = filename.lower().find(year, end_idx)
+                year_idx = clean_raw.lower().find(year, end_idx)
                 if year_idx != -1:
-                    processed_raw = filename[:year_idx + 4]
+                    processed_raw = clean_raw[:year_idx + 4]
     else:
         # Movie mode: find year or quality cutoff
         if year_match := YEAR_PATTERN.search(unified):
             year = year_match.group(0)
-            year_idx = filename.lower().find(year.lower())
+            year_idx = filename_norm.lower().find(year.lower())
             if year_idx != -1:
-                processed_raw = filename[:year_idx + 4]
+                processed_raw = filename_norm[:year_idx + 4]
                 base_raw = processed_raw
         else:
             if qual_match := QUALITY_PATTERN.search(unified):
                 qual_str = qual_match.group(0)
-                qual_idx = filename.lower().find(qual_str.lower())
+                qual_idx = filename_norm.lower().find(qual_str.lower())
                 if qual_idx != -1:
-                    processed_raw = filename[:qual_idx].strip()
+                    processed_raw = filename_norm[:qual_idx].strip()
                     base_raw = processed_raw
 
-    # Clean base_name
+    # Clean base_name (Yahan normalize karo taaki extra symbols space ban jayein)
     base_name = normalize(remove_ignored_words(normalize(base_raw)))
 
     # Remove leading symbols like -, _, :, etc.
@@ -217,7 +226,7 @@ def extract_media_info(filename: str, caption: str):
     base_name = re.sub(r"\s+", " ", base_name).strip()
 
     if not base_name or base_name.lower() == "n/a":
-        base_name = normalize(remove_ignored_words(filename)).strip() or filename
+        base_name = normalize(remove_ignored_words(filename_norm)).strip() or filename_norm
 
     return {
         "processed": normalize(processed_raw),
@@ -230,6 +239,7 @@ def extract_media_info(filename: str, caption: str):
         "ott_platform": ott_platform,
         "language": language
     }
+
 
 
 @Client.on_message(filters.chat(CHANNELS) & MEDIA_FILTER)
