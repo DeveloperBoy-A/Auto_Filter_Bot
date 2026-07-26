@@ -18,7 +18,7 @@ from pyrogram.errors import FloodWait, ChatAdminRequired, UserNotParticipant
 from database.ia_filterdb import Media, Media2, MEDIA_DBS, delete_file_by_id, delete_files_by_query, get_file_details, unpack_new_file_id, get_bad_files, get_cover_url
 from database.users_chats_db import db
 from info import *
-from utils import get_settings, save_group_settings, is_subscribed, is_req_subscribed, get_size, get_shortlink, is_check_admin, temp, get_readable_time, get_time, generate_settings_text, log_error, clean_filename
+from utils import get_settings, save_group_settings, is_subscribed, is_req_subscribed, get_size, get_shortlink, is_check_admin, temp, get_readable_time, get_time, generate_settings_text, log_error, clean_filename, enforce_daily_limit, get_remaining_limit_text
 
 
 
@@ -126,6 +126,10 @@ async def start(client, message):
             reply_markup=reply_markup,
             parse_mode=enums.ParseMode.HTML
         )
+        # --- Daily Download Limit System: show remaining downloads for free users ---
+        limit_txt = await get_remaining_limit_text(message.from_user.id)
+        if limit_txt:
+            await message.reply_text(limit_txt, parse_mode=enums.ParseMode.HTML)
         return
 
     if len(message.command) == 2 and message.command[1] in ["subscribe", "error", "okay", "help"]:
@@ -326,6 +330,10 @@ async def start(client, message):
 
             filesarr = []
             for file in files:
+                # --- Daily Download Limit System: check before sending each file ---
+                allowed, is_premium_user, _ = await enforce_daily_limit(message)
+                if not allowed:
+                    break
                 f_id = file.file_id  # Conflict से बचने के लिए नाम बदला
                 files_ = await get_file_details(f_id)
                 files1 = files_[0]
@@ -368,6 +376,8 @@ async def start(client, message):
                     cover=cover_url
                 )
                 filesarr.append(msg)
+                if not is_premium_user:
+                    await db.increase_download(message.from_user.id)
                 await asyncio.sleep(1) # यहाँ लूप खत्म हो रहा है
 
             # --- अब ये लाइनें FOR LOOP के बाहर हैं (4 स्पेस पीछे) ---
@@ -391,6 +401,17 @@ async def start(client, message):
     settings = await get_settings(int(grp_id))
     if not files_:
         pre, file_id = ((base64.urlsafe_b64decode(data + "=" * (-len(data) % 4))).decode("utf-8")).split("_", 1)
+        # --- Daily Download Limit System: check before sending the file ---
+        allowed, is_premium_user, remaining = await enforce_daily_limit(message)
+        if not allowed:
+            return
+
+        # Show remaining limit BEFORE the file is sent
+        if not is_premium_user:
+            await message.reply_text(
+                script.REMAINING_LIMIT_TXT.format(remaining, DAILY_DOWNLOAD_LIMIT),
+                parse_mode=enums.ParseMode.HTML
+            )
         try:
             if STREAM_MODE and not PREMIUM_STREAM_MODE:
                 btn = [
@@ -416,6 +437,9 @@ async def start(client, message):
                 file_id=file_id,
                 protect_content=settings.get('file_secure', PROTECT_CONTENT),
                 reply_markup=InlineKeyboardMarkup(btn))
+
+            if not is_premium_user:
+                await db.increase_download(message.from_user.id)
 
             filetype = msg.media
             file = getattr(msg, filetype.value)
@@ -444,6 +468,18 @@ async def start(client, message):
             logger.exception(e)
             pass
         return await message.reply('ɴᴏ ꜱᴜᴄʜ ꜰɪʟᴇ ᴇxɪꜱᴛꜱ !')
+
+    # --- Daily Download Limit System: check before sending the file ---
+    allowed, is_premium_user, remaining = await enforce_daily_limit(message)
+    if not allowed:
+        return
+
+    # Show remaining limit BEFORE the file is sent
+    if not is_premium_user:
+        await message.reply_text(
+            script.REMAINING_LIMIT_TXT.format(remaining, DAILY_DOWNLOAD_LIMIT),
+            parse_mode=enums.ParseMode.HTML
+        )
 
     files = files_[0]
     title = clean_filename(files.file_name)
@@ -488,6 +524,8 @@ async def start(client, message):
         reply_markup=InlineKeyboardMarkup(btn),
         cover=cover_url
     )
+    if not is_premium_user:
+        await db.increase_download(message.from_user.id)
     k = await msg.reply(script.DEL_MSG.format(get_time(DELETE_TIME)),
             quote=True, parse_mode=enums.ParseMode.HTML
     )     
