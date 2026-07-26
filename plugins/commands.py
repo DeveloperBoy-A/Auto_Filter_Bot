@@ -18,7 +18,7 @@ from pyrogram.errors import FloodWait, ChatAdminRequired, UserNotParticipant
 from database.ia_filterdb import Media, Media2, MEDIA_DBS, delete_file_by_id, delete_files_by_query, get_file_details, unpack_new_file_id, get_bad_files, get_cover_url
 from database.users_chats_db import db
 from info import *
-from utils import get_settings, save_group_settings, is_subscribed, is_req_subscribed, get_size, get_shortlink, is_check_admin, temp, get_readable_time, get_time, generate_settings_text, log_error, clean_filename, enforce_daily_limit, get_remaining_limit_text
+from utils import get_settings, save_group_settings, is_subscribed, is_req_subscribed, get_size, get_shortlink, is_check_admin, temp, get_readable_time, get_time, generate_settings_text, log_error, clean_filename, enforce_daily_limit
 
 
 
@@ -126,10 +126,6 @@ async def start(client, message):
             reply_markup=reply_markup,
             parse_mode=enums.ParseMode.HTML
         )
-        # --- Daily Download Limit System: show remaining downloads for free users ---
-        limit_txt = await get_remaining_limit_text(message.from_user.id)
-        if limit_txt:
-            await message.reply_text(limit_txt, parse_mode=enums.ParseMode.HTML)
         return
 
     if len(message.command) == 2 and message.command[1] in ["subscribe", "error", "okay", "help"]:
@@ -327,6 +323,14 @@ async def start(client, message):
             files = temp.GETALL.get(file_id)
             if not files:
                 return await message.reply('<b><i>ɴᴏ ꜱᴜᴄʜ ꜰɪʟᴇ ᴇxɪꜱᴛꜱ !</b></i>')
+
+            # --- Daily Download Limit System: show remaining limit BEFORE the batch starts ---
+            batch_status = await db.get_download_status(message.from_user.id)
+            if not batch_status["is_premium"]:
+                await message.reply_text(
+                    script.REMAINING_LIMIT_TXT.format(batch_status["remaining"], DAILY_DOWNLOAD_LIMIT),
+                    parse_mode=enums.ParseMode.HTML
+                )
 
             filesarr = []
             for file in files:
