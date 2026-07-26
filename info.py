@@ -74,6 +74,11 @@ STAR_PREMIUM_PLANS = {
 }  # Premium plans with their respective durations in days
 
 # ============================
+# Daily Download Limit Configuration
+# ============================
+DAILY_DOWNLOAD_LIMIT = int(environ.get('DAILY_DOWNLOAD_LIMIT', '10'))  # Max files a FREE user can download every 24 hours. Premium users are unlimited.
+
+# ============================
 # MongoDB Configuration
 # ============================
 DATABASE_URI = environ.get('DATABASE_URI', "")  # MongoDB URI for the database
