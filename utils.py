@@ -135,7 +135,7 @@ async def is_req_subscribed(bot, user_id, rqfsub_channels, force_check=False):
 # db.get_download_status). Premium users are always unlimited.
 # ==========================================================
 
-async def enforce_daily_limit(message):
+async def enforce_daily_limit(client, message):
     """
     Call this right before sending a file to a user.
     Returns a tuple: (allowed: bool, is_premium: bool, remaining: int)
@@ -143,8 +143,12 @@ async def enforce_daily_limit(message):
     If the free user's daily limit has already been used up, this sends
     the "🚫 Daily download limit reached." message (with Upgrade to
     Premium / Contact Owner buttons) on its own, so the caller simply
-    needs to `return`/`continue` when allowed is False - no file should
-    be sent in that case.
+    needs to `return`/`continue`/`break` when allowed is False - no file
+    should be sent in that case.
+
+    Uses client.send_message (instead of message.reply_text) and retries
+    once on FloodWait, so the message still reaches the user even when
+    called back-to-back inside a fast batch-download loop.
     """
     user_id = message.from_user.id
     status = await db.get_download_status(user_id)
@@ -158,14 +162,20 @@ async def enforce_daily_limit(message):
     ], [
         InlineKeyboardButton('📱 Contact Owner', url=OWNER_LNK)
     ]]
-    try:
-        await message.reply_text(
-            script.DOWNLOAD_LIMIT_TXT.format(DAILY_DOWNLOAD_LIMIT),
-            reply_markup=InlineKeyboardMarkup(buttons),
-            parse_mode=enums.ParseMode.HTML
-        )
-    except Exception as e:
-        logger.error(f"Error sending download limit message: {e}")
+    for attempt in range(2):  # 1 retry on FloodWait, so the message is never silently dropped
+        try:
+            await client.send_message(
+                chat_id=user_id,
+                text=script.DOWNLOAD_LIMIT_TXT.format(DAILY_DOWNLOAD_LIMIT),
+                reply_markup=InlineKeyboardMarkup(buttons),
+                parse_mode=enums.ParseMode.HTML
+            )
+            break
+        except FloodWait as e:
+            await asyncio.sleep(e.value)
+        except Exception as e:
+            logger.error(f"Error sending download limit message: {e}")
+            break
     return False, False, 0
 
 
