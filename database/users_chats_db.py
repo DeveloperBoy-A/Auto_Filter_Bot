@@ -324,7 +324,89 @@ class Database:
             else:
                 await self.users.update_one({"id": user_id}, {"$set": {"expiry_time": None}})
         return False
-        
+
+    # ==========================================================
+    # Daily Download Limit System
+    # ----------------------------------------------------------
+    # Free users are allowed DAILY_DOWNLOAD_LIMIT file downloads
+    # every rolling 24 hours. Premium users are always unlimited.
+    # Counters are stored on the same document used for premium
+    # (self.users / "uersz" collection) so that a single find_one
+    # query can resolve BOTH premium status and download status,
+    # keeping this efficient for bots with millions of users.
+    #   - daily_download_count : int   -> downloads used today
+    #   - last_download_reset  : dt    -> when the counter last reset
+    # ==========================================================
+
+    async def get_download_status(self, user_id):
+        """
+        Single-query helper that returns the user's current premium +
+        download status, auto-resetting the daily counter if 24 hours
+        have passed since the last reset. Used internally by
+        can_download / increase_download / remaining_downloads /
+        reset_download_if_needed so we never hit MongoDB twice for the
+        same check.
+        Returns: {"is_premium": bool, "count": int, "remaining": int}
+        """
+        user_id = int(user_id)
+        now = datetime.datetime.now()
+        user_data = await self.users.find_one({"id": user_id})
+
+        # ---- Premium check (mirrors has_premium_access logic) ----
+        is_premium = False
+        if user_data:
+            expiry_time = user_data.get("expiry_time")
+            if isinstance(expiry_time, datetime.datetime) and now <= expiry_time:
+                is_premium = True
+            elif expiry_time is not None:
+                await self.users.update_one({"id": user_id}, {"$set": {"expiry_time": None}})
+
+        if is_premium:
+            # Unlimited downloads, no need to touch the counters
+            return {"is_premium": True, "count": 0, "remaining": DAILY_DOWNLOAD_LIMIT}
+
+        # ---- Free user: resolve / reset the daily counter ----
+        count = user_data.get("daily_download_count", 0) if user_data else 0
+        last_reset = user_data.get("last_download_reset") if user_data else None
+
+        if not last_reset or (now - last_reset) >= datetime.timedelta(hours=24):
+            count = 0
+            await self.users.update_one(
+                {"id": user_id},
+                {"$set": {"daily_download_count": 0, "last_download_reset": now}},
+                upsert=True
+            )
+
+        remaining = DAILY_DOWNLOAD_LIMIT - count
+        remaining = remaining if remaining > 0 else 0
+        return {"is_premium": False, "count": count, "remaining": remaining}
+
+    async def reset_download_if_needed(self, user_id):
+        """Resets the user's daily_download_count to 0 if last_download_reset was >= 24 hours ago."""
+        return await self.get_download_status(user_id)
+
+    async def can_download(self, user_id):
+        """Returns True if the user (premium or free within limit) is allowed to download a file right now."""
+        status = await self.get_download_status(user_id)
+        return status["is_premium"] or status["remaining"] > 0
+
+    async def increase_download(self, user_id):
+        """Increments the free user's daily_download_count by 1. Call this only AFTER a file has been sent."""
+        user_id = int(user_id)
+        await self.users.update_one(
+            {"id": user_id},
+            {
+                "$inc": {"daily_download_count": 1},
+                "$setOnInsert": {"last_download_reset": datetime.datetime.now()}
+            },
+            upsert=True
+        )
+
+    async def remaining_downloads(self, user_id):
+        """Returns remaining downloads left today for the user. Premium users get DAILY_DOWNLOAD_LIMIT (unlimited)."""
+        status = await self.get_download_status(user_id)
+        return DAILY_DOWNLOAD_LIMIT if status["is_premium"] else status["remaining"]
+
     
 
     async def update_one(self, filter_query, update_data):
