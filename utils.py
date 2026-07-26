@@ -125,6 +125,58 @@ async def is_req_subscribed(bot, user_id, rqfsub_channels, force_check=False):
     return btn
 
 
+# ==========================================================
+# Daily Download Limit System
+# ----------------------------------------------------------
+# Wraps database.users_chats_db.db's can_download / increase_download /
+# remaining_downloads / reset_download_if_needed so plugin code only has
+# to make ONE call before sending a file. Free users get DAILY_DOWNLOAD_LIMIT
+# downloads every rolling 24 hours (stored in MongoDB and auto reset by
+# db.get_download_status). Premium users are always unlimited.
+# ==========================================================
+
+async def enforce_daily_limit(message):
+    """
+    Call this right before sending a file to a user.
+    Returns a tuple: (allowed: bool, is_premium: bool, remaining: int)
+
+    If the free user's daily limit has already been used up, this sends
+    the "🚫 Daily download limit reached." message (with Upgrade to
+    Premium / Contact Owner buttons) on its own, so the caller simply
+    needs to `return`/`continue` when allowed is False - no file should
+    be sent in that case.
+    """
+    user_id = message.from_user.id
+    status = await db.get_download_status(user_id)
+
+    if status["is_premium"] or status["remaining"] > 0:
+        return True, status["is_premium"], status["remaining"]
+
+    # Limit exceeded -> inform the free user and stop here
+    buttons = [[
+        InlineKeyboardButton('💎 Upgrade to Premium', callback_data='premium_info')
+    ], [
+        InlineKeyboardButton('📱 Contact Owner', url=OWNER_LNK)
+    ]]
+    try:
+        await message.reply_text(
+            script.DOWNLOAD_LIMIT_TXT.format(DAILY_DOWNLOAD_LIMIT),
+            reply_markup=InlineKeyboardMarkup(buttons),
+            parse_mode=enums.ParseMode.HTML
+        )
+    except Exception as e:
+        logger.error(f"Error sending download limit message: {e}")
+    return False, False, 0
+
+
+async def get_remaining_limit_text(user_id):
+    """Returns a small ready-to-send '📦 Remaining limit: X/10' string, or None for premium users."""
+    status = await db.get_download_status(user_id)
+    if status["is_premium"]:
+        return None
+    return script.REMAINING_LIMIT_TXT.format(status["remaining"], DAILY_DOWNLOAD_LIMIT)
+
+
 async def is_subscribed(bot, user_id, fsub_channels, force_check=False):
     """
     Check if user is subscribed to required channels
