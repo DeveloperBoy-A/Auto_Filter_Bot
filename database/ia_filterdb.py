@@ -1306,77 +1306,86 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
     if file_type:
         filter_mongo["file_type"] = file_type
 
-    # ✅ Movie / Series filter — DB query level pe hi apply karo (post-fetch nahi),
-    # taaki count_documents() aur pagination poore collection ke hisaab se sahi aaye,
-    # sirf top fetch_limit files tak seemit na ho.
     if media_type == "movie":
-        filter_mongo = {"$and": [filter_mongo, {"file_name": {"$not": SERIES_REGEX}}]}
+        filter_mongo = {
+            "$and": [
+                filter_mongo,
+                {
+                    "$or": [
+                        {"media_type": "movie"},
+                        {"media_type": None, "file_name": {"$not": SERIES_REGEX}},
+                    ]
+                },
+            ]
+        }
     elif media_type == "series":
-        filter_mongo = {"$and": [filter_mongo, {"file_name": SERIES_REGEX}]}
+        filter_mongo = {
+            "$and": [
+                filter_mongo,
+                {
+                    "$or": [
+                        {"media_type": "series"},
+                        {"media_type": None, "file_name": SERIES_REGEX},
+                    ]
+                },
+            ]
+        }
 
-    fetch_limit = max(300, offset + max_results * 2)  # Increased for better pagination
+    fetch_limit = max(100, offset + max_results * 2)
 
+    # 🚀 SPEED FIX: count_documents में limit=1000 लगाया है। 
+    # इससे DB पूरी दुनिया की फाइल्स गिनने के बजाय 1000 पर रुक जाएगा और तुरंत रेस्पोंस देगा।
     if len(MEDIA_DBS) > 1:
-        counts = await asyncio.gather(*[m.count_documents(filter_mongo) for m in MEDIA_DBS])
+        counts = await asyncio.gather(*[m.count_documents(filter_mongo, limit=1000) for m in MEDIA_DBS])
         total_results = sum(counts)
 
-        files = await MEDIA_DBS[0].find(filter_mongo).sort("$natural", -1).limit(fetch_limit).to_list(length=fetch_limit)
+        files = await MEDIA_DBS[0].find(filter_mongo).sort("_id", -1).limit(fetch_limit).to_list(length=fetch_limit)
         remaining = fetch_limit - len(files)
         for media_cls in MEDIA_DBS[1:]:
             if remaining <= 0:
                 break
-            more_files = await media_cls.find(filter_mongo).sort("$natural", -1).limit(remaining).to_list(length=remaining)
+            more_files = await media_cls.find(filter_mongo).sort("_id", -1).limit(remaining).to_list(length=remaining)
             files.extend(more_files)
             remaining -= len(more_files)
-
-        # Remove duplicate files by file_id
-        seen_ids = set()
-        unique_files = []
-        for file in files:
-            if file.file_id not in seen_ids:
-                unique_files.append(file)
-                seen_ids.add(file.file_id)
-        files = unique_files
     else:
         total_results, files = await asyncio.gather(
-            Media.count_documents(filter_mongo),
-            Media.find(filter_mongo).sort("$natural", -1).limit(fetch_limit).to_list(length=fetch_limit)
+            Media.count_documents(filter_mongo, limit=1000),
+            Media.find(filter_mongo).sort("_id", -1).limit(fetch_limit).to_list(length=fetch_limit)
         )
 
     is_series = any(re.search(r"s\d{1,2}.*e\d{1,4}", str(file.file_name).lower()) for file in files)
 
-    first_word = original_query.split()[0] if original_query.split() else original_query
+    # 🚀 RECENT FILE FIX: Python के बेकार Regex Checks हटा दिए हैं जो नई फाइल्स को नीचे ढकेल रहे थे।
+    indexed_files = list(enumerate(files))
 
     if is_series:
-        files = sorted(
-            files,
-            key=lambda x: (
-                not (re.match(rf"^[\s._\-\[\(]*{re.escape(original_query)}", x.file_name.lower())),
-                not (re.match(rf"^[\s._\-\[\(]*{re.escape(first_word)}", x.file_name.lower())),
-                -extract_season_episode(x.file_name)[0],      
-                -extract_season_episode(x.file_name)[1],      
-                not (re.search(r'\bs\d{1,2}e\d{1,4}\b', x.file_name.lower())), 
-                not (re.search(r'\bs\d{1,2}\s*e\d{1,4}\b', x.file_name.lower())), 
-                -extract_quality(x.file_name),                
-                -extract_source(x.file_name),                 
-                x.file_id
+        def _series_key(item):
+            idx, x = item  
+            season, episode = extract_season_episode(x.file_name)
+            return (
+                -season,      # 1. सबसे नया सीज़न ऊपर
+                -episode,     # 2. सबसे नया एपिसोड ऊपर
+                idx,          # 3. नई अपलोड की गई फाइल ऊपर
+                -extract_quality(x.file_name)
             )
-        )
+        indexed_files = sorted(indexed_files, key=_series_key)
     else:
-        files = sorted(
-            files,
-            key=lambda x: (
-                not (re.match(rf"^[\s._\-\[\(]*{re.escape(original_query)}", x.file_name.lower())),
-                not (re.match(rf"^[\s._\-\[\(]*{re.escape(first_word)}", x.file_name.lower())),
-                -extract_quality(x.file_name),
-                -extract_source(x.file_name),
-                x.file_id
+        def _movie_key(item):
+            idx, x = item  
+            # 🚀 हम नई फाइल्स को 3-3 के ग्रुप में बाँट रहे हैं।
+            # इससे सबसे नई फाइल्स हमेशा टॉप पर रहेंगी, और उन 3 में से अच्छी क्वालिटी (1080p) वाली ऊपर दिखेगी।
+            return (
+                idx // 3,                      # 1. नई अपलोड की गई फाइल्स को प्राथमिकता
+                -extract_quality(x.file_name), # 2. उसके बाद क्वालिटी
+                idx                            
             )
-        )
+        indexed_files = sorted(indexed_files, key=_movie_key)
 
-    paginated_files = files[offset:offset + max_results]
+    # वापस ओरिजिनल फाइल ऑब्जेक्ट्स निकालें
+    sorted_files = [x for idx, x in indexed_files]
 
-    # FIX: Use fixed max_results instead of len(paginated_files) to avoid duplicate results
+    paginated_files = sorted_files[offset:offset + max_results]
+
     next_offset = offset + max_results
     if next_offset >= total_results or len(paginated_files) < max_results:
         next_offset = ""
