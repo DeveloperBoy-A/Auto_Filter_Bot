@@ -960,6 +960,15 @@ async def set_pm_search(client, message):
         await message.reply_text(f"<b>❗ An error occurred: {e}</b>")
 
 _media_backfill_lock = asyncio.Lock()
+_media_backfill_cancel = {"flag": False}
+
+def _progress_bar(done: int, total: int, width: int = 12) -> str:
+    if total <= 0:
+        return "▓" * width + " 100.0%"
+    pct = min(100.0, (done / total) * 100)
+    filled = max(0, min(width, int(width * done / total)))
+    bar = "▓" * filled + "░" * (width - filled)
+    return f"{bar} {pct:.1f}%"
 
 @Client.on_message(filters.private & filters.command("fix_media_speed") & filters.user(ADMINS))
 async def run_media_type_backfill(client, message):
@@ -975,7 +984,10 @@ async def run_media_type_backfill(client, message):
     - Chhote batches + har batch ke baad chhota pause — DB par ek saath
       zyada load nahi padta.
     - Yahi status message har kuch second me apne aap update hoke "live"
-      progress dikhata hai.
+      progress bar dikhata hai.
+    - Neeche ❌ Cancel button — kabhi bhi roka ja sakta hai; jitna ho chuka
+      hoga wo save rehta hai, dobara chalane par sirf baaki files process
+      hongi.
     """
     if _media_backfill_lock.locked():
         await message.reply_text(
@@ -983,9 +995,16 @@ async def run_media_type_backfill(client, message):
         )
         return
 
+    _media_backfill_cancel["flag"] = False
+
+    cancel_markup = InlineKeyboardMarkup(
+        [[InlineKeyboardButton("❌ Cancel", callback_data="cancel_media_backfill")]]
+    )
+
     status = await message.reply_text(
         "<b>⏳ Purani files ko movie/series ke hisaab se classify kiya ja raha hai...</b>\n"
-        "<i>Ye background me chalega, bot normal kaam karta rahega. Status yahi update hoga.</i>"
+        "<i>Ye background me chalega, bot normal kaam karta rahega. Status yahi update hoga.</i>",
+        reply_markup=cancel_markup,
     )
 
     last_edit_at = {"t": 0.0}
@@ -993,25 +1012,41 @@ async def run_media_type_backfill(client, message):
     async def progress_cb(coll_name, done, total):
         now = time.monotonic()
         # Telegram flood-wait se bachne ke liye edit har ~5 sec me ek baar,
-        # sirf last batch pe hamesha edit karo taaki final count sahi dikhe.
+        # sirf last batch pe hamesha edit karo taaki final count sahi aaye.
         if done < total and (now - last_edit_at["t"] < 5):
             return
         last_edit_at["t"] = now
-        pct = (done / total * 100) if total else 100.0
+        bar = _progress_bar(done, total)
         try:
             await status.edit(
                 "<b>⏳ Live Status</b>\n"
                 f"• Collection: <code>{coll_name}</code>\n"
-                f"• Progress: {done} / {total} ({pct:.1f}%)"
+                f"• Progress: {done} / {total}\n"
+                f"<code>{bar}</code>",
+                reply_markup=cancel_markup,
             )
         except Exception:
             pass
 
+    def cancel_check():
+        return _media_backfill_cancel["flag"]
+
     async def _run_backfill():
         async with _media_backfill_lock:
             try:
-                report = await backfill_media_type(progress_cb=progress_cb)
+                report = await backfill_media_type(progress_cb=progress_cb, cancel_check=cancel_check)
+                was_cancelled = report.pop("_cancelled", False)
                 total = sum(report.values())
+
+                if was_cancelled:
+                    await status.edit(
+                        "<b>🛑 Cancel kar diya gaya.</b>\n\n"
+                        f"<b>Us waqt tak files updated:</b> {total}\n"
+                        "<i>Jab chaho /fix_media_speed dubara chala sakte ho — sirf baaki bachi hui "
+                        "files hi process hongi.</i>"
+                    )
+                    return
+
                 if total == 0:
                     await status.edit(
                         "<b>✅ Kuch bhi update karne ki zaroorat nahi thi — sab files already classified hain.</b>"
@@ -1030,6 +1065,18 @@ async def run_media_type_backfill(client, message):
                     pass
 
     asyncio.create_task(_run_backfill())
+
+@Client.on_callback_query(filters.regex("^cancel_media_backfill$"))
+async def cancel_media_backfill_cb(client, query):
+    if ADMINS and query.from_user.id not in ADMINS:
+        await query.answer("Sirf admin cancel kar sakta hai.", show_alert=True)
+        return
+    if not _media_backfill_lock.locked():
+        await query.answer("Koi backfill abhi chal hi nahi raha.", show_alert=True)
+        return
+    _media_backfill_cancel["flag"] = True
+    await query.answer("🛑 Cancel ho raha hai, thoda wait karo...")
+
 
 @Client.on_message(filters.private & filters.command("movie_update") & filters.user(ADMINS))
 async def set_movie_update_notification(client, message):
