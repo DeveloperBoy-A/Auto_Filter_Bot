@@ -1250,6 +1250,7 @@ async def backfill_media_type(
     media_dbs=None,
     progress_cb=None,
     sleep_between_batches: float = 0.25,
+    cancel_check=None,
 ) -> dict:
     """
     One-time (safe to re-run) migration: existing files jinka `media_type`
@@ -1261,11 +1262,17 @@ async def backfill_media_type(
     - Har batch ke baad chhota pause — DB/bot par extra load nahi padta.
     - progress_cb(collection_name, done, total) — diya jaye to live status
       dikhane ke liye har batch ke baad call hota hai.
+    - cancel_check() — diya jaye aur True return kare to migration turant
+      (agle batch boundary par) ruk jaata hai. Us batch tak jo bhi update ho
+      chuka hota hai wo DB me commit rehta hai — dobara chalane par sirf
+      baaki bachi hui files hi process hongi. Result dict me is case me
+      "_cancelled": True bhi milta hai.
     """
     from pymongo import UpdateOne
 
     dbs = media_dbs if media_dbs is not None else MEDIA_DBS
     report = {}
+    cancelled = False
 
     for media_cls in dbs:
         coll = media_cls.collection
@@ -1284,6 +1291,9 @@ async def backfill_media_type(
 
         try:
             async for doc in cursor:
+                if cancel_check and cancel_check():
+                    cancelled = True
+                    break
                 mtype = "series" if is_series_file(doc.get("file_name", "")) else "movie"
                 ops.append(UpdateOne({"_id": doc["_id"]}, {"$set": {"media_type": mtype}}))
                 if len(ops) >= batch_size:
@@ -1295,6 +1305,9 @@ async def backfill_media_type(
                             await progress_cb(media_cls.__name__, updated, pending_total)
                         except Exception:
                             pass
+                    if cancel_check and cancel_check():
+                        cancelled = True
+                        break
                     if sleep_between_batches:
                         await asyncio.sleep(sleep_between_batches)
             if ops:
@@ -1309,6 +1322,12 @@ async def backfill_media_type(
             await cursor.close()
 
         report[media_cls.__name__] = updated
+
+        if cancelled:
+            break
+
+    if cancelled:
+        report["_cancelled"] = True
 
     return report
 
