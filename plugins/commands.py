@@ -19,7 +19,7 @@ from pyrogram.errors import FloodWait, ChatAdminRequired, UserNotParticipant
 from database.ia_filterdb import Media, Media2, MEDIA_DBS, delete_file_by_id, delete_files_by_query, get_file_details, unpack_new_file_id, get_bad_files, get_cover_url, backfill_media_type
 from database.users_chats_db import db
 from info import *
-from utils import get_settings, save_group_settings, is_subscribed, is_req_subscribed, get_size, get_shortlink, is_check_admin, temp, get_readable_time, get_time, generate_settings_text, log_error, clean_filename
+from utils import get_settings, save_group_settings, is_subscribed, is_req_subscribed, get_size, get_shortlink, is_check_admin, temp, get_readable_time, get_time, generate_settings_text, log_error, clean_filename, enforce_daily_limit
 
 
 
@@ -325,8 +325,20 @@ async def start(client, message):
             if not files:
                 return await message.reply('<b><i>ɴᴏ ꜱᴜᴄʜ ꜰɪʟᴇ ᴇxɪꜱᴛꜱ !</b></i>')
 
+            # --- Daily Download Limit System: show remaining limit BEFORE the batch starts ---
+            batch_status = await db.get_download_status(message.from_user.id)
+            if not batch_status["is_premium"]:
+                await message.reply_text(
+                    script.REMAINING_LIMIT_TXT.format(batch_status["remaining"], DAILY_DOWNLOAD_LIMIT),
+                    parse_mode=enums.ParseMode.HTML
+                )
+
             filesarr = []
             for file in files:
+                # --- Daily Download Limit System: check before sending each file ---
+                allowed, is_premium_user, _ = await enforce_daily_limit(message)
+                if not allowed:
+                    break
                 f_id = file.file_id  # Conflict से बचने के लिए नाम बदला
                 files_ = await get_file_details(f_id)
                 files1 = files_[0]
@@ -369,6 +381,8 @@ async def start(client, message):
                     cover=cover_url
                 )
                 filesarr.append(msg)
+                if not is_premium_user:
+                    await db.increase_download(message.from_user.id)
                 await asyncio.sleep(1) # यहाँ लूप खत्म हो रहा है
 
             # --- अब ये लाइनें FOR LOOP के बाहर हैं (4 स्पेस पीछे) ---
@@ -392,6 +406,17 @@ async def start(client, message):
     settings = await get_settings(int(grp_id))
     if not files_:
         pre, file_id = ((base64.urlsafe_b64decode(data + "=" * (-len(data) % 4))).decode("utf-8")).split("_", 1)
+        # --- Daily Download Limit System: check before sending the file ---
+        allowed, is_premium_user, remaining = await enforce_daily_limit(message)
+        if not allowed:
+            return
+
+        # Show remaining limit BEFORE the file is sent
+        if not is_premium_user:
+            await message.reply_text(
+                script.REMAINING_LIMIT_TXT.format(remaining, DAILY_DOWNLOAD_LIMIT),
+                parse_mode=enums.ParseMode.HTML
+            )
         try:
             if STREAM_MODE and not PREMIUM_STREAM_MODE:
                 btn = [
@@ -417,6 +442,9 @@ async def start(client, message):
                 file_id=file_id,
                 protect_content=settings.get('file_secure', PROTECT_CONTENT),
                 reply_markup=InlineKeyboardMarkup(btn))
+
+            if not is_premium_user:
+                await db.increase_download(message.from_user.id)
 
             filetype = msg.media
             file = getattr(msg, filetype.value)
@@ -445,6 +473,18 @@ async def start(client, message):
             logger.exception(e)
             pass
         return await message.reply('ɴᴏ ꜱᴜᴄʜ ꜰɪʟᴇ ᴇxɪꜱᴛꜱ !')
+
+    # --- Daily Download Limit System: check before sending the file ---
+    allowed, is_premium_user, remaining = await enforce_daily_limit(message)
+    if not allowed:
+        return
+
+    # Show remaining limit BEFORE the file is sent
+    if not is_premium_user:
+        await message.reply_text(
+            script.REMAINING_LIMIT_TXT.format(remaining, DAILY_DOWNLOAD_LIMIT),
+            parse_mode=enums.ParseMode.HTML
+        )
 
     files = files_[0]
     title = clean_filename(files.file_name)
@@ -489,6 +529,8 @@ async def start(client, message):
         reply_markup=InlineKeyboardMarkup(btn),
         cover=cover_url
     )
+    if not is_premium_user:
+        await db.increase_download(message.from_user.id)
     k = await msg.reply(script.DEL_MSG.format(get_time(DELETE_TIME)),
             quote=True, parse_mode=enums.ParseMode.HTML
     )     
@@ -959,125 +1001,6 @@ async def set_pm_search(client, message):
         logger.error(f"Error in set_pm_search: {e}")
         await message.reply_text(f"<b>❗ An error occurred: {e}</b>")
 
-_media_backfill_lock = asyncio.Lock()
-_media_backfill_cancel = {"flag": False}
-
-def _progress_bar(done: int, total: int, width: int = 12) -> str:
-    if total <= 0:
-        return "▓" * width + " 100.0%"
-    pct = min(100.0, (done / total) * 100)
-    filled = max(0, min(width, int(width * done / total)))
-    bar = "▓" * filled + "░" * (width - filled)
-    return f"{bar} {pct:.1f}%"
-
-@Client.on_message(filters.private & filters.command("fix_media_speed") & filters.user(ADMINS))
-async def run_media_type_backfill(client, message):
-    """
-    Movie/Series button aur uske Next/Back pagination ko normal /search jitna
-    fast banane ke liye — purani files jinka media_type abhi tak set nahi
-    hua, unko ek baar classify karke save kar deta hai. Isse baar baar wala
-    slow live-regex scan hamesha ke liye khatam ho jaata hai.
-
-    12 lakh+ files jaise bade DB ke liye:
-    - Ye background me chalta hai (bot baaki users ko normal serve karta
-      rehta hai, kahi bhi block/hang nahi hota).
-    - Chhote batches + har batch ke baad chhota pause — DB par ek saath
-      zyada load nahi padta.
-    - Yahi status message har kuch second me apne aap update hoke "live"
-      progress bar dikhata hai.
-    - Neeche ❌ Cancel button — kabhi bhi roka ja sakta hai; jitna ho chuka
-      hoga wo save rehta hai, dobara chalane par sirf baaki files process
-      hongi.
-    """
-    if _media_backfill_lock.locked():
-        await message.reply_text(
-            "<b>⏳ Ek backfill pehle se chal raha hai.</b> Please usko complete hone do."
-        )
-        return
-
-    _media_backfill_cancel["flag"] = False
-
-    cancel_markup = InlineKeyboardMarkup(
-        [[InlineKeyboardButton("❌ Cancel", callback_data="cancel_media_backfill")]]
-    )
-
-    status = await message.reply_text(
-        "<b>⏳ Purani files ko movie/series ke hisaab se classify kiya ja raha hai...</b>\n"
-        "<i>Ye background me chalega, bot normal kaam karta rahega. Status yahi update hoga.</i>",
-        reply_markup=cancel_markup,
-    )
-
-    last_edit_at = {"t": 0.0}
-
-    async def progress_cb(coll_name, done, total):
-        now = time.monotonic()
-        # Telegram flood-wait se bachne ke liye edit har ~5 sec me ek baar,
-        # sirf last batch pe hamesha edit karo taaki final count sahi aaye.
-        if done < total and (now - last_edit_at["t"] < 5):
-            return
-        last_edit_at["t"] = now
-        bar = _progress_bar(done, total)
-        try:
-            await status.edit(
-                "<b>⏳ Live Status</b>\n"
-                f"• Collection: <code>{coll_name}</code>\n"
-                f"• Progress: {done} / {total}\n"
-                f"<code>{bar}</code>",
-                reply_markup=cancel_markup,
-            )
-        except Exception:
-            pass
-
-    def cancel_check():
-        return _media_backfill_cancel["flag"]
-
-    async def _run_backfill():
-        async with _media_backfill_lock:
-            try:
-                report = await backfill_media_type(progress_cb=progress_cb, cancel_check=cancel_check)
-                was_cancelled = report.pop("_cancelled", False)
-                total = sum(report.values())
-
-                if was_cancelled:
-                    await status.edit(
-                        "<b>🛑 Cancel kar diya gaya.</b>\n\n"
-                        f"<b>Us waqt tak files updated:</b> {total}\n"
-                        "<i>Jab chaho /fix_media_speed dubara chala sakte ho — sirf baaki bachi hui "
-                        "files hi process hongi.</i>"
-                    )
-                    return
-
-                if total == 0:
-                    await status.edit(
-                        "<b>✅ Kuch bhi update karne ki zaroorat nahi thi — sab files already classified hain.</b>"
-                    )
-                    return
-                details = "\n".join(f"• <code>{name}</code>: {count}" for name, count in report.items() if count)
-                await status.edit(
-                    "<b>✅ Ho gaya! Movie/Series filtering ab normal search jitni fast hogi.</b>\n\n"
-                    f"<b>Total files updated:</b> {total}\n{details}"
-                )
-            except Exception as e:
-                logger.error(f"Error in run_media_type_backfill: {e}")
-                try:
-                    await status.edit(f"<b>❗ An error occurred: {e}</b>")
-                except Exception:
-                    pass
-
-    asyncio.create_task(_run_backfill())
-
-@Client.on_callback_query(filters.regex("^cancel_media_backfill$"))
-async def cancel_media_backfill_cb(client, query):
-    if ADMINS and query.from_user.id not in ADMINS:
-        await query.answer("Sirf admin cancel kar sakta hai.", show_alert=True)
-        return
-    if not _media_backfill_lock.locked():
-        await query.answer("Koi backfill abhi chal hi nahi raha.", show_alert=True)
-        return
-    _media_backfill_cancel["flag"] = True
-    await query.answer("🛑 Cancel ho raha hai, thoda wait karo...")
-
-
 @Client.on_message(filters.private & filters.command("movie_update") & filters.user(ADMINS))
 async def set_movie_update_notification(client, message):
     bot_id = client.me.id
@@ -1484,8 +1407,6 @@ async def reset_trial(client, message):
     except Exception as e:
         await message.reply_text(f"An error occurred: {e}")
 
-from motor.motor_asyncio import AsyncIOMotorClient
-
 @Client.on_message(filters.command("cleandb") & filters.user(ADMINS))
 async def clean_db_command(client, message):
     await message.reply_text("🧹 Cleaning database(s)... Please wait ⏳")
@@ -1515,4 +1436,165 @@ async def clean_db_command(client, message):
     except Exception as e:
         await message.reply_text(f"❌ <b>Error while cleaning DB:</b>\n<code>{e}</code>")
 
+# =========================================================
+# 🚀 MOVIE/SERIES SPEED FIX — one-time media_type backfill
+# =========================================================
+# Movie/Series button (mtype#..) aur uske Next/Back pagination hamesha
+# get_search_results() ko media_type="movie"/"series" ke saath call karte
+# hain. Naye upload hue files ka media_type save time par hi set ho jaata
+# hai, lekin is fix se pehle upload hui purani files ka media_type abhi
+# bhi None hai — unke liye query runtime par un-indexable regex evaluate
+# karti thi, jisse Movie/Series button + Next/Back plain /search se slow
+# the. Ye ek-baar-chalne-wala backfill un purani files ko classify karke
+# hamesha ke liye fix kar deta hai.
 
+_media_backfill_lock = asyncio.Lock()
+_media_backfill_cancel = {"flag": False}
+
+def _progress_bar(done: int, total: int, width: int = 14) -> str:
+    if total <= 0:
+        return "▓" * width + " 100.0%"
+    pct = min(100.0, (done / total) * 100)
+    filled = max(0, min(width, int(width * done / total)))
+    bar = "▓" * filled + "░" * (width - filled)
+    return f"{bar} {pct:.1f}%"
+
+def _status_box(title: str, lines: list) -> str:
+    """
+    Charo taraf moti border-line waala, all-caps, monospace status box.
+    Telegram par <pre> tag ke andar rakha jaata hai taaki border characters
+    hamesha ek doosre ke sath perfectly align rahein.
+    """
+    title = title.upper()
+    up_lines = [str(l).upper() for l in lines]
+    inner_width = max(len(title), *(len(l) for l in up_lines)) + 2
+
+    def center(s):
+        pad = inner_width - len(s)
+        left = pad // 2
+        right = pad - left
+        return "║" + (" " * left) + s + (" " * right) + "║"
+
+    def left(s):
+        return "║ " + s + (" " * (inner_width - len(s) - 1)) + "║"
+
+    top    = "╔" + "═" * inner_width + "╗"
+    sep    = "╠" + "═" * inner_width + "╣"
+    bottom = "╚" + "═" * inner_width + "╝"
+
+    rows = [top, center(title), sep]
+    rows += [left(l) for l in up_lines]
+    rows.append(bottom)
+
+    return "<pre>" + "\n".join(rows) + "</pre>"
+
+@Client.on_message(filters.private & filters.command("fix_media_speed") & filters.user(ADMINS))
+async def run_media_type_backfill(client, message):
+    """
+    Movie/Series button aur uske Next/Back pagination ko normal /search jitna
+    fast banane ke liye — purani files jinka media_type abhi tak set nahi
+    hua, unko ek baar classify karke save kar deta hai.
+
+    12 lakh+ files jaise bade DB ke liye:
+    - Ye background me chalta hai (bot baaki users ko normal serve karta
+      rehta hai, kahi bhi block/hang nahi hota).
+    - Chhote batches + har batch ke baad chhota pause — DB par ek saath
+      zyada load nahi padta.
+    - Yahi status message har kuch second me apne aap update hoke "live"
+      progress bar dikhata hai (stylish bordered box me).
+    - Neeche ❌ CANCEL button — kabhi bhi roka ja sakta hai; jitna ho chuka
+      hoga wo save rehta hai, dobara chalane par sirf baaki files process
+      hongi.
+    """
+    if _media_backfill_lock.locked():
+        await message.reply_text(
+            "<b>⏳ Ek backfill pehle se chal raha hai.</b> Please usko complete hone do."
+        )
+        return
+
+    _media_backfill_cancel["flag"] = False
+
+    cancel_markup = InlineKeyboardMarkup(
+        [[InlineKeyboardButton("❌ CANCEL", callback_data="cancel_media_backfill")]]
+    )
+
+    status = await message.reply_text(
+        _status_box("⏳ Live Status", ["Starting…", "Please wait"]),
+        reply_markup=cancel_markup,
+        parse_mode=enums.ParseMode.HTML,
+    )
+
+    last_edit_at = {"t": 0.0}
+
+    async def progress_cb(coll_name, done, total):
+        now = time.monotonic()
+        # Telegram flood-wait se bachne ke liye edit har ~5 sec me ek baar,
+        # sirf last batch pe hamesha edit karo taaki final count sahi aaye.
+        if done < total and (now - last_edit_at["t"] < 5):
+            return
+        last_edit_at["t"] = now
+        bar = _progress_bar(done, total)
+        try:
+            await status.edit(
+                _status_box(
+                    "⏳ Live Status",
+                    [
+                        f"Collection : {coll_name}",
+                        f"Progress   : {done} / {total}",
+                        bar,
+                    ],
+                ),
+                reply_markup=cancel_markup,
+                parse_mode=enums.ParseMode.HTML,
+            )
+        except Exception:
+            pass
+
+    def cancel_check():
+        return _media_backfill_cancel["flag"]
+
+    async def _run_backfill():
+        async with _media_backfill_lock:
+            try:
+                report = await backfill_media_type(progress_cb=progress_cb, cancel_check=cancel_check)
+                was_cancelled = report.pop("_cancelled", False)
+                total = sum(report.values())
+
+                if was_cancelled:
+                    await status.edit(
+                        _status_box("🛑 Cancelled", [f"Updated so far : {total}"]),
+                        parse_mode=enums.ParseMode.HTML,
+                    )
+                    return
+
+                if total == 0:
+                    await status.edit(
+                        _status_box("✅ Already Up To Date", ["Nothing to update"]),
+                        parse_mode=enums.ParseMode.HTML,
+                    )
+                    return
+
+                detail_lines = [f"{name} : {count}" for name, count in report.items() if count]
+                await status.edit(
+                    _status_box("✅ Done", [f"Total updated : {total}"] + detail_lines),
+                    parse_mode=enums.ParseMode.HTML,
+                )
+            except Exception as e:
+                logger.error(f"Error in run_media_type_backfill: {e}")
+                try:
+                    await status.edit(f"<b>❗ An error occurred: {e}</b>")
+                except Exception:
+                    pass
+
+    asyncio.create_task(_run_backfill())
+
+@Client.on_callback_query(filters.regex("^cancel_media_backfill$"))
+async def cancel_media_backfill_cb(client, query):
+    if ADMINS and query.from_user.id not in ADMINS:
+        await query.answer("Sirf admin cancel kar sakta hai.", show_alert=True)
+        return
+    if not _media_backfill_lock.locked():
+        await query.answer("Koi backfill abhi chal hi nahi raha.", show_alert=True)
+        return
+    _media_backfill_cancel["flag"] = True
+    await query.answer("🛑 Cancel ho raha hai, thoda wait karo...")
