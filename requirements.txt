@@ -31,5 +31,5 @@ colorama
 rapidfuzz
 
 # Git-based Packages
-https://github.com/NBBotz/IMDBKit/archive/refs/heads/main.zip
+git+https://github.com/DreamXBotz/IMDBKit.git@main
 git+https://github.com/DreamXBotz/cinemagoer
