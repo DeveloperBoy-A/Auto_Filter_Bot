@@ -388,6 +388,7 @@ async def advantage_spoll_choker(bot, query):
     await asyncio.sleep(30)
     await k.delete()
 
+
 # Qualities
 @Client.on_callback_query(filters.regex(r"^qualities#"))
 async def qualities_cb_handler(client: Client, query: CallbackQuery):
