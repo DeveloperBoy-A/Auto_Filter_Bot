@@ -211,12 +211,13 @@ async def _upload_cover(bot, image_url: str) -> str | None:
         return image_url
 
 
+# ---------------- Global DB cache ----------------
 # ---------------- Global DB cache (per-database, keyed by db object id) ----------------
 _db_stats_cache: Dict[int, dict] = {}
 
 # Safe threshold (MB) below the free-tier ~512MB cap. Once a database crosses
 # this, new files auto-switch to the next configured database in the list.
-DB_SIZE_LIMIT_MB = 460
+DB_SIZE_LIMIT_MB = 400
 
 # ---------------- DB Setup (up to 5 databases) ----------------
 client = AsyncIOMotorClient(DATABASE_URI)
@@ -250,10 +251,11 @@ class Media(Document):
     mime_type = fields.StrField(allow_none=True)
     caption = fields.StrField(allow_none=True)
     cover = fields.StrField(allow_none=True)
-    media_type = fields.StrField(allow_none=True)  # "movie" | "series" — precomputed for fast Movie/Series button filtering
+    media_type = fields.StrField(allow_none=True)  # "movie" | "series" — precomputed for fast filtering
+    file_date = fields.DateTimeField(allow_none=True)  # 🚀 real upload timestamp, used for "recent first" sorting
 
     class Meta:
-        indexes = ("$file_name", "media_type")
+        indexes = ("$file_name", "media_type", "-file_date")
         collection_name = COLLECTION_NAME
 
 
@@ -267,10 +269,11 @@ class Media2(Document):
     mime_type = fields.StrField(allow_none=True)
     caption = fields.StrField(allow_none=True)
     cover = fields.StrField(allow_none=True)
-    media_type = fields.StrField(allow_none=True)  # "movie" | "series" — precomputed for fast Movie/Series button filtering
+    media_type = fields.StrField(allow_none=True)
+    file_date = fields.DateTimeField(allow_none=True)  # 🚀 real upload timestamp, used for "recent first" sorting
 
     class Meta:
-        indexes = ("$file_name", "media_type")
+        indexes = ("$file_name", "media_type", "-file_date")
         collection_name = COLLECTION_NAME
 
 
@@ -284,10 +287,11 @@ class Media3(Document):
     mime_type = fields.StrField(allow_none=True)
     caption = fields.StrField(allow_none=True)
     cover = fields.StrField(allow_none=True)
-    media_type = fields.StrField(allow_none=True)  # "movie" | "series" — precomputed for fast Movie/Series button filtering
+    media_type = fields.StrField(allow_none=True)
+    file_date = fields.DateTimeField(allow_none=True)  # 🚀 real upload timestamp, used for "recent first" sorting
 
     class Meta:
-        indexes = ("$file_name", "media_type")
+        indexes = ("$file_name", "media_type", "-file_date")
         collection_name = COLLECTION_NAME
 
 
@@ -301,10 +305,11 @@ class Media4(Document):
     mime_type = fields.StrField(allow_none=True)
     caption = fields.StrField(allow_none=True)
     cover = fields.StrField(allow_none=True)
-    media_type = fields.StrField(allow_none=True)  # "movie" | "series" — precomputed for fast Movie/Series button filtering
+    media_type = fields.StrField(allow_none=True)
+    file_date = fields.DateTimeField(allow_none=True)  # 🚀 real upload timestamp, used for "recent first" sorting
 
     class Meta:
-        indexes = ("$file_name", "media_type")
+        indexes = ("$file_name", "media_type", "-file_date")
         collection_name = COLLECTION_NAME
 
 
@@ -318,10 +323,11 @@ class Media5(Document):
     mime_type = fields.StrField(allow_none=True)
     caption = fields.StrField(allow_none=True)
     cover = fields.StrField(allow_none=True)
-    media_type = fields.StrField(allow_none=True)  # "movie" | "series" — precomputed for fast Movie/Series button filtering
+    media_type = fields.StrField(allow_none=True)
+    file_date = fields.DateTimeField(allow_none=True)  # 🚀 real upload timestamp, used for "recent first" sorting
 
     class Meta:
-        indexes = ("$file_name", "media_type")
+        indexes = ("$file_name", "media_type", "-file_date")
         collection_name = COLLECTION_NAME
 
 
@@ -490,11 +496,11 @@ def extract_pure_title(original_name):
     clean_name = re.sub(r'^@\w+[\s_\-–]*', '', clean_name).strip()
     clean_name = re.sub(r'[@\[\]\(\)_]+', ' ', clean_name)
     clean_name = re.sub(r"[._\-]+", " ", clean_name)
-
+    
     # URL aur Telegram links ko udana
     clean_name = re.sub(r'(?:https?://)?(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*)', '', clean_name, flags=re.IGNORECASE)
     clean_name = re.sub(r't\.me/[a-zA-Z0-9_]+', '', clean_name, flags=re.IGNORECASE)
-
+    
     # Bewajah ke "Movie" ya "Video" words udana
     clean_name = re.sub(r'\b(full|hindi|tamil|english|telugu|malayalam|kannada|bengali|new|latest|hd|mp4)\s+(movie|video)\b', '', clean_name, flags=re.IGNORECASE).strip()
     clean_name = re.sub(r'\b(web[\s\-]?series|tv[\s\-]?series)\b', '', clean_name, flags=re.IGNORECASE).strip()
@@ -513,7 +519,7 @@ def extract_pure_title(original_name):
         r'web[\-\s]?dl', r'web[\-\s]?rip', r'hdrip', r'bluray', r'brrip', r'dvdrip', r'camrip', r'hdts', r'hdcam', 
         r'av1', r'x264', r'x265', r'hevc', r'10bit', r'aac', r'eac3', r'ac3', r'ddp[\s\-]?7\.1', r'ddp[\s\-]?5\.1', r'dd[\s\-]?5\.1', r'dd[\s\-]?2\.0', r'ddp', r'5\.1', r'7\.1', r'2\.0', r'2ch', r'stereo',
         r'download', r'watch', r'full[\s\-]?movie', r'web[\s\-]?series', r'new', r'latest', 
-        r'netflix', r'amazon', r'prime', r'hotstar', r'zee5', r'sonyliv', r'jio', r'jiocinema', r'voot', r'altbalaji', r'Movies4u' 
+        r'netflix', r'amazon', r'prime', r'hotstar', r'zee5', r'sonyliv', r'jio', r'jiocinema', r'voot', r'altbalaji' 
     ]
 
     prefix_cleanup = r'^(?:(?:' + '|'.join(prefix_tags) + r')[\s_\-]*)+'
@@ -557,68 +563,95 @@ def extract_pure_title(original_name):
 # 3. CUSTOM SEASON & EPISODE NORMALIZER (ULTRA PRO MAX)
 # =========================================================
 
+
 def normalize_season_episode(text):
     text = text.lower()
 
     # ===== SEASON + EPISODE RANGES =====
-
+    
     # S02.E01 -> S02 E01
     text = re.sub(r'\bs(\d{1,2})\.e(\d{1,4})\b', r's\1 e\2', text)
-
-    # S02E01E04 or S02_E01_E04 or S02-E01-E04
-    text = re.sub(r'\bs(\d{1,2})[\s\-_]*e(\d{1,4})[\s\-_]*e(\d{1,4})\b', 
+    
+    # ✨ NEW: S01E01 to S01E10 / S01E01-S01E10 (full SxxExx repeated on both
+    # bounds of the range, optionally joined by "to"/"and"/"&"). Previously
+    # unhandled -> only the first SxxExx got captured, and the leftover
+    # "to S01E10" text was getting picked up as junk "episode_title".
+    text = re.sub(r'\bs(\d{1,2})[\s\-_]*e(\d{1,4})[\s\-_~]+(?:to|and|&)?[\s\-_~]*s\d{1,2}[\s\-_]*e(\d{1,4})\b',
                   lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}-{int(m.group(3)):02d}", text)
 
+    # S02E01E04 or S02_E01_E04 or S02-E01-E04 or S02E01~E04
+    text = re.sub(r'\bs(\d{1,2})[\s\-_~]*e(\d{1,4})[\s\-_~]*e(\d{1,4})\b', 
+                  lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}-{int(m.group(3)):02d}", text)
+    
     # S02 E01 to E04 / S02 E01 and E04 / S02 E01 & E04
     text = re.sub(r'\bs(\d{1,2})[\s\-_]*e(\d{1,4})[\s\-_]*(?:to|&|and)[\s\-_]*e?(\d{1,4})\b', 
                   lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}-{int(m.group(3)):02d}", text)
-
+    
     # S02-E01-E04 (multiple separators)
     text = re.sub(r'\bs(\d{1,2})[\s\-_]+e(\d{1,4})[\s\-_]+e?(\d{1,4})\b', 
                   lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}-{int(m.group(3)):02d}", text)
-
+    
     # 2x01-04 or 2x01 04
     text = re.sub(r'\b(\d{1,2})[xX](\d{1,4})[\s\-_]+(?:\d{1,2}[xX])?(\d{1,4})\b', 
                   lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}-{int(m.group(3)):02d}", text)
-
-    # Season range (S02-S04)
-    text = re.sub(r'\bs(\d{1,2})[\s\-_]+s?(\d{1,2})\b', 
+    
+    # ✨ NEW: word-form season range — "Season 1 to Season 3", "Season 1-3"
+    text = re.sub(r'\bseason[\s\-_]*(\d{1,2})[\s\-_~]+(?:to|and|&)?[\s\-_~]*(?:season[\s\-_]*)?(\d{1,2})\b',
                   lambda m: f"s{int(m.group(1)):02d}-{int(m.group(2)):02d}", text)
 
+    # Season range (S02-S04) — ✅ FIX: now also accepts "to"/"and"/"&" and
+    # tilde as a separator, e.g. "S01 to S03", "S01~S03".
+    text = re.sub(r'\bs(\d{1,2})[\s\-_~]+(?:to|and|&)?[\s\-_~]*s?(\d{1,2})\b', 
+                  lambda m: f"s{int(m.group(1)):02d}-{int(m.group(2)):02d}", text)
+    
     # ===== EPISODE RANGES =====
-
+    
     # ✨ E01TE04 or E01T04 (T for "to") - NEW PATTERN
     text = re.sub(r'\be(\d{1,4})[tT]e?(\d{1,4})\b', 
                   lambda m: f"e{int(m.group(1)):02d}-{int(m.group(2)):02d}", text)
-
+    
     # ✨ E01_E04 or E01-E04 with underscore/dash - NEW PATTERN
     text = re.sub(r'\be(\d{1,4})[\s\-_]e(\d{1,4})\b', 
                   lambda m: f"e{int(m.group(1)):02d}-{int(m.group(2)):02d}", text)
-
-    # ep(01-04) or ep 01-04 or ep(01 to 04)
-    text = re.sub(r'\bep(?:isode)?[\s\-_]*\(?(\d+)[\s\-–]*(?:to|and|&)?[\s\-–]*(\d+)\)?\b', 
+    
+    # ✨ FIX: EP01-EP10 / EP01 TO EP10 (repeated "ep" prefix on both bounds) —
+    # previously unhandled, so ranges like this fell through to the single-ep
+    # rules below and got mangled into two separate bogus fragments.
+    text = re.sub(r'\bep(?:isode)?[\s\-_]*(\d{1,4})[\s\-_]+(?:to|and|&)?[\s\-_]*ep(?:isode)?[\s\-_]*(\d{1,4})\b',
                   lambda m: f"e{int(m.group(1)):02d}-{int(m.group(2)):02d}", text)
 
-    # e01-e04 or e01 to e04
-    text = re.sub(r'\be(\d{1,4})[\s\-–]*(?:to|and|&)?[\s\-–]*e?(\d{1,4})\b', 
-                  lambda m: f"e{int(m.group(1)):02d}-{int(m.group(2)):02d}" if len(m.group(2)) > 0 else f"e{int(m.group(1)):02d}", text)
-
+    # ep(01-04) or ep 01-04 or ep(01 to 04)
+    # ✅ FIX (root cause of the "E00" bug): the 2nd number group used to be
+    # mandatory while the separator between the two numbers was optional
+    # (zero-or-more). So a lone "ep05"/"e05" with NO range at all still had
+    # to satisfy two capture groups, forcing the regex to backtrack and split
+    # the digits of that ONE number in half (e.g. "05" -> "0" and "5"),
+    # producing garbage like "E00-05". Now the 2nd number is genuinely
+    # optional, and when it IS present it must be preceded by a real (1+)
+    # separator, so a standalone episode number is never split.
+    text = re.sub(r'\bep(?:isode)?[\s\-_]*\(?(\d{1,4})(?:[\s\-–~]+(?:to|and|&)?[\s\-–~]*(\d{1,4}))?\)?\b', 
+                  lambda m: f"e{int(m.group(1)):02d}-{int(m.group(2)):02d}" if m.group(2) else f"e{int(m.group(1)):02d}", text)
+    
+    # e01-e04 or e01 to e04 or e01~e04 — same fix as above.
+    text = re.sub(r'\be(\d{1,4})(?:[\s\-–~]+(?:to|and|&)?[\s\-–~]*e?(\d{1,4}))?\b', 
+                  lambda m: f"e{int(m.group(1)):02d}-{int(m.group(2)):02d}" if m.group(2) else f"e{int(m.group(1)):02d}", text)
+    
     # 01-04 (only if both numbers < 60)
     text = re.sub(r'\b(\d{2})[\s\-–]+(\d{2})\b', 
                   lambda m: f"e{int(m.group(1)):02d}-{int(m.group(2)):02d}" if int(m.group(1)) < 60 and int(m.group(2)) < 60 else m.group(0), text)
-
+    
     # 2x01
     text = re.sub(r'\b(\d{1,2})[xX](\d{1,4})\b', 
                   lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}", text)
-
+    
     # ===== STANDALONE PATTERNS =====
-
+    
     # Season (season 2, s 2, season2, s2)
     text = re.sub(r'\b(?:season)[\s\-_]*(\d{1,2})\b', 
                   lambda m: f"s{int(m.group(1)):02d}", text)
     text = re.sub(r'\bs[\s\-_]*(\d{1,2})\b', 
                   lambda m: f"s{int(m.group(1)):02d}", text)
-
+    
     # Episode (episode 5, ep 5, e 5, episode5)
     text = re.sub(r'\b(?:episode)[\s\-_]*(\d{1,4})\b', 
                   lambda m: f"e{int(m.group(1)):02d}", text)
@@ -626,12 +659,12 @@ def normalize_season_episode(text):
                   lambda m: f"e{int(m.group(1)):02d}", text)
     text = re.sub(r'\be[\s\-_]*(\d{1,4})\b', 
                   lambda m: f"e{int(m.group(1)):02d}", text)
-
+    
     # ===== FINAL CLEANUP =====
-
+    
     text = re.sub(r'\bs(\d{2})e(\d{2,4})\b', r's\1 e\2', text)
     text = re.sub(r'\s+', ' ', text).strip()
-
+    
     return text.upper()
 
 
@@ -639,7 +672,7 @@ def normalize_season_episode(text):
 
 def extract_episode_title(text):
     text = re.sub(r'\.[a-z0-9]{2,4}$', '', text, flags=re.IGNORECASE)
-
+    
     # Aur jyada strict stop words aur emojis add kiye
     stop_keywords = [
         r'19\d{2}', r'20\d{2}', r'2160p', r'1080p', r'720p', r'480p',
@@ -648,13 +681,19 @@ def extract_episode_title(text):
         r'dual', r'multi', r'combined', r'complete', r'jhs', r'netflix', r'amazon', r'🗃️'
     ]
     stop_pattern = '|'.join(stop_keywords)
-
+    
     # 🗃️ emoji aur ajeeb symbols par turant ruk jayega
     lookahead = rf'(?=\b(?:{stop_pattern})\b|$|\[|\(|@|🗃️)'
 
     patterns = [
-        r'(?:S\d{1,2}[\s._\-]*E\d{1,4}[-\d]*)[\s._\-]+(.+?)' + lookahead,
-        r'(?:Episode|Ep)[\s._\-]*\d+[\s._\-]+(.+?)' + lookahead
+        # ✅ FIX: (.+?) required at least 1 character. When there was no real
+        # episode title — e.g. "S02E05 720p" or "Ep 12 720p" with nothing
+        # between the episode number and the quality tag — the lazy match
+        # was forced to eat into the quality tag itself before the lookahead
+        # could stop it, producing junk titles like "720P". (.*?) can match
+        # zero characters, so it stops cleanly instead.
+        r'(?:S\d{1,2}[\s._\-]*E\d{1,4}[-\d]*)[\s._\-]+(.*?)' + lookahead,
+        r'(?:Episode|Ep)[\s._\-]*\d+[\s._\-]+(.*?)' + lookahead
     ]
 
     for pattern in patterns:
@@ -662,7 +701,7 @@ def extract_episode_title(text):
         if match:
             title = match.group(1)
             title = re.sub(r'[\s._\-()\[\]]+', ' ', title).strip()
-
+            
             # Agar title mein sirf numbers ya symbols bhare hain, toh usko ignore karo
             if len(title) > 2 and not re.fullmatch(r'[\d\s\-🗃️]+', title):
                 # ✅ FIX: Reject leftover range/connector junk like "25 To 25",
@@ -678,6 +717,7 @@ def extract_episode_title(text):
     return None
 
 
+
 # =========================================================
 # 4. UPDATED DATA EXTRACTOR
 # =========================================================
@@ -690,7 +730,12 @@ def extract_languages_quality(text_to_scan):
     year = year_match.group(1) if year_match else None
 
     # Pure Episode aur Season Pack Extraction Logic
-    normalized_se = normalize_season_episode(text_to_scan)
+    # ✅ FIX: scan the dot/underscore-normalized `scan_text`, not the raw
+    # `text_to_scan`. normalize_season_episode's patterns match on
+    # [\s\-_] boundaries, so a dotted filename like "Episode.5.mkv" or
+    # "S01.EP01-EP10" never matched anything against the raw text —
+    # season_episode silently came back None.
+    normalized_se = normalize_season_episode(scan_text)
     season_episode = None
     episode_title = None
 
@@ -847,9 +892,17 @@ def extract_languages_quality(text_to_scan):
                 break
 
     if "Dual Audio" not in languages and "Multi Audio" not in languages:
-        if len(languages) == 2 or r'\bdual\b' in scan_lower or r'\bdual\s?audio\b' in scan_lower:
+        # 🎯 keyword-based tag: independent of language names — fires purely
+        # because the filename literally contains the word "dual"/"multi"
+        # (which also covers "dual audio" / "multi audio" since those words
+        # appear inside them). The `len(languages) == 2 / > 2` checks are the
+        # existing language-count logic — untouched, still OR'd in as before.
+        has_dual_word = bool(re.search(r'\bdual\b', scan_lower) or re.search(r'\bdual[\s\.\-_]?audio\b', scan_lower))
+        has_multi_word = bool(re.search(r'\bmulti\b', scan_lower) or re.search(r'\bmulti[\s\.\-_]?audio\b', scan_lower))
+
+        if len(languages) == 2 or has_dual_word:
             languages.append("Dual Audio")
-        elif len(languages) > 2 or r'\bmulti\b' in scan_lower or r'\bmulti\s?audio\b' in scan_lower:
+        elif len(languages) > 2 or has_multi_word:
             languages.append("Multi Audio")
 
     kbps_tag = None
@@ -971,17 +1024,12 @@ async def save_file(media, bot=None, extracted_info=None):  # ✅ NEW: Added ext
 
         extracted = extract_languages_quality(text_to_scan)
 
-        # ✅ FIX #2: Merge pre-extracted language info without overwriting existing data
+        # ✅ FIX #2: Use pre-extracted language info if available
+        # This ensures language from caption is properly saved to database
         if extracted_info and extracted_info.get("language") and extracted_info.get("language") != "N/A":
-            # Channel se aayi languages ko list mein badlo
-            channel_langs = [lang.strip() for lang in extracted_info["language"].split(",")]
-
-            # Agar language pehle se list mein nahi hai, toh hi add karo (Duplicate bachane ke liye)
-            for lang in channel_langs:
-                if lang not in extracted.get("languages", []):
-                    extracted["languages"].append(lang)
-
-            logger.info(f"[LANGUAGE] Merged languages successfully: {extracted['languages']}")
+            # Convert comma-separated language string to list
+            extracted["languages"] = [lang.strip() for lang in extracted_info["language"].split(",")]
+            logger.info(f"[LANGUAGE] Using pre-extracted languages: {extracted['languages']}")
 
         # --- SMART AUTO-ADD LOGIC ---
         # 1. Agar Resolution nahi mili, to automatically 720P add karo
@@ -1136,20 +1184,11 @@ async def save_file(media, bot=None, extracted_info=None):  # ✅ NEW: Added ext
             caption=getattr(media.caption, "html", None) if media.caption else None,
             cover=None,
             media_type=("series" if is_series_file(file_name) else "movie"),
+            file_date=datetime.utcnow()  # 🚀 real timestamp so "recent uploads" sort correctly
         )
         await record.commit()
         logger.info(f"[SAVED] {file_name}")
-
-        # ✅ FIX: Overwrite media.file_name with the properly reconstructed
-        # name (the exact same string that was just saved to DB above / shown
-        # in the [SAVED] log). channel.py's quality-detection, duplicate
-        # cleanup, and its own logging all read media.file_name AFTER this
-        # call returns — so this one line makes all of them automatically use
-        # the correct, tag-complete name instead of the raw/inconsistent
-        # Telegram filename (which was causing UNKNOWN quality + broken
-        # duplicate matching on episode-range / underscore uploads).
-        media.file_name = file_name
-
+        clear_search_cache()  # 🚀 new file added -> old cached search/filter results are stale
         return True, 1
 
     except DuplicateKeyError:
@@ -1157,9 +1196,6 @@ async def save_file(media, bot=None, extracted_info=None):  # ✅ NEW: Added ext
     except Exception as e:
         logger.error(f"Error saving file: {e}", exc_info=True)
         return False, 0
-
-
-
 
 #__________________________________
 # FOR GET SEARCH RESULT THIS CODE UPDATE BY 🅰️NKIT MEENA 
@@ -1217,13 +1253,13 @@ SERIES_PATTERNS = [
     r"\bepisode[\s._-]*\d{1,4}\b",                                                # Episode 5
     r"\bep[\s._-]*\d{1,4}\b",                                                     # EP05
     r"\ball\s*episodes?\b",                                                       # All Episodes
-    r"\bcomplete\b.*\b(?:season|series)\b",                                       # Complete ... Season/Series
-    r"\b(?:season|series)\b.*\bcomplete\b",                                       # Season/Series ... Complete
+    r"\bcomplete\b.{0,40}\b(?:season|series)\b",                                  # Complete ... Season/Series (bounded gap)
+    r"\b(?:season|series)\b.{0,40}\bcomplete\b",                                  # Season/Series ... Complete (bounded gap)
 ]
 
 # Ek hi combined regex — DB query ($regex) aur Python dono jagah reuse hota hai,
-# taaki "sirf top 500 fetch hoke phir filter" wali limitation na aaye aur
-# pagination/total count DB level pe hi sahi aaye.
+# taaki filtering hamesha poore collection ke against DB level pe ho, post-fetch
+# limited-batch pe nahi (isse pagination/total count bhi sahi aata hai).
 SERIES_REGEX = re.compile("|".join(f"(?:{p})" for p in SERIES_PATTERNS), re.IGNORECASE)
 
 def is_series_file(name) -> bool:
@@ -1236,43 +1272,49 @@ def is_series_file(name) -> bool:
     return bool(SERIES_REGEX.search(str(name).lower()))
 
 # 🚀 SPEED FIX: Movie/Series button (mtype#..) aur uske Next/Back pagination
-# (next_..) dono get_search_results() ko media_type="movie"/"series" ke saath
-# call karte hain. Naye upload hue files ka media_type ab save time par hi set
-# ho jaata hai (save_file() dekho), lekin is fix se PEHLE upload hui purani
-# files ka media_type abhi bhi None hai. Unke liye query runtime par
-# un-indexable `$not regex` evaluate karti thi (index use nahi ho sakta),
-# isliye Movie/Series button + Next/Back plain /search se slow the.
+# (next_..) dono hamesha get_search_results() ko media_type="movie"/"series"
+# ke saath call karte hain (dekho plugins/pmfilter.py: media_type_cb_handler
+# aur next_page). Naye upload hue files ka media_type save time par hi set ho
+# jaata hai (line ~1149), lekin migration se pehle ke purane files me
+# media_type None hi hai. Filter query in None-wale docs ke liye runtime par
+# `{"file_name": {"$not": SERIES_REGEX}}` jaisa un-indexable regex evaluate
+# karti hai — ye MongoDB text/regex index use nahi kar sakta, isliye har
+# search + har next/back click par utna hi collection scan lagta hai jitna
+# purane (media_type=None) documents hain. Plain /search me ye extra $and/$or
+# branch bilkul nahi lagta, isiliye wahan speed sahi rehti hai.
 #
-# Fix: ek baar sab purane docs ka media_type precompute karke store kar do.
-# Uske baad filter sirf indexed `media_type` equality pe match karega.
+# Fix: ek baar sab purane docs ka media_type precompute karke store kar do
+# (is_series_file() ka wahi logic jo naye uploads ke liye already use hota
+# hai). Uske baad movie/series filter sirf indexed `media_type` equality pe
+# match karega — koi live regex scan nahi lagega, aur Next/Back bhi utne hi
+# fast honge jitna normal search.
 async def backfill_media_type(
     batch_size: int = 500,
     media_dbs=None,
     progress_cb=None,
     sleep_between_batches: float = 0.25,
-    cancel_check=None,
 ) -> dict:
     """
     One-time (safe to re-run) migration: existing files jinka `media_type`
     abhi bhi None hai, unko is_series_file() se classify karke
     "movie"/"series" set kar deta hai.
 
-    Bade collections (12 lakh+) ke liye safe:
-    - Chhote batches (default 500) me hi bulk_write hota hai.
-    - Har batch ke baad chhota pause — DB/bot par extra load nahi padta.
-    - progress_cb(collection_name, done, total) — diya jaye to live status
-      dikhane ke liye har batch ke baad call hota hai.
-    - cancel_check() — diya jaye aur True return kare to migration turant
-      (agle batch boundary par) ruk jaata hai. Us batch tak jo bhi update ho
-      chuka hota hai wo DB me commit rehta hai — dobara chalane par sirf
-      baaki bachi hui files hi process hongi. Result dict me is case me
-      "_cancelled": True bhi milta hai.
+    12 lakh+ files jaise bade collections ke liye safe rehne ke liye:
+    - Chhote batches (default 500) me hi bulk_write hota hai — poora
+      collection ek saath RAM me kabhi load nahi hota.
+    - Har batch ke baad `sleep_between_batches` sec ka chhota sa pause hota
+      hai, taaki DB aur bot event-loop dono par ek saath extra load na pade
+      aur bot baaki users ke normal search/messages handle karta rahe.
+    - `progress_cb(collection_name, done, total)` — agar diya jaaye to har
+      batch ke baad call hota hai, isse caller "live status" dikha sakta hai
+      (kitni files ho gayi, kitni baaki hai).
+
+    Returns: {"<CollectionName>": <docs_updated>, ...}
     """
     from pymongo import UpdateOne
 
     dbs = media_dbs if media_dbs is not None else MEDIA_DBS
     report = {}
-    cancelled = False
 
     for media_cls in dbs:
         coll = media_cls.collection
@@ -1291,9 +1333,6 @@ async def backfill_media_type(
 
         try:
             async for doc in cursor:
-                if cancel_check and cancel_check():
-                    cancelled = True
-                    break
                 mtype = "series" if is_series_file(doc.get("file_name", "")) else "movie"
                 ops.append(UpdateOne({"_id": doc["_id"]}, {"$set": {"media_type": mtype}}))
                 if len(ops) >= batch_size:
@@ -1305,9 +1344,6 @@ async def backfill_media_type(
                             await progress_cb(media_cls.__name__, updated, pending_total)
                         except Exception:
                             pass
-                    if cancel_check and cancel_check():
-                        cancelled = True
-                        break
                     if sleep_between_batches:
                         await asyncio.sleep(sleep_between_batches)
             if ops:
@@ -1322,12 +1358,6 @@ async def backfill_media_type(
             await cursor.close()
 
         report[media_cls.__name__] = updated
-
-        if cancelled:
-            break
-
-    if cancelled:
-        report["_cancelled"] = True
 
     return report
 
@@ -1345,6 +1375,7 @@ def expand_query(query):
     query = query.lower()
     patterns = [query]
 
+    # टाइटल अलग करें (बिना सीजन और एपिसोड के)
     title = re.sub(r'\b(s\d+|e\d+|season[\s-]*\d+|episode[\s-]*\d+|ep[\s-]*\d+)\b', '', query)
     title = re.sub(r'[\s._-]+', ' ', title).strip()
 
@@ -1354,27 +1385,93 @@ def expand_query(query):
     s_num = int(s_match.group(1) or s_match.group(2)) if s_match else None
     e_num = int(e_match.group(1) or e_match.group(2) or e_match.group(3)) if e_match else None
 
+    # CASE 1: जब यूजर सीजन और एपिसोड दोनों लिखे (जैसे: money heist s02 e03)
     if s_num and e_num:
         variations = [
-            f"s{s_num:02d}e{e_num:02d}", f"s{s_num:02d} e{e_num:02d}", 
-            f"s{s_num}e{e_num}", f"s{s_num:02d}", f"e{e_num:02d}"
+            f"s{s_num:02d}e{e_num:02d}", 
+            f"s{s_num:02d} e{e_num:02d}", 
+            f"s{s_num}e{e_num}"
         ]
         for v in variations:
             patterns.append(f"{title} {v}".strip())
+
+    # CASE 2: जब यूजर केवल सीजन लिखे (जैसे: money heist s01)
     elif s_num:
-        variations = [f"s{s_num:02d}", f"s{s_num}", f"season {s_num}"]
+        variations = [
+            f"s{s_num:02d}", 
+            f"s{s_num}", 
+            f"season {s_num}"
+        ]
         for v in variations:
             patterns.append(f"{title} {v}".strip())
+
+    # CASE 3: जब यूजर केवल एपिसोड लिखे (जैसे: money heist e02 या सिर्फ e02)
     elif e_num:
-        variations = [f"e{e_num:02d}", f"e{e_num}", f"episode {e_num}"]
+        variations = [
+            f"e{e_num:02d}", 
+            f"e{e_num}", 
+            f"episode {e_num}"
+        ]
         for v in variations:
-            patterns.append(f"{title} {v}".strip())
+            # यदि टाइटल मौजूद है तो टाइटल के साथ जोड़ें, अन्यथा केवल एपिसोड पैटर्न रखें
+            if title:
+                patterns.append(f"{title} {v}".strip())
+            else:
+                patterns.append(v)
 
     return list(set(patterns))
 
+
 # ----------------- 4. मुख्य सर्च और सॉर्टिंग फंक्शन -----------------
 
+# 🚀 IN-MEMORY SEARCH CACHE
+# Movie / Series filter button (mtype#movie / mtype#series) re-runs the full
+# Mongo search (count_documents + find across every MEDIA_DB) every single
+# time it's tapped, which is what made that button feel slow. Since the
+# underlying query + filters are identical on repeat taps (and often shared
+# across users searching the same title), we cache the (files, next_offset,
+# total_results) result in memory for a short TTL so repeat taps are instant
+# and only "new" queries hit the DB.
+_SEARCH_CACHE: dict = {}
+_SEARCH_CACHE_TTL = 90          # seconds a cached search result stays valid
+_SEARCH_CACHE_MAX_ENTRIES = 300  # hard cap so memory can't grow unbounded
+
+
+def _search_cache_key(chat_id, query, file_type, max_results, offset, filter, media_type):
+    q = tuple(query) if isinstance(query, list) else query
+    return (chat_id, q, file_type, max_results, offset, filter, media_type)
+
+
+def _search_cache_get(key):
+    entry = _SEARCH_CACHE.get(key)
+    if not entry:
+        return None
+    cached_at, value = entry
+    if (datetime.utcnow() - cached_at).total_seconds() > _SEARCH_CACHE_TTL:
+        _SEARCH_CACHE.pop(key, None)
+        return None
+    return value
+
+
+def _search_cache_set(key, value):
+    if len(_SEARCH_CACHE) >= _SEARCH_CACHE_MAX_ENTRIES:
+        # drop the oldest entry to keep the cache bounded
+        oldest_key = min(_SEARCH_CACHE, key=lambda k: _SEARCH_CACHE[k][0])
+        _SEARCH_CACHE.pop(oldest_key, None)
+    _SEARCH_CACHE[key] = (datetime.utcnow(), value)
+
+
+def clear_search_cache():
+    """Invalidate every cached search result (called whenever a new file is indexed)."""
+    _SEARCH_CACHE.clear()
+
+
 async def get_search_results(chat_id, query, file_type=None, max_results=10, offset=0, filter=False, media_type=None):
+    cache_key = _search_cache_key(chat_id, query, file_type, max_results, offset, filter, media_type)
+    cached = _search_cache_get(cache_key)
+    if cached is not None:
+        return cached
+
     if chat_id:
         settings = await get_settings(int(chat_id))
         max_results = 10 if settings.get("max_btn") else int(MAX_B_TN)
@@ -1392,17 +1489,27 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
 
         words = q.split()
         pattern = r'.*'.join(re.escape(w) for w in words)
+        regex_list.append(pattern)
 
+    # 🚀 SPEED FIX: combine every pattern variant into ONE alternation regex
+    # instead of a separate $or branch per variant. expand_query() can return
+    # up to 5 variants, and with USE_CAPTION_FILTER that used to mean up to
+    # 10 separate {field: regex} conditions Mongo had to test on every single
+    # document it scanned. Alternation "(?:p1|p2|p3)" matches exactly the same
+    # documents (regex alternation IS a logical OR) but as ONE predicate per
+    # field, so every document scan does 2x work instead of up to 10x.
+    combined_regex = None
+    if regex_list:
         try:
-            regex_list.append(re.compile(pattern, re.IGNORECASE))
+            combined_regex = re.compile("(?:" + "|".join(regex_list) + ")", re.IGNORECASE)
         except re.error:
-            continue
+            combined_regex = None
 
     conditions = []
-    for r in regex_list:
-        conditions.append({"file_name": r})
+    if combined_regex is not None:
+        conditions.append({"file_name": combined_regex})
         if USE_CAPTION_FILTER:
-            conditions.append({"caption": r})
+            conditions.append({"caption": combined_regex})
 
     filter_mongo = {"$or": conditions}
     if file_type:
@@ -1435,52 +1542,93 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
 
     fetch_limit = max(100, offset + max_results * 2)
 
-    # 🚀 SPEED FIX: count_documents में limit=1000 लगाया है। 
-    # इससे DB पूरी दुनिया की फाइल्स गिनने के बजाय 1000 पर रुक जाएगा और तुरंत रेस्पोंस देगा।
-    if len(MEDIA_DBS) > 1:
-        counts = await asyncio.gather(*[m.count_documents(filter_mongo, limit=1000) for m in MEDIA_DBS])
-        total_results = sum(counts)
+    # 🚀 SPEED + RECENCY FIX: query every configured DB IN PARALLEL (instead of
+    # draining MEDIA_DBS[0]'s quota first and only "backfilling" from later DBs).
+    # The old code meant that once DB[0] alone returned `fetch_limit` matches,
+    # DB[1]/DB[2].. (exactly where new uploads land once earlier DBs fill up —
+    # see get_active_media_db) were never even queried, so brand-new files
+    # could be missing from results entirely.
+    #
+    # We also sort by "file_date" (real upload timestamp) instead of "_id".
+    # "_id" here is derived from Telegram's file_id/access_hash — a base64
+    # string that is NOT chronological — so sorting by it never reliably put
+    # the newest upload first. Legacy records without file_date sort last.
+    count_tasks = [m.count_documents(filter_mongo) for m in MEDIA_DBS]
+    find_tasks = [
+        m.find(filter_mongo).sort([("file_date", -1), ("_id", -1)]).limit(fetch_limit).to_list(length=fetch_limit)
+        for m in MEDIA_DBS
+    ]
+    counts, per_db_files = await asyncio.gather(
+        asyncio.gather(*count_tasks),
+        asyncio.gather(*find_tasks),
+    )
+    total_results = sum(counts)
 
-        files = await MEDIA_DBS[0].find(filter_mongo).sort("_id", -1).limit(fetch_limit).to_list(length=fetch_limit)
-        remaining = fetch_limit - len(files)
-        for media_cls in MEDIA_DBS[1:]:
-            if remaining <= 0:
-                break
-            more_files = await media_cls.find(filter_mongo).sort("_id", -1).limit(remaining).to_list(length=remaining)
-            files.extend(more_files)
-            remaining -= len(more_files)
-    else:
-        total_results, files = await asyncio.gather(
-            Media.count_documents(filter_mongo, limit=1000),
-            Media.find(filter_mongo).sort("_id", -1).limit(fetch_limit).to_list(length=fetch_limit)
-        )
+    files = [f for db_files in per_db_files for f in db_files]
+
+    def _recency_key(x):
+        fd = getattr(x, "file_date", None)
+        # None (legacy pre-migration records) sorts as oldest
+        return fd if fd is not None else datetime.min
+
+    files.sort(key=_recency_key, reverse=True)
+    files = files[:fetch_limit]
 
     is_series = any(re.search(r"s\d{1,2}.*e\d{1,4}", str(file.file_name).lower()) for file in files)
 
-    # 🚀 RECENT FILE FIX: Python के बेकार Regex Checks हटा दिए हैं जो नई फाइल्स को नीचे ढकेल रहे थे।
+    first_word = original_query.split()[0] if original_query.split() else original_query
+    orig_re = re.compile(rf"^[\s._\-\[\(]*{re.escape(original_query)}")
+    first_re = re.compile(rf"^[\s._\-\[\(]*{re.escape(first_word)}")
+
+    def _normalize_exact(text):
+        # strip extension, collapse every separator (., _, -, [](), spaces) to
+        # a single space, so "Money.Heist.S01E01.1080p" and
+        # "money heist s01e01 1080p" compare equal.
+        text = str(text).lower()
+        text = re.sub(r"\.\w{2,4}$", "", text)
+        text = re.sub(r"[\s._\-\[\]\(\)]+", " ", text)
+        return text.strip()
+
+    exact_query_norm = _normalize_exact(original_query)
+
+    # 🎯 EXACT MATCH FIX: a file whose whole name (ignoring dots/underscores/
+    # brackets/extension) equals the search query exactly now ranks above
+    # everything else — even above files that merely *start with* the query.
+    def _is_exact(x):
+        return _normalize_exact(x.file_name) == exact_query_norm
+
+    # 🚀 RECENT FILE FIX: enumerate() का इस्तेमाल ताकि DB का newest-first order सुरक्षित रहे (idx = 0 मतलब सबसे नई फाइल)
+    # `files` is now already true-recency sorted across ALL databases combined, so idx 0 really is the newest file.
     indexed_files = list(enumerate(files))
 
     if is_series:
         def _series_key(item):
-            idx, x = item  
+            idx, x = item  # idx 0, 1, 2... (0 is most recent)
+            name_lower = x.file_name.lower()
             season, episode = extract_season_episode(x.file_name)
             return (
-                -season,      # 1. सबसे नया सीज़न ऊपर
-                -episode,     # 2. सबसे नया एपिसोड ऊपर
-                idx,          # 3. नई अपलोड की गई फाइल ऊपर
-                -extract_quality(x.file_name)
+                not _is_exact(x),          # 🎯 exact match always first
+                not orig_re.match(name_lower),
+                not first_re.match(name_lower),
+                -season,
+                -episode,
+                idx  # 🚀 नई फाइल्स को प्राथमिकता (quality/source से पहले)
             )
+
         indexed_files = sorted(indexed_files, key=_series_key)
     else:
         def _movie_key(item):
-            idx, x = item  
-            # 🚀 हम नई फाइल्स को 3-3 के ग्रुप में बाँट रहे हैं।
-            # इससे सबसे नई फाइल्स हमेशा टॉप पर रहेंगी, और उन 3 में से अच्छी क्वालिटी (1080p) वाली ऊपर दिखेगी।
+            idx, x = item  # idx 0, 1, 2... (0 is most recent)
+            name_lower = x.file_name.lower()
             return (
-                idx // 3,                      # 1. नई अपलोड की गई फाइल्स को प्राथमिकता
-                -extract_quality(x.file_name), # 2. उसके बाद क्वालिटी
-                idx                            
+                not _is_exact(x),          # 🎯 exact match always first
+                not orig_re.match(name_lower),
+                not first_re.match(name_lower),
+                idx,  # 🚀 नई फाइल्स को प्राथमिकता मिलेगी
+                -extract_quality(x.file_name),
+                -extract_source(x.file_name)
             )
+
         indexed_files = sorted(indexed_files, key=_movie_key)
 
     # वापस ओरिजिनल फाइल ऑब्जेक्ट्स निकालें
@@ -1492,7 +1640,11 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
     if next_offset >= total_results or len(paginated_files) < max_results:
         next_offset = ""
 
-    return paginated_files, next_offset, total_results
+    result = (paginated_files, next_offset, total_results)
+    _search_cache_set(cache_key, result)
+    return result
+
+
 
 #_________________________________
 
@@ -1561,7 +1713,10 @@ async def get_file_details(query):
 async def dreamxbotz_fetch_media(limit: int) -> list:
     try:
         target_media = MEDIA_DBS[0] if len(MEDIA_DBS) == 1 else await get_active_media_db()
-        cursor = target_media.find().sort("$natural", -1).limit(limit)
+        # 🚀 sort by real upload timestamp (file_date) instead of $natural,
+        # which is not a reliable "most recently inserted" order once a
+        # collection has had updates/compaction.
+        cursor = target_media.find().sort([("file_date", -1), ("_id", -1)]).limit(limit)
         files = await cursor.to_list(length=limit)
 
         cleaned_files = []
