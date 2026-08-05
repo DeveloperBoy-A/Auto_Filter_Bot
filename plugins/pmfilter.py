@@ -1,5 +1,5 @@
 from pyrogram.errors import MessageNotModified
-from utils import get_size, is_subscribed, is_req_subscribed, group_setting_buttons, get_poster, temp, get_settings, get_time, save_group_settings, get_cap, imdb, is_check_admin, extract_request_content, log_error, clean_filename, generate_season_variations, clean_search_text
+from utils import get_size, is_subscribed, is_req_subscribed, group_setting_buttons, get_poster, temp, get_settings, get_time, save_group_settings, get_cap, imdb, is_check_admin, extract_request_content, log_error, clean_filename, generate_season_variations, clean_search_text, get_caption_vars, SafeCaptionDict
 import tracemalloc
 from datetime import datetime
 #from fuzzywuzzy import process
@@ -1156,9 +1156,8 @@ async def cb_handler(client: Client, query: CallbackQuery):
         settings = await get_settings(query.message.chat.id)
         if CUSTOM_FILE_CAPTION:
             try:
-                f_caption = CUSTOM_FILE_CAPTION.format(file_name='' if title is None else title,
-                                                       file_size='' if size is None else size,
-                                                       file_caption='' if f_caption is None else f_caption)
+                cap_vars = get_caption_vars(title, size, f_caption)
+                f_caption = CUSTOM_FILE_CAPTION.format_map(SafeCaptionDict(cap_vars))
             except Exception as e:
                 logger.exception(e)
             f_caption = f_caption
