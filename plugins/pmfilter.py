@@ -1963,7 +1963,7 @@ def normalize_for_search(text):
 
 #_________________________________
 
- async def auto_filter(client, msg, spoll=False):
+async def auto_filter(client, msg, spoll=False):
     # PART 1: MESSAGE VALIDATION (Message ko check karna ki chalana hai ya nahi)
     # -------------------------------------------------------------------------
     if not spoll:
