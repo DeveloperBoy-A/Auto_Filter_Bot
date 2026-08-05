@@ -971,6 +971,101 @@ def get_size(size):
         size /= 1024.0
     return "%.2f %s" % (size, units[i])
 
+
+# ---------------------------------------------------------------------------
+# Custom caption placeholders: {season}, {episode}, {language}, {audio}, {quality}
+# ---------------------------------------------------------------------------
+
+class SafeCaptionDict(dict):
+    """dict subclass used with str.format_map so an unknown {placeholder} in an
+    admin-set custom caption is left as-is instead of raising a KeyError and
+    silently discarding the whole custom caption."""
+    def __missing__(self, key):
+        return "{" + key + "}"
+
+
+_CAPTION_LANGUAGE_MAP = {
+    r"\bhin\b": "Hindi", r"\bhindi\b": "Hindi",
+    r"\btam\b": "Tamil", r"\btamil\b": "Tamil",
+    r"\bkan\b": "Kannada", r"\bkannada\b": "Kannada",
+    r"\btel\b": "Telugu", r"\btelugu\b": "Telugu",
+    r"\bmal\b": "Malayalam", r"\bmalayalam\b": "Malayalam",
+    r"\beng\b": "English", r"\benglish\b": "English",
+    r"\bpun\b": "Punjabi", r"\bpunjabi\b": "Punjabi",
+    r"\bben\b": "Bengali", r"\bbengali\b": "Bengali",
+    r"\bmar\b": "Marathi", r"\bmarathi\b": "Marathi",
+    r"\bguj\b": "Gujarati", r"\bgujarati\b": "Gujarati",
+    r"\burd\b": "Urdu", r"\burdu\b": "Urdu",
+    r"\bkor\b": "Korean", r"\bkorean\b": "Korean",
+    r"\bjpn\b": "Japanese", r"\bjapanese\b": "Japanese",
+    r"\bmulti\b": "Multi Audio",
+}
+
+_QUALITY_TOKEN_PATTERN = re.compile(
+    r"\b(?:HDCam|HDTC|CamRip|TS|TC|TeleSync|DVDScr|DVDRip|PreDVD|"
+    r"WEBRip|WEB-DL|TVRip|HDTV|WEB DL|WebDl|BluRay|BRRip|BDRip|"
+    r"360p|480p|720p|1080p|2160p|4K|1440p|540p|240p|140p|HEVC|HDRip)\b",
+    re.IGNORECASE
+)
+
+_SEASON_EP_RANGE = re.compile(
+    r'\bS(\d{1,2})[^\w\n\r]*E(?:p(?:isode)?)?0*(\d{1,2})\s*(?:to|-)\s*(?:E(?:p(?:isode)?)?)?0*(\d{1,2})',
+    re.IGNORECASE
+)
+_SEASON_EP_SINGLE = re.compile(r'\bS(\d{1,2})[^\w\n\r]*E(?:p(?:isode)?)?0*(\d{1,3})', re.IGNORECASE)
+_SEASON_EP_NAMED = re.compile(r'Season\s*0*(\d{1,2})[\s\-,:]*Ep(?:isode)?\s*0*(\d{1,3})', re.IGNORECASE)
+
+
+def extract_season_episode_str(text: str):
+    """Returns (season, episode) as display strings like ('S01', 'E05'), or 'N/A' each if not found."""
+    text = text or ""
+    for pattern in (_SEASON_EP_RANGE, _SEASON_EP_SINGLE, _SEASON_EP_NAMED):
+        m = pattern.search(text)
+        if m:
+            season = f"S{int(m.group(1)):02d}"
+            if pattern is _SEASON_EP_RANGE:
+                episode = f"E{int(m.group(2)):02d}-E{int(m.group(3)):02d}"
+            else:
+                episode = f"E{int(m.group(2)):02d}"
+            return season, episode
+    return "N/A", "N/A"
+
+
+def extract_caption_language(text: str) -> str:
+    text_l = (text or "").lower()
+    langs = []
+    for pattern, name in _CAPTION_LANGUAGE_MAP.items():
+        if re.search(pattern, text_l) and name not in langs:
+            langs.append(name)
+    return ", ".join(langs) if langs else "N/A"
+
+
+def extract_caption_quality(text: str) -> str:
+    matches = _QUALITY_TOKEN_PATTERN.findall(text or "")
+    seen = []
+    for m in matches:
+        if m.upper() not in {s.upper() for s in seen}:
+            seen.append(m)
+    return ", ".join(seen) if seen else "N/A"
+
+
+def get_caption_vars(file_name: str, file_size=None, file_caption=None) -> dict:
+    """Builds the full variable dict usable in a custom /set_caption template:
+    {file_name} {file_size} {file_caption} {season} {episode} {language} {audio} {quality}"""
+    file_name = file_name or ""
+    season, episode = extract_season_episode_str(file_name)
+    return {
+        "file_name": file_name,
+        "file_size": "" if file_size is None else file_size,
+        "file_caption": "" if file_caption is None else file_caption,
+        "season": season,
+        "episode": episode,
+        "language": extract_caption_language(file_name),
+        "audio": extract_caption_language(file_name),
+        "quality": extract_caption_quality(file_name),
+    }
+
+
 def split_list(l, n):
     for i in range(0, len(l), n):
         yield l[i:i + n]  
