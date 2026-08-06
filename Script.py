@@ -249,7 +249,10 @@ Mᴇꜱꜱᴀɢᴇ : <code>{}</code>"""
     CAPTION = """<b><a href="https://t.me/newmovieswebseries_group">
 🎬 𝑻𝒊𝒕𝒍𝒆 : {file_name}
 
-📦 𝑺𝒊𝒛𝒆 : {file_size}</a></b>
+📦 𝑺𝒊𝒛𝒆 : {file_size}
+🎞 𝑺𝒆𝒂𝒔𝒐𝒏  : {season} 
+🗣 𝑳𝒂𝒏𝒈𝒖𝒂𝒈𝒆 : {language}
+🔊 𝑨𝒖𝒅𝒊𝒐 : {audio}</a></b>
 ★━━━━━━━━━━━━━━━━━━━━━★
 <b>❣️ 𝑷𝒐𝒘𝒆𝒓𝒆𝒅 𝑩𝒚 𝖩𝗈𝗂𝗇✅➥:</b>
 <a href="https://t.me/+MINAQiQyVq8wMWRl">🫧『𓆩ꨄ︎𓆪𝐓ᴏᴋʏᴏ 𝐁ᴀᴄᴋᴜᴘ𓆩ꨄ︎𓆪』🫧</a>
