@@ -1,15 +1,18 @@
 import re
+import asyncio
 import aiohttp
 import warnings
 import logging
 from io import BytesIO
 from PIL import Image
 from info import DREAMXBOTZ_IMAGE_FETCH, TMDB_API_KEY
-from imdb import Cinemagoer
+from imdbkit import IMDBKit
 
 
 logger = logging.getLogger(__name__)
-ia = Cinemagoer('s3', uri='sqlite:///cinemagoer.db')
+
+ia = IMDBKit()
+
 LONG_IMDB_DESCRIPTION = False
 
 Image.MAX_IMAGE_PIXELS = None
@@ -62,10 +65,24 @@ async def close_session():
     if _session and not _session.closed:
         await _session.close()
 
-def list_to_str(lst):
-    if lst:
-        return ", ".join(map(str, lst))
-    return ""
+def list_to_str(value):
+    if value is None:
+        return ""
+
+    # Already string
+    if isinstance(value, str):
+        return value
+
+    # Integer / Float
+    if isinstance(value, (int, float)):
+        return str(value)
+
+    # List / Tuple / Set
+    if isinstance(value, (list, tuple, set)):
+        return ", ".join(map(str, value))
+
+    # Anything else
+    return str(value)
 
 async def get_movie_details(query, id=False, file=None):
     try:
@@ -82,73 +99,92 @@ async def get_movie_details(query, id=False, file=None):
                     year = list_to_str(year[:1])
             else:
                 year = None
-            movieid = ia.search_movie(title.lower(), results=10)
-            if not movieid:
-                return None
-            if year:
-                filtered = list(filter(lambda k: str(k.get('year')) == str(year), movieid))
-                if not filtered:
-                    filtered = movieid
-            else:
-                filtered = movieid
 
-            filtered_kind = list(filter(lambda k: k.get('kind') in ['movie', 'tv series'], filtered))
+            try:
+                search_result = await asyncio.to_thread(ia.search_movie, title.lower())
+            except Exception as e:
+                logger.warning(f"IMDb search failed for '{title}': {e}")
+                return None
+
+            if not search_result or not search_result.titles:
+                return None
+
+            movie_list = search_result.titles[:10]
+
+            if year:
+                filtered = [m for m in movie_list if m.year and str(m.year) == str(year)]
+                if not filtered:
+                    filtered = movie_list
+            else:
+                filtered = movie_list
+
+            kind_filter = ['movie', 'tv series', 'tvSeries', 'tvMiniSeries', 'tvMovie']
+            filtered_kind = [m for m in filtered if m.kind and m.kind in kind_filter]
             if not filtered_kind:
                 logger.info("No matches found for kind 'movie' or 'tv series', falling back to filtered list.")
-                movieid = filtered
-            else:
-                movieid = filtered_kind
+                filtered_kind = filtered
 
-            movieid = movieid[0].movieID
+            if not filtered_kind:
+                return None
+
+            movieid = filtered_kind[0].imdb_id
         else:
             movieid = query
-        movie = ia.get_movie(movieid)
-        ia.update(movie, info=['main', 'vote details'])
 
-        if movie.get("original air date"):
-            date = movie["original air date"]
-        elif movie.get("year"):
-            date = movie.get("year")
+        movie = await asyncio.to_thread(ia.get_movie, movieid)
+        if not movie:
+            return None
+
+        if movie.release_date:
+            date = movie.release_date
+        elif movie.year:
+            date = str(movie.year)
         else:
             date = "N/A"
 
-        plot = movie.get('plot')
-        if plot and len(plot) > 0:
-            plot = plot[0]
-        else:
-            plot = movie.get('plot outline')
+        plot = movie.plot[0] if isinstance(movie.plot, list) else (movie.plot or "")
         if plot and len(plot) > 800:
             plot = plot[:800] + "..."
 
-        poster_url = movie.get('full-size cover url')
+        imdb_id = movie.imdb_id
+        if imdb_id and not str(imdb_id).startswith("tt"):
+            imdb_id = f"tt{imdb_id}"
+
+        poster_url = movie.cover_url
+
         return {
-            'title': movie.get('title'),
-            'votes': movie.get('votes'),
-            "aka": list_to_str(movie.get("akas")),
-            "seasons": movie.get("number of seasons"),
-            "box_office": movie.get('box office'),
-            'localized_title': movie.get('localized title'),
-            'kind': movie.get("kind"),
-            "imdb_id": f"tt{movie.get('imdbID')}",
-            "cast": list_to_str(movie.get("cast")),
-            "runtime": list_to_str(movie.get("runtimes")),
-            "countries": list_to_str(movie.get("countries")),
-            "certificates": list_to_str(movie.get("certificates")),
-            "languages": list_to_str(movie.get("languages")),
-            "director": list_to_str(movie.get("director")),
-            "writer": list_to_str(movie.get("writer")),
-            "producer": list_to_str(movie.get("producer")),
-            "composer": list_to_str(movie.get("composer")),
-            "cinematographer": list_to_str(movie.get("cinematographer")),
-            "music_team": list_to_str(movie.get("music department")),
-            "distributors": list_to_str(movie.get("distributors")),
+            'title': movie.title,
+            'votes': movie.votes,
+            "aka": list_to_str(getattr(movie, "title_akas", None)),
+            "seasons": (
+                len(movie.info_series.display_seasons)
+                if getattr(movie, "info_series", None)
+                and getattr(movie.info_series, "display_seasons", None)
+                else None
+            ),
+            "box_office": getattr(movie, "worldwide_gross", None),
+            'localized_title': getattr(movie, "title_localized", None),
+            'kind': movie.kind,
+            "imdb_id": imdb_id,
+            "cast": list_to_str(getattr(movie, "stars", None)),
+            "runtime": list_to_str(getattr(movie, "duration", None)),
+            "countries": list_to_str(getattr(movie, "countries", None)),
+            "certificates": list_to_str(getattr(movie, "certificates", None)),
+            "languages": list_to_str(getattr(movie, "languages", None)),
+            "director": list_to_str(getattr(movie, "directors", None)),
+            "writer": list_to_str([p.name for p in movie.writers]) if getattr(movie, "writers", None) else "",
+            "producer": list_to_str([p.name for p in movie.producers]) if getattr(movie, "producers", None) else "",
+            "composer": list_to_str([p.name for p in movie.composers]) if getattr(movie, "composers", None) else "",
+            "cinematographer": list_to_str([p.name for p in movie.cinematographers]) if getattr(movie, "cinematographers", None) else "",
+            "music_team": list_to_str([p.name for p in movie.music_team]) if getattr(movie, "music_team", None) else "",
+            "distributors": list_to_str([c.name for c in movie.distributors]) if getattr(movie, "distributors", None) else "",
             'release_date': date,
-            'year': movie.get('year'),
-            'genres': list_to_str(movie.get("genres")),
-            'poster_url': poster_url + "._V1_SX1440.jpg" if poster_url.endswith("@.jpg") else poster_url,
+            'year': movie.year,
+            'genres': list_to_str(getattr(movie, "genres", None)),
+            'poster_url': poster_url,
             'plot': plot,
-            'rating': str(movie.get("rating", "N/A")),
-            'url': f'https://www.imdb.com/title/tt{movieid}'
+            'rating': str(movie.rating) if getattr(movie, "rating", None) else "N/A",
+            'url': getattr(movie, "url", None) or (f'https://www.imdb.com/title/{imdb_id}' if imdb_id else "")
         }
     except Exception as e:
         logger.exception(f"An error occurred in get_movie_details: {e}")
