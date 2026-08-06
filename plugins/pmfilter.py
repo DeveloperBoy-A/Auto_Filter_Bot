@@ -1,5 +1,5 @@
 from pyrogram.errors import MessageNotModified
-from utils import get_size, is_subscribed, is_req_subscribed, group_setting_buttons, get_poster, temp, get_settings, get_time, save_group_settings, get_cap, imdb, is_check_admin, extract_request_content, log_error, clean_filename, generate_season_variations, clean_search_text
+from utils import get_size, is_subscribed, is_req_subscribed, group_setting_buttons, get_poster, temp, get_settings, get_time, save_group_settings, get_cap, imdb, is_check_admin, extract_request_content, log_error, clean_filename, generate_season_variations, clean_search_text, extract_caption_meta
 import tracemalloc
 from rapidfuzz import process, fuzz
 from dreamxbotz.util.file_properties import get_name, get_hash
@@ -1152,9 +1152,11 @@ async def cb_handler(client: Client, query: CallbackQuery):
         settings = await get_settings(query.message.chat.id)
         if CUSTOM_FILE_CAPTION:
             try:
+                meta = extract_caption_meta(files.file_name)
                 f_caption = CUSTOM_FILE_CAPTION.format(file_name='' if title is None else title,
                                                        file_size='' if size is None else size,
-                                                       file_caption='' if f_caption is None else f_caption)
+                                                       file_caption='' if f_caption is None else f_caption,
+                                                       **meta)
             except Exception as e:
                 logger.exception(e)
             f_caption = f_caption
@@ -2138,7 +2140,7 @@ async def auto_filter(client, msg, spoll=False):
 
 
 
-#_______________________
+#________________________________________
 async def old_auto_filter(client, msg, spoll=False):
     curr_time = datetime.now(pytz.timezone('Asia/Kolkata')).time()
     if not spoll:
