@@ -686,6 +686,121 @@ def get_size(size):
         size /= 1024.0
     return "%.2f %s" % (size, units[i])
 
+
+# ---------------------------------------------------------------------------
+# 🆕 CAPTION AUTO-DETECT HELPERS (Language / Audio / Quality / Season / Episode)
+# ---------------------------------------------------------------------------
+# Filename se automatically {language}, {audio}, {quality}, {season}, {episode}
+# nikalne ke liye. Ye placeholders ab /set_caption command me use kiye ja
+# sakte hain, bilkul {file_name} aur {file_size} ki tarah.
+
+_CAPTION_LANG_PATTERNS = {
+    "Hindi": r"\bhindi\b|\bhin\b",
+    "English": r"\benglish\b|\beng\b",
+    "Tamil": r"\btamil\b|\btam\b",
+    "Telugu": r"\btelugu\b|\btel\b",
+    "Malayalam": r"\bmalayalam\b|\bmal\b",
+    "Kannada": r"\bkannada\b|\bkan\b",
+    "Punjabi": r"\bpunjabi\b|\bpbi\b|\bpunj\b",
+    "Bengali": r"\bbengali\b|\bbangla\b|\bben\b",
+    "Marathi": r"\bmarathi\b|\bmar\b",
+    "Gujarati": r"\bgujarati\b|\bguj\b",
+    "Urdu": r"\burdu\b",
+    "Korean": r"\bkorean\b|\bkor\b",
+    "Japanese": r"\bjapanese\b|\bjap\b",
+    "Chinese": r"\bchinese\b|\bchi\b",
+    "Spanish": r"\bspanish\b|\bspa\b",
+}
+
+_CAPTION_QUALITY_TOKENS = [
+    "2160p", "4k", "1440p", "1080p", "720p", "540p", "480p", "360p", "240p",
+    "web-dl", "webdl", "web dl", "webrip", "web rip",
+    "hdrip", "hd rip", "bluray", "blu ray", "bdrip", "bd rip", "brrip", "br rip",
+    "hdtv", "hd tv", "tvrip", "tv rip", "dvdrip", "dvd rip", "dvdscr", "dvd scr",
+    "predvd", "pre dvd", "hdts", "hd ts", "hdtc", "hd tc", "hdcam", "hd cam",
+    "camrip", "cam rip", "hqcam",
+]
+
+
+def extract_language(text):
+    """Filename/caption text se saari languages nikaal kar 'Hindi + English'
+    jaise format me deta hai. Kuch na mile to 'N/A' return hota hai."""
+    text = (text or "").lower()
+    found = []
+    for lang, pattern in _CAPTION_LANG_PATTERNS.items():
+        if re.search(pattern, text, flags=re.IGNORECASE):
+            found.append(lang)
+    return " + ".join(found) if found else "N/A"
+
+
+def extract_audio(text):
+    """Audio track info nikaalta hai (Dual/Multi Audio ho to wo, warna
+    detected language(s) hi audio maani jaati hai)."""
+    text = (text or "").lower()
+    if re.search(r"\bdual[\s\.\-_]?audio\b", text, flags=re.IGNORECASE):
+        return "Dual Audio"
+    if re.search(r"\bmulti[\s\.\-_]?audio\b|\bmulti\b", text, flags=re.IGNORECASE):
+        return "Multi Audio"
+    return extract_language(text)
+
+
+def extract_quality(text):
+    """Filename se resolution/source quality (720p, WEB-DL, BluRay, etc.)
+    nikaalta hai. Kuch na mile to 'N/A'."""
+    text = (text or "").lower()
+    found = []
+    seen_normalized = set()
+    for token in _CAPTION_QUALITY_TOKENS:
+        pattern = re.escape(token).replace(r"\ ", r"[\s\.\-_]?")
+        if re.search(rf"(?<![a-z0-9]){pattern}(?![a-z0-9])", text, flags=re.IGNORECASE):
+            normalized = token.replace(" ", "").replace("-", "")
+            if normalized in seen_normalized:
+                continue
+            seen_normalized.add(normalized)
+            label = token.upper().replace(" ", "-") if " " in token else token.upper()
+            found.append(label)
+    return " | ".join(found) if found else "N/A"
+
+
+def extract_season_episode(text):
+    """Filename se Season aur Episode number nikaalta hai.
+    Returns: (season_str, episode_str) e.g. ('S01', 'E05')."""
+    text = text or ""
+    season, episode = "N/A", "N/A"
+
+    m = re.search(r"[Ss](\d{1,2})[\s\.\-_]?[Ee](\d{1,3})", text)
+    if m:
+        return f"S{int(m.group(1)):02d}", f"E{int(m.group(2)):02d}"
+
+    m = re.search(r"season[\s\.\-_]?(\d{1,2})", text, flags=re.IGNORECASE)
+    if m:
+        season = f"S{int(m.group(1)):02d}"
+    else:
+        m = re.search(r"(?<![a-z0-9])s(\d{1,2})(?![a-z0-9])", text, flags=re.IGNORECASE)
+        if m:
+            season = f"S{int(m.group(1)):02d}"
+
+    m = re.search(r"(?:episode|ep)[\s\.\-_]?(\d{1,3})", text, flags=re.IGNORECASE)
+    if m:
+        episode = f"E{int(m.group(1)):02d}"
+
+    return season, episode
+
+
+def extract_caption_meta(filename):
+    """Ek hi jagah se {language}, {audio}, {quality}, {season}, {episode}
+    ke liye ready values deta hai. `.format(**extract_caption_meta(name))`
+    ki tarah caption templates ke saath seedha use ho sakta hai."""
+    filename = filename or ""
+    season, episode = extract_season_episode(filename)
+    return {
+        "language": extract_language(filename),
+        "audio": extract_audio(filename),
+        "quality": extract_quality(filename),
+        "season": season,
+        "episode": episode,
+    }
+
 def split_list(l, n):
     for i in range(0, len(l), n):
         yield l[i:i + n]  
