@@ -34,6 +34,7 @@ COVER_WATERMARK = bool(environ.get('COVER_WATERMARK', True)) # Watermark [@Tokyo
 # If you disable it then bot will use a default thumb for all files
 
 
+
 PICS = (environ.get('PICS', 'https://graph.org/file/56b5deb73f3b132e2bb73.jpg https://graph.org/file/5303692652d91d52180c2.jpg https://graph.org/file/425b6f46efc7c6d64105f.jpg https://graph.org/file/876867e761c6c7a29855b.jpg')).split()  # Sample pic
 NOR_IMG = environ.get("NOR_IMG", "https://graph.org/file/e20b5fdaf217252964202.jpg")
 MELCOW_PHOTO = environ.get("MELCOW_PHOTO", "https://graph.org/file/56b5deb73f3b132e2bb73.jpg")
@@ -56,7 +57,7 @@ reqst_channel = environ.get('REQST_CHANNEL_ID', '-1002433959073')  # Request cha
 SUPPORT_CHAT = environ.get('SUPPORT_CHAT', 'https://t.me/newmovies_support')  # Support group link (make sure bot is admin)
 
 # FORCE_SUB 
-auth_req_channels = environ.get("AUTH_REQ_CHANNELS", "")# requst to join Channel for force sub (make sure bot is admin) only for bot ADMINS  
+auth_req_channels = environ.get("AUTH_REQ_CHANNELS", "-1002413838031")# requst to join Channel for force sub (make sure bot is admin) only for bot ADMINS  
 auth_channels     = environ.get("AUTH_CHANNELS", "-1002413838031")# Channels for force sub (make sure bot is admin)
 
 # ============================
@@ -72,11 +73,6 @@ STAR_PREMIUM_PLANS = {
     55: "45day",
     75: "60day",
 }  # Premium plans with their respective durations in days
-
-# ============================
-# Daily Download Limit Configuration
-# ============================
-DAILY_DOWNLOAD_LIMIT = int(environ.get('DAILY_DOWNLOAD_LIMIT', '10'))  # Max files a FREE user can download every 24 hours. Premium users are unlimited.
 
 # ============================
 # MongoDB Configuration
@@ -97,12 +93,13 @@ DATABASE_URI5 = environ.get('DATABASE_URI5', "")  # MongoDB URI for the 5th data
 # ============================
 
 MOVIE_UPDATE_NOTIFICATION = bool(environ.get('MOVIE_UPDATE_NOTIFICATION', "False"))  # Notification On (True) / Off (False)
+
 MOVIE_UPDATE_CHANNEL_LINK = environ.get('MOVIE_UPDATE_CHANNEL_LINK', 'https://t.me/+4q9l508y2j0wY2Jl')  # Update channel link (make sure bot is admin)
 MOVIE_UPDATE_CHANNEL = int(environ.get('MOVIE_UPDATE_CHANNEL', '-1003896926458'))  # Notification of sent to your channel
 DREAMXBOTZ_IMAGE_FETCH = bool(environ.get('DREAMXBOTZ_IMAGE_FETCH', True))  # On (True) / Off (False)
 LINK_PREVIEW = bool(environ.get('LINK_PREVIEW', False)) # Shows link preview in notification msg instead of image
 ABOVE_PREVIEW = bool(environ.get('ABOVE_PREVIEW', True)) # Shows link preview above the text in notification msg if True else below the msg
-TMDB_API_KEY = environ.get('TMDB_API_KEY', '') # preffer to use your own tmdb API Key get it from https://www.themoviedb.org/settings/api
+TMDB_API_KEY = environ.get('TMDB_API_KEY', 'a02fd334c1aad2e413e6f57a0be2ef27') # preffer to use your own tmdb API Key get it from https://www.themoviedb.org/settings/api
 TMDB_POSTER = bool(environ.get('TMDB_POSTER', "True")) # Shows TMDB poster in notification msg
 LANDSCAPE_POSTER = bool(environ.get('LANDSCAPE_POSTER', True)) # Shows landscape poster in notification msg
 
@@ -110,7 +107,7 @@ MAX_LIST_ELM = environ.get("MAX_LIST_ELM", None)
 
 # Poster settings
 DREAMXBOTZ_IMAGE_FETCH = True
-TMDB_API_KEY = ""
+TMDB_API_KEY = "a02fd334c1aad2e413e6f57a0be2ef27"
 
 POSTER_SPOILER= bool(environ.get('POSTER_SPOILER', True))  # On (True) / Off (False)
 
@@ -163,7 +160,8 @@ DELETE_TIME = int(environ.get("DELETE_TIME", "120"))  #  deletion time in second
 CUSTOM_FILE_CAPTION = environ.get("CUSTOM_FILE_CAPTION", f"{script.CAPTION}")   # Custom caption for files
 BATCH_FILE_CAPTION = environ.get("BATCH_FILE_CAPTION", CUSTOM_FILE_CAPTION) # Custom caption for batch files
 IMDB_TEMPLATE = environ.get("IMDB_TEMPLATE", f"{script.IMDB_TEMPLATE_TXT}")     # Custom IMDB template 
-MAX_LIST_ELM = environ.get("MAX_LIST_ELM", 5) # Maximum number of elements in a list (default: None, no limit)
+MAX_LIST_ELM = environ.get("MAX_LIST_ELM", None) # Maximum number of elements in a list (default: None, no limit)
+MAX_LIST_ELM = int(environ.get("MAX_LIST_ELM") or 5) or None # Maximum number of elements in a list (default: 10, set 0 for no limit)
 INDEX_REQ_CHANNEL = int(environ.get('INDEX_REQ_CHANNEL', LOG_CHANNEL))  # Index Request Channel ID (make sure bot is admin)
 NO_RESULTS_MSG = bool(environ.get("NO_RESULTS_MSG", True))  # True if you want no results messages in Log Channel
 MAX_BTN = is_enabled((environ.get('MAX_BTN', "True")), True)    # Max Button On (True) / Off (False)
@@ -177,7 +175,7 @@ SPELL_CHECK_REPLY = is_enabled(environ.get("SPELL_CHECK_REPLY", "True"), True) #
 MELCOW_NEW_USERS = is_enabled((environ.get('MELCOW_NEW_USERS', "False")), False) # Melcow New Users On (True) / Off (False)
 PROTECT_CONTENT = is_enabled((environ.get('PROTECT_CONTENT', "False")), False) # Protect Content On (True) / Off (False)
 PM_SEARCH = bool(environ.get('PM_SEARCH', True))  # PM Search On (True) / Off (False)
-EMOJI_MODE = bool(environ.get('EMOJI_MODE', True))  # Emoji status On (True) / Off (False)
+EMOJI_MODE = bool(environ.get('EMOJI_MODE', False))  # Emoji status On (True) / Off (False)
 BUTTON_MODE = is_enabled((environ.get('BUTTON_MODE', "False")), False) # pm & Group button or link mode (True) / Off (False)
 STREAM_MODE = bool(environ.get('STREAM_MODE', True)) # Set Stream mode True or False
 PREMIUM_STREAM_MODE = bool(environ.get('PREMIUM_STREAM_MODE', False)) # Set Stream mode True or False only for premium users
@@ -216,8 +214,7 @@ BAD_WORDS = {
     "villa",
     "tg",
     "original"
-    "BackupByJaggii"
-    "@", "www.", "ClipmateZone", "NewMoviesOnTG", "moviehub4u update",   "New", "Movies", "OnTG", "movie4u"
+    "@", "www.", "ClipmateZone", "NewMoviesOnTG", "moviehub4u update",   "New", "Movies", "OnTG", "movie4u", "RunningMoviesHD", "@TGCinemaworld -"
 } # Set of bad words to filter out
    
 
@@ -321,4 +318,3 @@ LOG_STR += ("BUTTON_MODE is found, filename and file size will be shown in a sin
 LOG_STR += (f"CUSTOM_FILE_CAPTION enabled with value {CUSTOM_FILE_CAPTION}, your files will be sent along with this customized caption.\n" if CUSTOM_FILE_CAPTION else "No CUSTOM_FILE_CAPTION Found, Default captions of file will be used.\n")
 LOG_STR += ("Long IMDB storyline enabled." if LONG_IMDB_DESCRIPTION else "LONG_IMDB_DESCRIPTION is disabled, Plot will be shorter.\n")
 LOG_STR += ("Spell Check Mode is enabled, bot will be suggesting related movies if movie name is misspelled.\n" if SPELL_CHECK_REPLY else "Spell Check Mode is disabled.\n")
-
