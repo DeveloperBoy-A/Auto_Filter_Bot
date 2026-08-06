@@ -6,7 +6,7 @@ from info import  *
 from imdb import Cinemagoer 
 from imdbkit import IMDBKit
 from rapidfuzz import fuzz
-from fuzzywuzzy import process 
+#from fuzzywuzzy import process 
 #from urllib.parse import quote_plus
 import asyncio
 from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
