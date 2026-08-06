@@ -1,14 +1,12 @@
 from pyrogram.errors import MessageNotModified
 from utils import get_size, is_subscribed, is_req_subscribed, group_setting_buttons, get_poster, temp, get_settings, get_time, save_group_settings, get_cap, imdb, is_check_admin, extract_request_content, log_error, clean_filename, generate_season_variations, clean_search_text
 import tracemalloc
-from datetime import datetime
-#from fuzzywuzzy import process
-from rapidfuzz import fuzz
-from rapidfuzz import process
+from rapidfuzz import process, fuzz
 from dreamxbotz.util.file_properties import get_name, get_hash
 from urllib.parse import quote_plus
 import logging
 from database.ia_filterdb import Media, Media2, MEDIA_DBS, delete_file_by_id, get_file_details, get_search_results, get_bad_files
+
 from database.config_db import mdb
 from pyrogram.errors import FloodWait, UserIsBlocked, MessageNotModified, PeerIdInvalid, ChatAdminRequired, UserNotParticipant
 from pyrogram import Client, filters, enums
@@ -328,23 +326,23 @@ async def next_page(bot, query):
 @Client.on_callback_query(filters.regex(r"^spol"))
 async def advantage_spoll_choker(bot, query):
     _, id, user = query.data.split('#')
-
+    
     # Check if only the intended user can use this
     if int(user) != 0 and query.from_user.id != int(user):
         return await query.answer(script.ALRT_TXT.format(query.from_user.first_name), show_alert=True)
-
+    
     # Get movie details
     movies = await get_poster(id, id=True)
     movie = movies.get('title') or "Unknown Movie"
     movie = re.sub(r"[:-]", " ", movie)
     movie = re.sub(r"\s+", " ", movie).strip()
     year = movies.get('year')  # Optional: get year if available
-
+    
     await query.answer(script.TOP_ALRT_MSG)
-
+    
     # Search results
     files, offset, total_results = await get_search_results(query.message.chat.id, movie, offset=0, filter=True)
-
+    
     if files:
         k = (movie, files, offset, total_results)
         await auto_filter(bot, query, k)
@@ -360,12 +358,12 @@ async def advantage_spoll_choker(bot, query):
                 )
             except Exception as e:
                 print(f"Error In Spol - {e}   Make Sure Bot Admin BIN CHANNEL")
-
+    
     # Prepare auto-fill request button (always show to user)
     auto_fill_text = f"/request {movie}"
     if year:
         auto_fill_text += f" {year}"
-
+    
     btn = InlineKeyboardMarkup([
         [
             InlineKeyboardButton(
@@ -380,10 +378,10 @@ async def advantage_spoll_choker(bot, query):
             )
         ]
     ])
-
+    
     # Edit message to show guide + buttons
     k = await query.message.edit(script.MVE_NT_FND, reply_markup=btn)
-
+    
     # Auto-delete after 30 sec
     await asyncio.sleep(30)
     await k.delete()
@@ -1066,8 +1064,8 @@ async def media_type_cb_handler(client: Client, query: CallbackQuery):
 
     await query.answer()
 
-  
-  
+
+
 # -------- AUTO DELETE -------- #  
 async def send_auto_delete(client, chat_id, text, reply_markup, seconds=60):  
     try:  
@@ -1076,8 +1074,7 @@ async def send_auto_delete(client, chat_id, text, reply_markup, seconds=60):
         await msg.delete()  
     except Exception as e:  
         print(e)  
-  
-  
+
 
 @Client.on_callback_query()
 async def cb_handler(client: Client, query: CallbackQuery):
@@ -1172,30 +1169,14 @@ async def cb_handler(client: Client, query: CallbackQuery):
         await query.message.edit('ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ᴅᴇʟᴇᴛᴇᴅ ᴀʟʟ ɪɴᴅᴇxᴇᴅ ꜰɪʟᴇꜱ ✅')
 
     elif query.data.startswith("checksub"):
-        # FIXED: Indented this entire block properly
         try:
             ident, kk, file_id = query.data.split("#")
             btn = []
             chat = file_id.split("_")[0]
             settings = await get_settings(chat)
-            fsub_channels = list(dict.fromkeys((settings.get('fsub', []) if settings else [])+ AUTH_CHANNELS))
-
-            user_id = query.from_user.id
-            for channel_id in fsub_channels:
-                cache_key = (user_id, channel_id)
-                if cache_key in temp.FSUB_CACHE:
-                    del temp.FSUB_CACHE[cache_key]
-                    logger.info(f"FSUB Cache cleared for user {user_id} in channel {channel_id}")
-
-            for channel_id in AUTH_REQ_CHANNELS:
-                cache_key = (user_id, channel_id)
-                if cache_key in temp.FSUB_CACHE:
-                    del temp.FSUB_CACHE[cache_key]
-                    logger.info(f"REQ Cache cleared for user {user_id} in channel {channel_id}")
-
-            btn += await is_subscribed(client, user_id, fsub_channels, force_check=True)
-            btn += await is_req_subscribed(client, user_id, AUTH_REQ_CHANNELS, force_check=True)
-
+            fsub_channels = list(dict.fromkeys((settings.get('fsub', []) if settings else [])+ AUTH_CHANNELS)) 
+            btn += await is_subscribed(client, query.from_user.id, fsub_channels)
+            btn += await is_req_subscribed(client, query.from_user.id, AUTH_REQ_CHANNELS)
             if btn:
                 btn.append([InlineKeyboardButton("♻️ ᴛʀʏ ᴀɢᴀɪɴ ♻️", callback_data=f"checksub#{kk}#{file_id}")])
                 try:
@@ -1209,10 +1190,8 @@ async def cb_handler(client: Client, query: CallbackQuery):
                     show_alert=True
                 )
                 return
-
             await query.answer(url=f"https://t.me/{temp.U_NAME}?start={kk}_{file_id}")
             await query.message.delete()
-
         except Exception as e:
             await log_error(client, f"❌ Error in checksub callback:\n\n{repr(e)}")
             logger.error(f"❌ Error in checksub callback:\n\n{repr(e)}")
@@ -1222,60 +1201,26 @@ async def cb_handler(client: Client, query: CallbackQuery):
         ident, keyword = query.data.split("#")
         await query.message.edit_text(f"<b>Fetching Files for your query {keyword} on DB... Please wait...</b>")
         files, total = await get_bad_files(keyword)
-        
         await query.message.edit_text("<b>ꜰɪʟᴇ ᴅᴇʟᴇᴛɪᴏɴ ᴘʀᴏᴄᴇꜱꜱ ᴡɪʟʟ ꜱᴛᴀʀᴛ ɪɴ 5 ꜱᴇᴄᴏɴᴅꜱ !</b>")
         await asyncio.sleep(5)
-        
         deleted = 0
-        failed_files = []
-        
         async with lock:
             try:
                 for file in files:
                     file_ids = file.file_id
                     file_name = file.file_name
-
-                    # Try deleting from whichever configured DB actually holds it
                     deleted_count = await delete_file_by_id(file_ids)
-
-                    # ✅ FIX: Count केवल तभी increment करें जब file actually delete हो
                     if deleted_count:
-                        deleted += 1
                         logger.info(
-                            f'✅ ꜰɪʟᴇ ꜰᴏᴜɴᴅ ꜰᴏʀ ʏᴏᴜʀ ǫᴜᴇʀʏ {keyword}! ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ᴅᴇʟᴇᴛᴇᴅ {file_name} ꜰʀᴏᴍ ᴅᴀᴛᴀʙᴀꜱᴇ.')
-                    else:
-                        failed_files.append(file_name)
-                        logger.warning(
-                            f'❌ ꜰᴀɪʟᴇᴅ ᴛᴏ ᴅᴇʟᴇᴛᴇ {file_name} - ɴᴏᴛ ꜰᴏᴜɴᴅ ɪɴ ᴀɴʏ ᴅᴀᴛᴀʙᴀꜱᴇ.')
-                    
+                            f'ꜰɪʟᴇ ꜰᴏᴜɴᴅ ꜰᴏʀ ʏᴏᴜʀ ǫᴜᴇʀʏ {keyword}! ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ᴅᴇʟᴇᴛᴇᴅ {file_name} ꜰʀᴏᴍ ᴅᴀᴛᴀʙᴀꜱᴇ.')
+                    deleted += 1
                     if deleted % 20 == 0:
                         await query.message.edit_text(f"<b>ᴘʀᴏᴄᴇꜱꜱ ꜱᴛᴀʀᴛᴇᴅ ꜰᴏʀ ᴅᴇʟᴇᴛɪɴɢ ꜰɪʟᴇꜱ ꜰʀᴏᴍ ᴅʙ. ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ᴅᴇʟᴇᴛᴇᴅ {str(deleted)} ꜰɪʟᴇꜱ ꜰʀᴏᴍ ᴅʙ ꜰᴏʀ ʏᴏᴜʀ ǫᴜᴇʀʏ {keyword} !\n\nᴘʟᴇᴀꜱᴇ ᴡᴀɪᴛ...</b>")
-                        
             except Exception as e:
-                print(f"Error in killfilesdq: {e}")
+                print(f"Error In killfiledq -{e}")
                 await query.message.edit_text(f'Error: {e}')
             else:
-                # Final message with proper statistics
-                message_text = f"<b>ᴘʀᴏᴄᴇꜱꜱ ᴄᴏᴍᴘʟᴇᴛᴇᴅ!\n\n✅ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ᴅᴇʟᴇᴛᴇᴅ {str(deleted)} ꜰɪʟᴇꜱ ꜰʀᴏᴍ ᴅʙ ꜰᴏʀ ʏᴏᴜʀ ǫᴜᴇʀʏ {keyword}.</b>"
-                
-                if failed_files:
-                    message_text += f"\n\n❌ ꜰᴀɪʟᴇᴅ ({len(failed_files)} ꜰɪʟᴇꜱ): "
-                    # Show first 5 failed files
-                    message_text += ", ".join(failed_files[:5])
-                    if len(failed_files) > 5:
-                        message_text += f"... and {len(failed_files) - 5} more"
-                
-                await query.message.edit_text(message_text)
-
-                # ✅ OPTIONAL: Verify deletion from database
-                try:
-                    remaining_counts = await asyncio.gather(
-                        *[media_cls.count_documents({'file_name': {'$regex': keyword}}) for media_cls in MEDIA_DBS]
-                    )
-                    total_remaining = sum(remaining_counts)
-                    logger.info(f"Verification: Deleted={deleted}, Remaining in DB={total_remaining}")
-                except Exception as verify_error:
-                    logger.error(f"Verification error: {verify_error}")
+                await query.message.edit_text(f"<b>ᴘʀᴏᴄᴇꜱꜱ ᴄᴏᴍᴘʟᴇᴛᴇᴅ ꜰᴏʀ ꜰɪʟᴇ ᴅᴇʟᴇᴛᴀᴛɪᴏɴ !\n\nꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ᴅᴇʟᴇᴛᴇᴅ {str(deleted)} ꜰɪʟᴇꜱ ꜰʀᴏᴍ ᴅʙ ꜰᴏʀ ʏᴏᴜʀ ǫᴜᴇʀʏ {keyword}.</b>")
 
     elif query.data.startswith("opnsetgrp"):
         ident, grp_id = query.data.split("#")
@@ -1360,8 +1305,8 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
         btn = [[InlineKeyboardButton("⚠️ ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ ⚠️", callback_data=f"unalert#{from_user}")]]
         btn2 = [[
-            InlineKeyboardButton("Movie Channel 📢", url=MOVIE_UPDATE_CHANNEL_LINK),
-            InlineKeyboardButton("View Status", url=f"{query.message.link}")
+            InlineKeyboardButton("ᴍᴏᴠɪᴇ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ📢", url=MOVIE_UPDATE_CHANNEL_LINK),
+            InlineKeyboardButton("ᴠɪᴇᴡ ꜱᴛᴀᴛᴜꜱ", url=f"{query.message.link}")
         ]]
 
         if query.from_user.id in ADMINS:
@@ -1383,8 +1328,8 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
         btn = [[InlineKeyboardButton("📌 Not Released 📌", callback_data=f"nralert#{from_user}")]]
         btn2 = [[
-            InlineKeyboardButton("Movie Channel 📢", url=MOVIE_UPDATE_CHANNEL_LINK),
-            InlineKeyboardButton("View Status", url=f"{query.message.link}")
+            InlineKeyboardButton("ᴍᴏᴠɪᴇ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ📢", url=MOVIE_UPDATE_CHANNEL_LINK),
+            InlineKeyboardButton("ᴠɪᴇᴡ ꜱᴛᴀᴛᴜꜱ", url=f"{query.message.link}")
         ]]
 
         if query.from_user.id in ADMINS:
@@ -1406,8 +1351,8 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
         btn = [[InlineKeyboardButton("♨️ Correct Spelling ♨️", callback_data=f"wsalert#{from_user}")]]
         btn2 = [[
-            InlineKeyboardButton("Movie Channel 📢", url=MOVIE_UPDATE_CHANNEL_LINK),
-            InlineKeyboardButton("View Status", url=f"{query.message.link}")
+            InlineKeyboardButton("ᴍᴏᴠɪᴇ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ📢", url=MOVIE_UPDATE_CHANNEL_LINK),
+            InlineKeyboardButton("ᴠɪᴇᴡ ꜱᴛᴀᴛᴜꜱ", url=f"{query.message.link}")
         ]]
 
         if query.from_user.id in ADMINS:
@@ -1429,8 +1374,8 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
         btn = [[InlineKeyboardButton("⚜️ Hindi Not Available ⚜️", callback_data=f"hnalert#{from_user}")]]
         btn2 = [[
-            InlineKeyboardButton("Movie Channel 📢", url=MOVIE_UPDATE_CHANNEL_LINK),
-            InlineKeyboardButton("View Status", url=f"{query.message.link}")
+            InlineKeyboardButton("ᴍᴏᴠɪᴇ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ📢", url=MOVIE_UPDATE_CHANNEL_LINK),
+            InlineKeyboardButton("ᴠɪᴇᴡ ꜱᴛᴀᴛᴜꜱ", url=f"{query.message.link}")
         ]]
 
         if query.from_user.id in ADMINS:
@@ -1452,8 +1397,8 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
         btn = [[InlineKeyboardButton("✅ Uploaded ✅", callback_data=f"upalert#{from_user}")]]
         btn2 = [[
-            InlineKeyboardButton("Movie Channel 📢", url=MOVIE_UPDATE_CHANNEL_LINK),
-            InlineKeyboardButton("View Status", url=f"{query.message.link}")
+            InlineKeyboardButton("ᴍᴏᴠɪᴇ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ📢", url=MOVIE_UPDATE_CHANNEL_LINK),
+            InlineKeyboardButton("ᴠɪᴇᴡ ꜱᴛᴀᴛᴜꜱ", url=f"{query.message.link}")
         ], [
             InlineKeyboardButton("Search 🔍", url=GRP_LNK)
         ]]
@@ -1477,8 +1422,8 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
         btn = [[InlineKeyboardButton("♻️ Already Available ♻️", callback_data=f"alalert#{from_user}")]]
         btn2 = [[
-            InlineKeyboardButton("Movie Channel 📢", url=MOVIE_UPDATE_CHANNEL_LINK),
-            InlineKeyboardButton("View Status", url=f"{query.message.link}")
+            InlineKeyboardButton("ᴍᴏᴠɪᴇ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ📢", url=MOVIE_UPDATE_CHANNEL_LINK),
+            InlineKeyboardButton("ᴠɪᴇᴡ ꜱᴛᴀᴛᴜꜱ", url=f"{query.message.link}")
         ], [
             InlineKeyboardButton("Search 🔍", url=GRP_LNK)
         ]]
@@ -1884,7 +1829,9 @@ async def cb_handler(client: Client, query: CallbackQuery):
             await query.message.edit_reply_markup(reply_markup)
     await query.answer(MSG_ALRT)
 
-#___________________________________#___________________________________
+#________________________________
+
+#__________________________________
 
 def normalize_season(search):
     import re
@@ -1923,7 +1870,6 @@ def normalize_episode(search):
     return re.sub(r'\be\s*(\d+)', pad, search, flags=re.IGNORECASE)
 
 
-
 def normalize_for_search(text):
     text = text.lower()
 
@@ -1959,11 +1905,9 @@ def normalize_for_search(text):
 
     text = re.sub(r"\s+", " ", text).strip()
     return text
-   
-
+    #______________________________________________________AUTO_FILTER____________________________________________________________
 
 async def auto_filter(client, msg, spoll=False):
-    # -------------------------------------------------------------------------
     # PART 1: MESSAGE VALIDATION (Message ko check karna ki chalana hai ya nahi)
     # -------------------------------------------------------------------------
     if not spoll:
@@ -2006,15 +1950,15 @@ async def auto_filter(client, msg, spoll=False):
             find = search.split(" ")
             removes = ["in", "upload", "series", "full", "horror", "thriller", "mystery", 
                        "print", "file", "pls", "please", "send", "give", "movie", "movies", 
-                       "new", "latest", "download in", "bruh", "link", "dubbed", "download", 
-                       "subtitle", "subtitles", ":", "any", "()", "iruka", 
+                       "new", "latest", "'", "bruh", "link", "dubbed", "download", 
+                       "subtitle", "subtitles", ",", "any", "()", "iruka", 
                        "pannunga", "anuppunga", "film", "undo", "kitti", "kitty", "tharu", "&"]
             
             # List comprehension se faltu words ko remove karna
             search = " ".join([x for x in find if x not in removes])
             
             # Regex cleanup (Bache-kuche text variations aur please/bro ko saaf karna)
-            search = re.sub(r"\b(pl(i|e)*?(s|z+|ease|se|ese|(e+)s(e)?)|((send|snd|giv(e)?|gib)(\sme)?)|movie(s)?|new|latest|,|bruh|broh|helo|that|find|dubbed|link|'|iruka|pannunga|pannungga|anuppunga|anupunga|anuppungga|anupungga|film|undo|kitti|kitty|tharu|kittumo|kittum|movie|any(one)|download\ssubtitle(s)?)", "", search, flags=re.IGNORECASE)
+            search = re.sub(r"\b(pl(i|e)*?(s|z+|ease|se|ese|(e+)s(e)?)|((send|snd|giv(e)?|gib)(\sme)?)|movie(s)?|new|latest|:|bruh|broh|helo|that|find|dubbed|link|;|iruka|pannunga|pannungga|anuppunga|anupunga|anuppungga|anupungga|film|undo|kitti|kitty|tharu|kittumo|kittum|movie|any(one)|download\ssubtitle(s)?)", "", search, flags=re.IGNORECASE)
             search = re.sub(r"\s+", " ", search).strip()
             search = normalize_for_search(search)
             
@@ -2191,11 +2135,10 @@ async def auto_filter(client, msg, spoll=False):
         dxb = await message.reply_text(text=cap, reply_markup=InlineKeyboardMarkup(btn), disable_web_page_preview=True, parse_mode=enums.ParseMode.HTML)
         await m.delete()
         await handle_auto_delete(dxb)
- 
-
- #______________________________________________________AUTO_FILTER____________________________________________________________
 
 
+
+#_______________________
 async def old_auto_filter(client, msg, spoll=False):
     curr_time = datetime.now(pytz.timezone('Asia/Kolkata')).time()
     if not spoll:
@@ -2215,23 +2158,24 @@ async def old_auto_filter(client, msg, spoll=False):
             search = unicodedata.normalize('NFKD', search)
             search = search.encode('ascii', 'ignore').decode('ascii')
             search = re.sub(
-                "["
-                "\U0001F600-\U0001F64F"  # emoticons
-                "\U0001F300-\U0001F5FF"  # symbols & pictographs
-                "\U0001F680-\U0001F6FF"  # transport & map
-                "\U0001F1E0-\U0001F1FF"  # flags
-                "\U00002700-\U000027BF"  # dingbats
-                "\U000024C2-\U0001F251"
-                "]+",
-                "",
-                search
-            )
+    "["
+    "\U0001F600-\U0001F64F"  # emoticons
+    "\U0001F300-\U0001F5FF"  # symbols & pictographs
+    "\U0001F680-\U0001F6FF"  # transport & map
+    "\U0001F1E0-\U0001F1FF"  # flags
+    "\U00002700-\U000027BF"  # dingbats
+    "\U000024C2-\U0001F251"
+    "]+",
+    "",
+    search
+)
+            m = await message.reply_text(f'**•『 🔍 ɪ ᴀᴍ ꜱᴇᴀʀᴄʜɪɴɢ 』•** `{search}`', reply_to_message_id=message.id)
             find = search.split(" ")
             search = ""
             removes = ["in", "upload", "series", "full",
                        "horror", "thriller", "mystery", "print", "file", "pls", "please", "send", "give", "movie", "movies", "new", "latest", "bro", "bruh",
-                       "link", "dubbed", "download", "subtitle", "subtitles", "anyone", "any",
-                       "venum", "iruka", "pannunga", "anuppunga", "film", "undo", "kitti", "kitty", "tharu", "&"]
+     "link", "dubbed", "download", "subtitle", "subtitles", "anyone", "any",
+     "venum", "iruka", "pannunga", "anuppunga", "film", "undo", "kitti", "kitty", "tharu", "&"]
             for x in find:
                 if x in removes:
                     continue
@@ -2239,6 +2183,7 @@ async def old_auto_filter(client, msg, spoll=False):
                     search = search + x + " "
             search = re.sub(r"\b(pl(i|e)*?(s|z+|ease|se|ese|(e+)s(e)?)|((send|snd|giv(e)?|gib)(\sme)?)|movie(s)?|new|latest|bro|bruh|broh|helo|that|find|dubbed|link|venum|iruka|pannunga|pannungga|anuppunga|anupunga|anuppungga|anupungga|film|undo|kitti|kitty|tharu|kittumo|kittum|movie|any(one)|download\ssubtitle(s)?)", "", search, flags=re.IGNORECASE)
             search = re.sub(r"\s+", " ", search).strip()
+            # ✅ season episode normalize
             search = normalize_for_search(search)
             # ✅ season normalize
             #search = normalize_season(search)
@@ -2251,7 +2196,6 @@ async def old_auto_filter(client, msg, spoll=False):
             # 🔥 REMOVE SYMBOLS
             search = re.sub(r"[!@#$%^*()_+=\[\]{};\"<>?/\\|]", "", search)
             search = re.sub(r"\s+", " ", search).strip()
-            m = await message.reply_text(f'**•『 🔍 ɪ ᴀᴍ ꜱᴇᴀʀᴄʜɪɴɢ 』•** `{search}`', reply_to_message_id=message.id)
             files, offset, total_results = await get_search_results(message.chat.id, search, offset=0, filter=True)
             settings = await get_settings(message.chat.id)
             if not files:
@@ -2276,12 +2220,10 @@ async def old_auto_filter(client, msg, spoll=False):
         m = await message.reply_text(f'**•『 🔍 ɪ ᴀᴍ ꜱᴇᴀʀᴄʜɪɴɢ 』•** `{search}`', reply_to_message_id=message.id)
         settings = await get_settings(message.chat.id)
         await msg.message.delete()
-
     key = f"{message.chat.id}-{message.id}"
     FRESH[key] = search
     temp.GETALL[key] = files
     temp.SHORT[message.from_user.id] = message.chat.id
-    
     if settings.get('button'):
         btn = [
             [
@@ -2292,31 +2234,42 @@ async def old_auto_filter(client, msg, spoll=False):
         ]
         btn.insert(0,
                    [
-                       InlineKeyboardButton(f'Qᴜᴀʟɪᴛʏ', callback_data=f"qualities#{key}"),
-                       InlineKeyboardButton("Lᴀɴɢᴜᴀɢᴇ", callback_data=f"languages#{key}"),
-                       InlineKeyboardButton("Sᴇᴀsᴏɴ",  callback_data=f"seasons#{key}")
+                       InlineKeyboardButton(
+                           f'Qᴜᴀʟɪᴛʏ', callback_data=f"qualities#{key}"),
+                       InlineKeyboardButton(
+                           "Lᴀɴɢᴜᴀɢᴇ", callback_data=f"languages#{key}"),
+                       InlineKeyboardButton(
+                           "Sᴇᴀsᴏɴ",  callback_data=f"seasons#{key}")
                    ]
                    )
         btn.insert(0, movie_series_row(key))
         btn.insert(0,
                    [
-                       InlineKeyboardButton("⚜️ 𝐑𝐞𝐦𝐨𝐯𝐞 𝐚𝐝𝐬 ⚜️", url=f"https://t.me/{temp.U_NAME}?start=premium"),
-                       InlineKeyboardButton("Sᴇɴᴅ Aʟʟ", callback_data=f"sendfiles#{key}")
+                       InlineKeyboardButton(
+                           "⚜️ 𝐑𝐞𝐦𝐨𝐯𝐞 𝐚𝐝𝐬 ⚜️", url=f"https://t.me/{temp.U_NAME}?start=premium"),
+                       InlineKeyboardButton(
+                           "Sᴇɴᴅ Aʟʟ", callback_data=f"sendfiles#{key}")
+
                    ])
     else:
         btn = []
         btn.insert(0,
                    [
-                       InlineKeyboardButton(f'Qᴜᴀʟɪᴛʏ', callback_data=f"qualities#{key}"),
-                       InlineKeyboardButton("Lᴀɴɢᴜᴀɢᴇ", callback_data=f"languages#{key}"),
-                       InlineKeyboardButton("Sᴇᴀsᴏɴ",  callback_data=f"seasons#{key}")
+                       InlineKeyboardButton(
+                           f'Qᴜᴀʟɪᴛʏ', callback_data=f"qualities#{key}"),
+                       InlineKeyboardButton(
+                           "Lᴀɴɢᴜᴀɢᴇ", callback_data=f"languages#{key}"),
+                       InlineKeyboardButton(
+                           "Sᴇᴀsᴏɴ",  callback_data=f"seasons#{key}")
                    ]
                    )
         btn.insert(0, movie_series_row(key))
         btn.insert(0,
                    [
-                       InlineKeyboardButton("⚜️ 𝐑𝐞𝐦𝐨𝐯𝐞 𝐚𝐝𝐬 ⚜️", url=f"https://t.me/{temp.U_NAME}?start=premium"),
-                       InlineKeyboardButton("Sᴇɴᴅ Aʟʟ", callback_data=f"sendfiles#{key}")
+                       InlineKeyboardButton(
+                           "⚜️ 𝐑𝐞𝐦𝐨𝐯𝐞 𝐚𝐝𝐬 ⚜️", url=f"https://t.me/{temp.U_NAME}?start=premium"),
+                       InlineKeyboardButton(
+                           "Sᴇɴᴅ Aʟʟ", callback_data=f"sendfiles#{key}")
                    ])
 
     if offset != "":
@@ -2339,7 +2292,8 @@ async def old_auto_filter(client, msg, spoll=False):
                     text=f"1/{math.ceil(int(total_results)/10)}", callback_data="pages"), InlineKeyboardButton(text="ɴᴇxᴛ ⋟", callback_data=f"next_{req}_{key}_{offset}")]
             )
     else:
-        btn.append([InlineKeyboardButton(text="↭ ɴᴏ ᴍᴏʀᴇ ᴘᴀɢᴇꜱ ᴀᴠᴀɪʟᴀʙʟᴇ ↭", callback_data="pages")])
+        btn.append([InlineKeyboardButton(
+            text="↭ ɴᴏ ᴍᴏʀᴇ ᴘᴀɢᴇꜱ ᴀᴠᴀɪʟᴀʙʟᴇ ↭", callback_data="pages")])
 
     imdb = await get_poster(search, file=(files[0]).file_name) if settings["imdb"] else None
 
@@ -2348,8 +2302,8 @@ async def old_auto_filter(client, msg, spoll=False):
         timedelta(hours=curr_time.hour, minutes=curr_time.minute,
                   seconds=(curr_time.second+(curr_time.microsecond/1000000)))
     remaining_seconds = "{:.2f}".format(time_difference.total_seconds())
-    
     TEMPLATE = script.IMDB_TEMPLATE_TXT
+    settings = await get_settings(message.chat.id)
     if settings['template']:
         TEMPLATE = settings['template']
 
@@ -2390,7 +2344,7 @@ async def old_auto_filter(client, msg, spoll=False):
             cap += "\n📂 <b><u>𝒀𝒐𝒖𝒓 𝑭𝒊𝒍𝒆𝒔 𝑨𝒓𝒆 𝑹𝒆𝒂𝒅𝒚</u></b> 👇\n\n"
             for idx, file in enumerate(files, start=1):
                 cap += f"<b>{idx}. <a href='https://telegram.me/{temp.U_NAME}?start=file_{message.chat.id}_{file.file_id}'>[{get_size(file.file_size)}] {clean_filename(file.file_name)}</a></b>\n\n"
-            
+
             # Yahan gap control kiya hai
             cap = cap.strip()
             cap += f"\n\n───────────────────\n\n<b>{script.DEL_MSG_2.format(get_time(DELETE_TIME)).lstrip()}</b>"    
@@ -2402,7 +2356,7 @@ async def old_auto_filter(client, msg, spoll=False):
 
             for idx, file in enumerate(files, start=1):
                 cap += f"<b>{idx}. <a href='https://telegram.me/{temp.U_NAME}?start=file_{message.chat.id}_{file.file_id}'>[{get_size(file.file_size)}] {clean_filename(file.file_name)}</a></b>\n\n"
-            
+
             # Yahan gap control kiya hai
             cap = cap.strip()
             cap += f"\n\n───────────────────\n<b>{script.DEL_MSG_2.format(get_time(DELETE_TIME)).lstrip()}</b>"   
@@ -2465,12 +2419,11 @@ async def old_auto_filter(client, msg, spoll=False):
 
 
 
-
-#_______________________________________________________ai_spell_check________________________________________________________
+#_________🅰️NKIT_Ⓜ️EENA___________________#______________ai_spell_check_____________#_________________________________________
 
 async def ai_spell_check(chat_id, wrong_name):
     async def search_movie(wrong_name):
-        search_results = imdb.search_movie(wrong_name)
+        search_results = await asyncio.to_thread(imdb.search_movie, wrong_name.lower())
         if not search_results or not hasattr(search_results, "titles"):
             return []
         movie_list = [movie.title for movie in search_results.titles]
@@ -2480,7 +2433,7 @@ async def ai_spell_check(chat_id, wrong_name):
         return
     for _ in range(5):
         closest_match = process.extractOne(wrong_name, movie_list)
-        if not closest_match or closest_match[1] <= 80:
+        if not closest_match or closest_match[1] <= 70:
             return
         movie = closest_match[0]
         files, _, _ = await get_search_results(chat_id=chat_id, query=movie)
