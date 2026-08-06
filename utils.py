@@ -1,14 +1,12 @@
 import re
 import os
-import time
 import datetime
 import logging
 from info import  *
 from imdb import Cinemagoer 
 from imdbkit import IMDBKit
 from rapidfuzz import fuzz
-from rapidfuzz import process
-#from fuzzywuzzy import process 
+from fuzzywuzzy import process 
 #from urllib.parse import quote_plus
 import asyncio
 from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
@@ -42,6 +40,7 @@ class temp(object):
     BANNED_USERS = []
     BANNED_CHATS = []
     ME = None
+    AIOHTTP_SESSION = None
     CURRENT=int(os.environ.get("SKIP", 2))
     CANCEL = False
     B_USERS_CANCEL = False
@@ -56,191 +55,53 @@ class temp(object):
     IMDB_CAP = {}
     VERIFICATIONS = {}
     TEMP_INVITE_LINKS = {}
-    # ── Speed caches ──────────────────────────────────────────
-    CHAT_CACHE       = {}   # {chat_id: (title, invite_link, ts)}  — channel info cache
-    FSUB_CACHE       = {}   # {(user_id, ch_id): (is_member, ts)}  — membership cache (TTL 60s)
-    AIOHTTP_SESSION  = None # shared aiohttp session
 
-async def is_req_subscribed(bot, user_id, rqfsub_channels, force_check=False):
-    """
-    Check if user has joined request-based channels
-    
-    Args:
-        bot: Pyrogram client
-        user_id: User ID to check
-        rqfsub_channels: List of request-based channel IDs
-        force_check: If True, bypass cache (default: False)
-    """
+async def is_req_subscribed(bot, user_id, rqfsub_channels):
     btn = []
-    now = time.time()
     for ch_id in rqfsub_channels:
         if await db.has_joined_channel(user_id, ch_id):
             continue
-        
-        # 🔧 Cache check (10s TTL - changed from 60s)
-        cache_key = (user_id, ch_id)
-        cached = temp.FSUB_CACHE.get(cache_key)
-        
-        # 🔧 NEW: Check force_check parameter
-        if force_check:
-            is_member = None  # Skip cache, force fresh check
-        elif cached and now - cached[1] < 10:  # ✅ Changed from 60 to 10
-            is_member = cached[0]
-        else:
-            is_member = None
-        
-        # अगर cache miss या force_check है, तो fresh check करो
-        if is_member is None:
-            try:
-                member = await bot.get_chat_member(ch_id, user_id)
-                is_member = member.status != enums.ChatMemberStatus.BANNED
-            except UserNotParticipant:
-                is_member = False
-            except Exception as e:
-                logger.error(f"Error checking membership in {ch_id}: {e}")
-                is_member = False
-            temp.FSUB_CACHE[cache_key] = (is_member, now)
-
-        if is_member:
-            await db.add_join_req(user_id, ch_id)
-            continue
+        try:
+            member = await bot.get_chat_member(ch_id, user_id)
+            if member.status != enums.ChatMemberStatus.BANNED:
+                await db.add_join_req(user_id, ch_id)
+                continue
+        except UserNotParticipant:
+            pass
+        except Exception as e:
+            logger.error(f"Error checking membership in {ch_id}: {e}")
 
         try:
-            # Channel info cache (10 min TTL)
-            ch_cached = temp.CHAT_CACHE.get(ch_id)
-            if ch_cached and now - ch_cached[2] < 600:
-                ch_title, invite_link, _ = ch_cached
-            else:
-                chat = await bot.get_chat(ch_id)
-                ch_title = chat.title
-                inv = await bot.create_chat_invite_link(ch_id, creates_join_request=True)
-                invite_link = inv.invite_link
-                temp.CHAT_CACHE[ch_id] = (ch_title, invite_link, now)
-            btn.append([InlineKeyboardButton(f"⛔️ Join {ch_title}", url=invite_link)])
+            chat   = await bot.get_chat(ch_id)
+            invite = await bot.create_chat_invite_link(
+                ch_id,
+                creates_join_request=True
+            )
+            btn.append([InlineKeyboardButton(f"⛔️ Join {chat.title}", url=invite.invite_link)])
         except ChatAdminRequired:
             logger.warning(f"Bot not admin in {ch_id}")
         except Exception as e:
             logger.warning(f"Invite link error for {ch_id}: {e}")
-
+            
     return btn
 
 
-# ==========================================================
-# Daily Download Limit System
-# ----------------------------------------------------------
-# Wraps database.users_chats_db.db's can_download / increase_download /
-# remaining_downloads / reset_download_if_needed so plugin code only has
-# to make ONE call before sending a file. Free users get DAILY_DOWNLOAD_LIMIT
-# downloads every rolling 24 hours (stored in MongoDB and auto reset by
-# db.get_download_status). Premium users are always unlimited.
-# ==========================================================
-
-async def enforce_daily_limit(client, message):
-    """
-    Call this right before sending a file to a user.
-    Returns a tuple: (allowed: bool, is_premium: bool, remaining: int)
-
-    If the free user's daily limit has already been used up, this sends
-    the "🚫 Daily download limit reached." message (with Upgrade to
-    Premium / Contact Owner buttons) on its own, so the caller simply
-    needs to `return`/`continue`/`break` when allowed is False - no file
-    should be sent in that case.
-
-    Uses client.send_message (instead of message.reply_text) and retries
-    once on FloodWait, so the message still reaches the user even when
-    called back-to-back inside a fast batch-download loop.
-    """
-    user_id = message.from_user.id
-    status = await db.get_download_status(user_id)
-
-    if status["is_premium"] or status["remaining"] > 0:
-        return True, status["is_premium"], status["remaining"]
-
-    # Limit exceeded -> inform the free user and stop here
-    buttons = [[
-        InlineKeyboardButton('💎 Upgrade to Premium', callback_data='premium_info')
-    ], [
-        InlineKeyboardButton('📱 Contact Owner', url=OWNER_LNK)
-    ]]
-    for attempt in range(2):  # 1 retry on FloodWait, so the message is never silently dropped
-        try:
-            await client.send_message(
-                chat_id=user_id,
-                text=script.DOWNLOAD_LIMIT_TXT.format(DAILY_DOWNLOAD_LIMIT),
-                reply_markup=InlineKeyboardMarkup(buttons),
-                parse_mode=enums.ParseMode.HTML
-            )
-            break
-        except FloodWait as e:
-            await asyncio.sleep(e.value)
-        except Exception as e:
-            logger.error(f"Error sending download limit message: {e}")
-            break
-    return False, False, 0
-
-
-async def get_remaining_limit_text(user_id):
-    """Returns a small ready-to-send '📦 Remaining limit: X/10' string, or None for premium users."""
-    status = await db.get_download_status(user_id)
-    if status["is_premium"]:
-        return None
-    return script.REMAINING_LIMIT_TXT.format(status["remaining"], DAILY_DOWNLOAD_LIMIT)
-
-
-async def is_subscribed(bot, user_id, fsub_channels, force_check=False):
-    """
-    Check if user is subscribed to required channels
-    
-    Args:
-        bot: Pyrogram client
-        user_id: User ID to check
-        fsub_channels: List of channel IDs
-        force_check: If True, bypass cache (default: False)
-    """
+async def is_subscribed(bot, user_id, fsub_channels):
     btn = []
-    now = time.time()
     for channel_id in fsub_channels:
-        # 🔧 Membership cache (10s TTL - changed from 60s)
-        cache_key = (user_id, channel_id)
-        cached = temp.FSUB_CACHE.get(cache_key)
-        
-        # 🔧 NEW: Check force_check parameter
-        if force_check:
-            is_member = None  # Skip cache, force fresh check
-        elif cached and now - cached[1] < 10:  # ✅ Changed from 60 to 10
-            is_member = cached[0]
-        else:
-            is_member = None
-        
-        # अगर cache miss या force_check है, तो fresh check करो
-        if is_member is None:
+        try:
+            chat = await bot.get_chat(int(channel_id))
+            await bot.get_chat_member(channel_id, user_id)
+        except UserNotParticipant:
             try:
-                await bot.get_chat_member(channel_id, user_id)
-                is_member = True
-            except UserNotParticipant:
-                is_member = False
-            except Exception as e:
-                logger.exception(f"is_subscribed error for {channel_id}: {e}")
-                is_member = True  # fail-open
-            temp.FSUB_CACHE[cache_key] = (is_member, now)
-
-        if not is_member:
-            try:
-                # Channel info cache (10 min TTL)
-                ch_cached = temp.CHAT_CACHE.get(channel_id)
-                if ch_cached and now - ch_cached[2] < 600:
-                    ch_title, invite_link, _ = ch_cached
-                else:
-                    chat = await bot.get_chat(int(channel_id))
-                    ch_title = chat.title
-                    inv = await bot.create_chat_invite_link(channel_id, creates_join_request=False)
-                    invite_link = inv.invite_link
-                    temp.CHAT_CACHE[channel_id] = (ch_title, invite_link, now)
-                btn.append([InlineKeyboardButton(f"📢 Join {ch_title}", url=invite_link)])
+                invite = await bot.create_chat_invite_link(channel_id, creates_join_request=False)
+                btn.append([InlineKeyboardButton(f"📢 Join {chat.title}", url=invite.invite_link)])
             except Exception as e:
                 logger.warning(f"Failed to create invite for {channel_id}: {e}")
+        except Exception as e:
+            logger.exception(f"is_subscribed error for {channel_id}: {e}")
+            pass
     return btn
-
 
 async def is_check_admin(bot, chat_id, user_id):
     try:
@@ -248,7 +109,7 @@ async def is_check_admin(bot, chat_id, user_id):
         return member.status in [enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.OWNER]
     except:
         return False
-
+    
 from pyrogram import Client
 
 # Users broadcast
@@ -303,7 +164,7 @@ async def junk_group(chat_id, message):
         await db.delete_chat(int(chat_id))       
         logging.info(f"{chat_id} - PeerIdInvalid")
         return False, "deleted", f'{e}\n\n'
-
+    
 
 async def clear_junk(user_id, message):
     try:
@@ -326,7 +187,7 @@ async def clear_junk(user_id, message):
         return False, "Error"
     except Exception as e:
         return False, "Error"
-
+     
 async def get_status(bot_id):
     try:
         return await db.movie_update_status(bot_id) or False  
@@ -340,7 +201,7 @@ async def add_name_to_db(filename):
     """
     Helper function to add a filename to the database.
     """
-
+    
     return await db.add_name(filename) 
 
 
@@ -364,108 +225,6 @@ def listx_to_str(k):
     return ', '.join(result) if result else "N/A"
 
 
-async def no_get_poster(query, bulk=False, id=False, file=None):
-    if not id:
-        query = (query.strip()).lower()
-        title = query
-        year_val = None
-
-        # 1. Year Extraction
-        year_list = re.findall(r'[1-2]\d{3}$', query, re.IGNORECASE)
-        if year_list:
-            year_val = year_list[0]
-            title = (query.replace(year_val, "")).strip()
-        elif file is not None:
-            year_list = re.findall(r'[1-2]\d{3}', file, re.IGNORECASE)
-            if year_list: 
-                year_val = year_list[0]
-
-        # IMDb Search
-        search_result = await asyncio.to_thread(imdb.search_movie, title.lower())
-        if not search_result or not hasattr(search_result, "titles"):
-            return None
-
-        movie_list = search_result.titles[:20] 
-
-        # 2. Kind Filter (Sirf Movies aur Series)
-        kind_filter = ['movie', 'tv series', 'tvSeries', 'tvMiniSeries', 'tvMovie']
-        filtered = [m for m in movie_list if m.kind and m.kind in kind_filter]
-
-        # 3. BLACKLIST Filter (Review, Podcast, Trailer hatane ke liye)
-        bad_words = ["review", "podcast", "trailer", "teaser", "news", "special", "vlog"]
-        filtered = [
-            m for m in filtered 
-            if not any(word in m.title.lower() for word in bad_words)
-        ]
-
-        # 4. Future Year Filter (Agle saal tak ki movies hi allow karein)
-        current_year = datetime.datetime.now().year
-        filtered = [m for m in filtered if not m.year or m.year <= (current_year + 1)]
-
-        # 5. ACCURACY CHECK (Similarity Score)
-        # Ye part check karega ki IMDb ka title user ke title se kitna match karta hai
-        final_list = []
-        for m in filtered:
-            # Score nikalein (0 to 100)
-            score = fuzz.token_sort_ratio(title.lower(), m.title.lower())
-            if score > 70:  # 70% se kam match wale ko reject karein
-                m.similarity_score = score
-                final_list.append(m)
-
-        # Score ke hisaab se sort karein (Sabse accurate upar)
-        final_list.sort(key=lambda x: getattr(x, 'similarity_score', 0), reverse=True)
-
-        if not final_list:
-            return None
-
-        if bulk:
-            return final_list[:10]
-
-        movie_brief = final_list[0]
-        movieid_str = movie_brief.imdb_id
-    else:
-        movieid_str = query
-
-    # IMDb se detailed data fetch karein
-    movie = await asyncio.to_thread(imdb.get_movie, movieid_str)
-    if not movie:
-        return None
-
-    # Baaki ka logic same rahega (Detailed Data)
-    if hasattr(movie, 'release_date') and movie.release_date:
-        date = movie.release_date
-    elif hasattr(movie, 'year') and movie.year:
-        date = str(movie.year)
-    else:
-        date = "N/A"
-
-    plot = movie.plot[0] if isinstance(movie.plot, list) and movie.plot else (movie.plot or "")
-    if len(plot) > 800:
-        plot = plot[:800] + "..."
-
-    imdb_id = movie.imdb_id
-    if not imdb_id.startswith("tt"):
-        imdb_id = f"tt{imdb_id}"
-
-    return {
-        'title': movie.title,
-        'votes': getattr(movie, 'votes', 'N/A'),
-        "aka": listx_to_str(getattr(movie, 'title_akas', [])),
-        "kind": movie.kind,
-        "imdb_id": imdb_id,
-        "cast": listx_to_str(getattr(movie, 'stars', [])),
-        "runtime": listx_to_str(getattr(movie, 'duration', [])),
-        "director": listx_to_str(getattr(movie, 'directors', [])),
-        "release_date": date,
-        'year': movie.year,
-        'genres': listx_to_str(getattr(movie, 'genres', [])),
-        'poster': getattr(movie, 'cover_url', ''), 
-        'plot': plot,
-        'rating': str(getattr(movie, 'rating', '0')),
-        "url": f"https://www.imdb.com/title/{imdb_id}"
-    }
-#________________________
- 
 
 async def get_poster(query, bulk=False, id=False, file=None):
     if not id:
@@ -495,18 +254,14 @@ async def get_poster(query, bulk=False, id=False, file=None):
         else:
             filtered = movie_list
 
-        # 1. यहाँ सही कैटेगरीज़ को फ़िल्टर करने के लिए कोड मजबूत किया
         kind_filter = ['movie', 'tv series', 'tvSeries', 'tvMiniSeries', 'tvMovie']
-        filtered_kind = [m for m in filtered if getattr(m, 'kind', None) in kind_filter]
-
-        # 2. यहाँ बदलाव किया गया है: 
-        # अगर bulk=True है, तो यह बिना छाने डेटा भेज रहा था, अब यह सिर्फ़ फ़िल्टर किया हुआ (मूवी/सीरीज) डेटा ही भेजेगा।
-        if bulk:
-            return filtered_kind[:MAX_LIST_ELM] if filtered_kind else filtered[:MAX_LIST_ELM]
+        filtered_kind = [m for m in filtered if m.kind and m.kind in kind_filter]
 
         if not filtered_kind:
             filtered_kind = filtered
 
+        if bulk:
+            return filtered_kind[:MAX_LIST_ELM]
         if not filtered_kind:
             return None   
         movie_brief = filtered_kind[0]
@@ -560,40 +315,18 @@ async def get_poster(query, bulk=False, id=False, file=None):
         'release_date': date,
         'year': movie.year,
         'genres': listx_to_str(movie.genres),
-        'poster': movie.get('full-size cover url'),
+        'poster': movie.cover_url,
         'plot': plot,
         'rating': str(movie.rating),
         "url": movie.url or f"https://www.imdb.com/title/{imdb_id}"
     }
-
-
-
-
-ALLOWED_KINDS = [
-    'movie',
-    'tv series',
-    'tv mini series',
-    'anime',
-    'anime series',
-    'web series'
-]
-
-BLOCKED_WORDS = [
-    'podcast',
-    'news',
-    'daily',
-    'talk',
-    'radio',
-    'interview'
-]
-
+#Remove Nahi Kiya Hu.....Agar Tujha Remove Karna Hai To Kar Dena
 async def old_get_poster(query, bulk=False, id=False, file=None):
     if not id:
         query = (query.strip()).lower()
         title = query
         year = re.findall(r'[1-2]\d{3}$', query, re.IGNORECASE)
-        
-        # Note: 'imdb' object yahan define ya global hona chahiye
+        imdb
         if year:
             year = list_to_str(year[:1])
             title = (query.replace(year, "")).strip()
@@ -603,45 +336,31 @@ async def old_get_poster(query, bulk=False, id=False, file=None):
                 year = list_to_str(year[:1]) 
         else:
             year = None
-            
-        movieid = imdb.search_movie(title.lower(), results=20)
+        movieid = imdb.search_movie(title.lower(), results=10)
         if not movieid:
             return None
-            
         if year:
-            filtered = list(filter(lambda k: str(k.get('year')) == str(year), movieid))
+            filtered=list(filter(lambda k: str(k.get('year')) == str(year), movieid))
             if not filtered:
                 filtered = movieid
         else:
             filtered = movieid
-            
-        movieid = list(filter(
-            lambda k: k.get('kind')
-            and any(a in k.get('kind').lower() for a in ALLOWED_KINDS)
-            and not any(b in k.get('kind').lower() for b in BLOCKED_WORDS),
-            filtered
-        ))
-        movieid = movieid[:7]   # sirf top 6–7 accurate results
-        
+        movieid=list(filter(lambda k: k.get('kind') in ['movie', 'tv series'], filtered))
         if not movieid:
-            movieid = filtered[:7]   # fallback bhi limited rahe
-            
+            movieid = filtered
         if bulk:
             return movieid
         movieid = movieid[0].movieID
     else:
         movieid = query
-        
     movie = imdb.get_movie(movieid)
     imdb.update(movie, info=['main', 'vote details'])
-    
     if movie.get("original air date"):
         date = movie["original air date"]
     elif movie.get("year"):
         date = movie.get("year")
     else:
         date = "N/A"
-        
     plot = ""
     if not LONG_IMDB_DESCRIPTION:
         plot = movie.get('plot')
@@ -649,16 +368,13 @@ async def old_get_poster(query, bulk=False, id=False, file=None):
             plot = plot[0]
     else:
         plot = movie.get('plot outline')
-        
     if plot and len(plot) > 800:
         plot = plot[0:800] + "..."
-        
     STANDARD_GENRES = {
         'Action', 'Adventure', 'Animation', 'Biography', 'Comedy', 'Crime', 'Documentary',
         'Drama', 'Family', 'Fantasy', 'Film-Noir', 'History', 'Horror', 'Music',
         'Musical', 'Mystery', 'Romance', 'Sci-Fi', 'Sport', 'Thriller', 'War', 'Western'
     }
-    
     raw_genres = movie.get("genres", "N/A")
     if isinstance(raw_genres, str):
         genre_list = [g.strip() for g in raw_genres.split(",")]
@@ -695,9 +411,6 @@ async def old_get_poster(query, bulk=False, id=False, file=None):
         'rating': str(movie.get("rating")),
         'url':f'https://www.imdb.com/title/tt{movieid}'
     }
-
-
-
 
 async def get_posterx(query, bulk=False, id=False, file=None):
     """
@@ -831,7 +544,7 @@ async def get_best_visual(tmdb_data: Dict) -> Optional[str]:
     if backdrops.get("all") and backdrops["all"]:
         return backdrops["all"][0]["url"]
     return None
-
+    
 async def search_gagala(text):
     usr_agent = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
@@ -867,7 +580,7 @@ async def get_settings(group_id):
         settings = await db.get_settings(group_id)
         temp.SETTINGS.update({group_id: settings})
     return settings
-
+    
 async def save_group_settings(group_id, key, value):
     current = await get_settings(group_id)
     current.update({key: value})
@@ -875,7 +588,7 @@ async def save_group_settings(group_id, key, value):
     await db.update_settings(group_id, current)
 
 
-#CLEAN_FILENAME____🅰️NKIT_Ⓜ️EENA______
+
 #CLEAN_FILENAME____🅰️NKIT_Ⓜ️EENA______
 
 def clean_filename(file_name):
@@ -962,6 +675,8 @@ def remove_prefix_garbage(file_name):
 
     return file_name
 
+
+
 def get_size(size):
     units = ["Bytes", "KB", "MB", "GB", "TB", "PB", "EB"]
     size = float(size)
@@ -970,101 +685,6 @@ def get_size(size):
         i += 1
         size /= 1024.0
     return "%.2f %s" % (size, units[i])
-
-
-# ---------------------------------------------------------------------------
-# Custom caption placeholders: {season}, {episode}, {language}, {audio}, {quality}
-# ---------------------------------------------------------------------------
-
-class SafeCaptionDict(dict):
-    """dict subclass used with str.format_map so an unknown {placeholder} in an
-    admin-set custom caption is left as-is instead of raising a KeyError and
-    silently discarding the whole custom caption."""
-    def __missing__(self, key):
-        return "{" + key + "}"
-
-
-_CAPTION_LANGUAGE_MAP = {
-    r"\bhin\b": "Hindi", r"\bhindi\b": "Hindi",
-    r"\btam\b": "Tamil", r"\btamil\b": "Tamil",
-    r"\bkan\b": "Kannada", r"\bkannada\b": "Kannada",
-    r"\btel\b": "Telugu", r"\btelugu\b": "Telugu",
-    r"\bmal\b": "Malayalam", r"\bmalayalam\b": "Malayalam",
-    r"\beng\b": "English", r"\benglish\b": "English",
-    r"\bpun\b": "Punjabi", r"\bpunjabi\b": "Punjabi",
-    r"\bben\b": "Bengali", r"\bbengali\b": "Bengali",
-    r"\bmar\b": "Marathi", r"\bmarathi\b": "Marathi",
-    r"\bguj\b": "Gujarati", r"\bgujarati\b": "Gujarati",
-    r"\burd\b": "Urdu", r"\burdu\b": "Urdu",
-    r"\bkor\b": "Korean", r"\bkorean\b": "Korean",
-    r"\bjpn\b": "Japanese", r"\bjapanese\b": "Japanese",
-    r"\bmulti\b": "Multi Audio",
-}
-
-_QUALITY_TOKEN_PATTERN = re.compile(
-    r"\b(?:HDCam|HDTC|CamRip|TS|TC|TeleSync|DVDScr|DVDRip|PreDVD|"
-    r"WEBRip|WEB-DL|TVRip|HDTV|WEB DL|WebDl|BluRay|BRRip|BDRip|"
-    r"360p|480p|720p|1080p|2160p|4K|1440p|540p|240p|140p|HEVC|HDRip)\b",
-    re.IGNORECASE
-)
-
-_SEASON_EP_RANGE = re.compile(
-    r'\bS(\d{1,2})[^\w\n\r]*E(?:p(?:isode)?)?0*(\d{1,2})\s*(?:to|-)\s*(?:E(?:p(?:isode)?)?)?0*(\d{1,2})',
-    re.IGNORECASE
-)
-_SEASON_EP_SINGLE = re.compile(r'\bS(\d{1,2})[^\w\n\r]*E(?:p(?:isode)?)?0*(\d{1,3})', re.IGNORECASE)
-_SEASON_EP_NAMED = re.compile(r'Season\s*0*(\d{1,2})[\s\-,:]*Ep(?:isode)?\s*0*(\d{1,3})', re.IGNORECASE)
-
-
-def extract_season_episode_str(text: str):
-    """Returns (season, episode) as display strings like ('S01', 'E05'), or 'N/A' each if not found."""
-    text = text or ""
-    for pattern in (_SEASON_EP_RANGE, _SEASON_EP_SINGLE, _SEASON_EP_NAMED):
-        m = pattern.search(text)
-        if m:
-            season = f"S{int(m.group(1)):02d}"
-            if pattern is _SEASON_EP_RANGE:
-                episode = f"E{int(m.group(2)):02d}-E{int(m.group(3)):02d}"
-            else:
-                episode = f"E{int(m.group(2)):02d}"
-            return season, episode
-    return "N/A", "N/A"
-
-
-def extract_caption_language(text: str) -> str:
-    text_l = (text or "").lower()
-    langs = []
-    for pattern, name in _CAPTION_LANGUAGE_MAP.items():
-        if re.search(pattern, text_l) and name not in langs:
-            langs.append(name)
-    return ", ".join(langs) if langs else "N/A"
-
-
-def extract_caption_quality(text: str) -> str:
-    matches = _QUALITY_TOKEN_PATTERN.findall(text or "")
-    seen = []
-    for m in matches:
-        if m.upper() not in {s.upper() for s in seen}:
-            seen.append(m)
-    return ", ".join(seen) if seen else "N/A"
-
-
-def get_caption_vars(file_name: str, file_size=None, file_caption=None) -> dict:
-    """Builds the full variable dict usable in a custom /set_caption template:
-    {file_name} {file_size} {file_caption} {season} {episode} {language} {audio} {quality}"""
-    file_name = file_name or ""
-    season, episode = extract_season_episode_str(file_name)
-    return {
-        "file_name": file_name,
-        "file_size": "" if file_size is None else file_size,
-        "file_caption": "" if file_caption is None else file_caption,
-        "season": season,
-        "episode": episode,
-        "language": extract_caption_language(file_name),
-        "audio": extract_caption_language(file_name),
-        "quality": extract_caption_quality(file_name),
-    }
-
 
 def split_list(l, n):
     for i in range(0, len(l), n):
@@ -1479,7 +1099,7 @@ async def get_cap(settings, remaining_seconds, files, query, total_results, sear
                 # Logic: Strip karke extra space hataya, phir choti line aur chipka hua msg
                 cap = cap.strip()
                 cap += f"\n\n───────────────────\n<b>{script.DEL_MSG_2.format(get_time(DELETE_TIME)).lstrip()}</b>"
-            
+
             else:
                 imdb = await get_poster(search, file=(files[0]).file_name) if settings["imdb"] else None
                 if imdb:
@@ -1526,7 +1146,7 @@ async def get_cap(settings, remaining_seconds, files, query, total_results, sear
                         )
                     cap = cap.strip()
                     cap += f"\n\n───────────────────\n<b>{script.DEL_MSG_2.format(get_time(DELETE_TIME)).lstrip()}</b>"
-                
+
                 else:
                     cap = (
                         f"<b>🏷 ᴛɪᴛʟᴇ : <code>{search}</code>\n"
@@ -1546,7 +1166,7 @@ async def get_cap(settings, remaining_seconds, files, query, total_results, sear
                         )
                     cap = cap.strip()
                     cap += f"\n\n───────────────────\n<b>{script.DEL_MSG_2.format(get_time(DELETE_TIME)).lstrip()}</b>"
-        
+
         else:
             cap = (
                 f"<b>🏷 ᴛɪᴛʟᴇ : <code>{search}</code>\n"
@@ -1570,7 +1190,4 @@ async def get_cap(settings, remaining_seconds, files, query, total_results, sear
     except Exception as e:
         logging.error(f"Error in get_cap: {e}")
         return None
-
-
-
 
