@@ -28,6 +28,17 @@ async def get_session():
     return _session
 
 
+def _resize_image_sync(data: bytes, size) -> BytesIO:
+    """CPU-heavy PIL work, run off the event loop via asyncio.to_thread."""
+    img = Image.open(BytesIO(data))
+    img = img.resize(size, Image.LANCZOS)
+
+    out = BytesIO()
+    img.save(out, format="JPEG")
+    out.seek(0)
+    return out
+
+
 async def fetch_image(url, size=(860, 1200)):
     if not DREAMXBOTZ_IMAGE_FETCH:
         logger.info("Image fetching is disabled.")
@@ -42,13 +53,7 @@ async def fetch_image(url, size=(860, 1200)):
                 return None
 
             data = await response.read()
-            img = Image.open(BytesIO(data))
-            img = img.resize(size, Image.LANCZOS)
-
-            out = BytesIO()
-            img.save(out, format="JPEG")
-            out.seek(0)
-            return out
+            return await asyncio.to_thread(_resize_image_sync, data, size)
 
     except aiohttp.ClientError as e:
         logger.error(f"HTTP request error in fetch_image: {e}")
