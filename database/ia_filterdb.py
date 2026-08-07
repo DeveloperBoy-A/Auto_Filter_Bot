@@ -77,10 +77,22 @@ async def _fetch_cover_url(title: str) -> str | None:
 
                     if poster_url or backdrop_url:
                         # Title match check
+                        # ✅ FIX: purana check (a) 2-se-chhote length wale words drop
+                        # karta tha — isse short real title jaise "Dc" ke paas validate
+                        # karne ke liye ZERO words bachte the, aur (b) ANY ek word match
+                        # hone par bhi accept kar leta tha (up to 2 words me se sirf 1).
+                        # Dono milke matlab short/ambiguous titles ka validation bilkul
+                        # skip ho jaata tha aur GALAT movie ka poster silently accept ho
+                        # sakta tha (e.g. "Dc" match "Dc Rave 2026" jaisi bilkul alag film
+                        # se, jo TMDB fuzzy-search "Dc 2026" ke through aa jaati thi).
+                        # Ab: year ko word-list se bahar rakha (akela year useful title
+                        # signal nahi hai), chhote real words (len >= 2) ko rakha hai
+                        # (drop nahi kiya), aur pehle do significant words me se SABHI
+                        # ka result-title me hona zaroori kar diya, sirf ek nahi.
                         result_title = str(data.get("title", "")).lower().strip()
-                        search_words = title.lower().split()
-                        main_words = [w for w in search_words if len(w) > 2][:2]
-                        if main_words and not any(w in result_title for w in main_words):
+                        search_words = [w for w in title.lower().split() if not w.isdigit()]
+                        main_words = [w for w in search_words if len(w) >= 2][:2]
+                        if main_words and not all(w in result_title for w in main_words):
                             logger.warning(f"[COVER] TMDB title mismatch: searched='{title}' got='{result_title}' — skipping")
                         else:
                             if poster_url:
@@ -263,9 +275,11 @@ class Media(Document):
     cover = fields.StrField(allow_none=True)
     media_type = fields.StrField(allow_none=True)  # "movie" | "series" — precomputed for fast filtering
     file_date = fields.DateTimeField(allow_none=True)  # 🚀 real upload timestamp, used for "recent first" sorting
+    title = fields.StrField(allow_none=True)  # ✅ NEW: pure extracted title, used for exact cover-reuse matching
+    year = fields.StrField(allow_none=True)   # ✅ NEW: release year, used for exact cover-reuse matching
 
     class Meta:
-        indexes = ("$file_name", "media_type", "-file_date")
+        indexes = ("$file_name", "media_type", "-file_date", "title", "year")
         collection_name = COLLECTION_NAME
 
 
@@ -281,9 +295,11 @@ class Media2(Document):
     cover = fields.StrField(allow_none=True)
     media_type = fields.StrField(allow_none=True)
     file_date = fields.DateTimeField(allow_none=True)  # 🚀 real upload timestamp, used for "recent first" sorting
+    title = fields.StrField(allow_none=True)  # ✅ NEW: pure extracted title, used for exact cover-reuse matching
+    year = fields.StrField(allow_none=True)   # ✅ NEW: release year, used for exact cover-reuse matching
 
     class Meta:
-        indexes = ("$file_name", "media_type", "-file_date")
+        indexes = ("$file_name", "media_type", "-file_date", "title", "year")
         collection_name = COLLECTION_NAME
 
 
@@ -299,9 +315,11 @@ class Media3(Document):
     cover = fields.StrField(allow_none=True)
     media_type = fields.StrField(allow_none=True)
     file_date = fields.DateTimeField(allow_none=True)  # 🚀 real upload timestamp, used for "recent first" sorting
+    title = fields.StrField(allow_none=True)  # ✅ NEW: pure extracted title, used for exact cover-reuse matching
+    year = fields.StrField(allow_none=True)   # ✅ NEW: release year, used for exact cover-reuse matching
 
     class Meta:
-        indexes = ("$file_name", "media_type", "-file_date")
+        indexes = ("$file_name", "media_type", "-file_date", "title", "year")
         collection_name = COLLECTION_NAME
 
 
@@ -317,9 +335,11 @@ class Media4(Document):
     cover = fields.StrField(allow_none=True)
     media_type = fields.StrField(allow_none=True)
     file_date = fields.DateTimeField(allow_none=True)  # 🚀 real upload timestamp, used for "recent first" sorting
+    title = fields.StrField(allow_none=True)  # ✅ NEW: pure extracted title, used for exact cover-reuse matching
+    year = fields.StrField(allow_none=True)   # ✅ NEW: release year, used for exact cover-reuse matching
 
     class Meta:
-        indexes = ("$file_name", "media_type", "-file_date")
+        indexes = ("$file_name", "media_type", "-file_date", "title", "year")
         collection_name = COLLECTION_NAME
 
 
@@ -335,9 +355,11 @@ class Media5(Document):
     cover = fields.StrField(allow_none=True)
     media_type = fields.StrField(allow_none=True)
     file_date = fields.DateTimeField(allow_none=True)  # 🚀 real upload timestamp, used for "recent first" sorting
+    title = fields.StrField(allow_none=True)  # ✅ NEW: pure extracted title, used for exact cover-reuse matching
+    year = fields.StrField(allow_none=True)   # ✅ NEW: release year, used for exact cover-reuse matching
 
     class Meta:
-        indexes = ("$file_name", "media_type", "-file_date")
+        indexes = ("$file_name", "media_type", "-file_date", "title", "year")
         collection_name = COLLECTION_NAME
 
 
@@ -1012,7 +1034,10 @@ async def _fetch_and_save_cover(file_id: str, final_title: str, year: str | None
     Background task — Smart caching ke sath taaki multiple qualities ek sath upload 
     hone par TMDB par duplicate requests na jaye aur watermark 3-4 baar process na ho.
     """
-    lock_key = final_title.lower().strip()
+    # ✅ FIX: year is now part of the cache/lock key. Before, two different
+    # movies/shows sharing the same title text but a different year could
+    # end up sharing one another's cover.
+    lock_key = f"{final_title.lower().strip()}::{(year or '').strip()}"
 
     if lock_key not in _COVER_LOCKS:
         _COVER_LOCKS[lock_key] = asyncio.Lock()
@@ -1022,14 +1047,27 @@ async def _fetch_and_save_cover(file_id: str, final_title: str, year: str | None
             # 1. Sabse pehle fast memory cache check karo
             if lock_key in _COVER_CACHE:
                 cover_url = _COVER_CACHE[lock_key]
-                logger.info(f"[COVER] Reused cover from memory cache for '{final_title}'")
+                logger.info(f"[COVER] Reused cover from memory cache for '{final_title}' ({year})")
             else:
                 # 2. Agar cache mein nahi hai, tabhi Database check karo (sabhi configured DBs mein)
+                # ✅ FIX: pehle ye `file_name` par sirf a PREFIX regex (`^title`) match karta tha,
+                # jisse e.g. title "Dc" wali file ko "Dc Rave 2026 ..." wali file ka cover mil
+                # jaata tha (kyunki "Dc Rave..." bhi "Dc" se hi START hota hai — prefix match
+                # matlab galti se superset-title bhi match ho jaata tha).
+                # Ab hum stored `title` field (jo save ke time exact pure-title se set hota hai)
+                # se EXACT, case-insensitive equality match karte hain, aur agar year known hai
+                # to wo bhi match karte hain — is se do alag titles (chahe ek dusre ka prefix ho)
+                # kabhi cover share nahi karenge.
+                query = {
+                    "title": {"$regex": rf"^{re.escape(final_title)}$", "$options": "i"},
+                    "cover": {"$ne": None},
+                }
+                if year:
+                    query["year"] = year
+
                 existing = None
                 for media_cls in MEDIA_DBS:
-                    existing = await media_cls.find_one(
-                        {"file_name": {"$regex": rf"^{re.escape(final_title)}", "$options": "i"}, "cover": {"$ne": None}}
-                    )
+                    existing = await media_cls.find_one(query)
                     if existing:
                         break
 
@@ -1241,7 +1279,9 @@ async def save_file(media, bot=None, extracted_info=None):  # ✅ NEW: Added ext
             caption=getattr(media.caption, "html", None) if media.caption else None,
             cover=None,
             media_type=("series" if is_series_file(file_name) else "movie"),
-            file_date=datetime.utcnow()  # 🚀 real timestamp so "recent uploads" sort correctly
+            file_date=datetime.utcnow(),  # 🚀 real timestamp so "recent uploads" sort correctly
+            title=final_title,            # ✅ NEW: stored for exact cover-reuse matching (see _fetch_and_save_cover)
+            year=extracted.get("year")    # ✅ NEW: stored for exact cover-reuse matching
         )
         await record.commit()
         logger.info(f"[SAVED] {file_name}")
