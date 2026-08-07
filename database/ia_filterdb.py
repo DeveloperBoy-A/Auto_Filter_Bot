@@ -526,16 +526,63 @@ def extract_pure_title(original_name):
     clean_name = re.sub(prefix_cleanup, '', clean_name, flags=re.IGNORECASE).strip()
 
     stop_anchors = [
+        # ── Season / Episode word & range forms ──────────────────────
+        # ✅ FIX: "Season 2" word-form wasn't recognized, so it leaked into
+        # the title and got duplicated later by normalize_season_episode()
+        # (e.g. title became "... Season 2 E30T33 S02 E30-33").
+        r'\bseason[\s\-_]*\d{1,2}\b',
+        # ✅ FIX: "E30T33" (T-separated range) wasn't recognized either.
+        r'\be\d{1,4}[\s\-_]*[tT][\s\-_]*e?\d{1,4}\b',
+        # ✅ FIX: "Episode 5" / "Ep 5" word-forms weren't recognized
+        # (\be\d{1,4}\b only matches the single-letter "e"/"E" short-form).
+        r'\bepisode[\s\-_]*\d{1,4}\b',
+        r'\bep[\s\-_]*\d{1,4}\b',
+        # ✅ FIX: "2x01" / "2x01-04" numbered season-x-episode form.
+        r'\b\d{1,2}x\d{1,4}\b',
         r'\bs\d{1,2}\s?e\d{1,4}\b', 
         r'\bs\d{1,2}\b', 
         r'\be\d{1,4}\b', 
+
+        # ── Title Part / Volume / Chapter (and file-split "Part 001") ──
+        # ✅ FIX: without this, "Part 2"/"Vol 3" stayed inside the title
+        # AND got re-appended separately as extracted["title_part"],
+        # producing the same kind of duplicate as the season/episode bug
+        # (e.g. "Movie Name Part 2 Part 2 ...").
+        r'\b(?:vol|volume|chapter|part|pt)[\s\.\-_]*(?:\d{1,4}|[ivx]+)\b',
+
         r'\b(19|20)\d{2}\b',                                      
         r'\b\d{3,4}[pi]\b', 
         r'\b4k\b', r'\b8k\b',
+
+        # ── Series status ────────────────────────────────────────────
+        # ✅ FIX: "Combined"/"Complete" weren't stop anchors, so if they
+        # appeared before any S/E or quality tag they'd stay in the title.
+        r'\bcombined\b', r'\bcomplete\b',
+
+        # ── Dual/Multi audio ─────────────────────────────────────────
+        r'\bdual[\s\-]?audio\b', r'\bmulti[\s\-]?audio\b',
+
+        # ── Source ────────────────────────────────────────────────────
+        # ✅ FIX: only web-dl/webrip/bluray/hdrip were covered before;
+        # the rest of the SOURCES list (used by extract_languages_quality)
+        # could still leak into the title.
         r'\bweb[\s\-]?dl\b', 
         r'\bwebrip\b', 
-        r'\bbluray\b', 
-        r'\bhdrip\b'
+        r'\bbluray\b', r'\bbdrip\b', r'\bbrrip\b', r'\bbdremux\b', r'\bremux\b',
+        r'\bhdrip\b', r'\bdvdrip\b', r'\bdvdscr\b',
+        r'\bhdtc\b', r'\bhdts\b', r'\bhdcam\b', r'\bcamrip\b', r'\bpredvd\b',
+
+        # ── Video codec (in case it appears before resolution/source) ──
+        r'\bx264\b', r'\bx265\b', r'\bh264\b', r'\bh265\b', r'\bhevc\b', r'\bavc\b', r'\bav1\b',
+        r'\b10bit\b', r'\b12bit\b',
+
+        # ── OTT platform names ───────────────────────────────────────
+        # ✅ FIX: mirrors the OTT_MAP keywords already used for tag
+        # extraction, so an OTT name appearing mid-title also gets cut.
+        r'\bnetflix\b', r'\bamazon\b', r'\bprime\b', r'\bhotstar\b', r'\bdisney\b',
+        r'\bzee5\b', r'\bsonyliv\b', r'\bjiocinema\b', r'\bjio\b', r'\bvoot\b', r'\baltbalaji\b',
+        r'\bhbomax\b', r'\bapple[\s\-]?tv\b', r'\bparamount\b', r'\bpeacock\b',
+        r'\bsunnxt\b', r'\bmx[\s\-]?player\b', r'\blionsgate\b',
     ]
 
     lower_name = clean_name.lower()
