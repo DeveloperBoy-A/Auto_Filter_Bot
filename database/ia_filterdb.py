@@ -123,11 +123,68 @@ async def _fetch_cover_url(title: str) -> str | None:
     return poster
 
 
-async def _add_watermark(image_url: str) -> "io.BytesIO | None":
+def _render_watermark_sync(data: bytes) -> "io.BytesIO | None":
+    """CPU-heavy PIL work. Runs in a worker thread via asyncio.to_thread
+    so it never blocks the bot's event loop."""
     import io
     import random
-    import aiohttp
     from PIL import Image, ImageDraw, ImageFont
+
+    original = Image.open(io.BytesIO(data)).convert("RGBA")
+
+    TARGET_W, TARGET_H = 1280, 720
+    img = original.resize((TARGET_W, TARGET_H), Image.LANCZOS)
+    W, H = img.size
+
+    style      = random.choice(WATERMARK_STYLES)
+    position   = random.choice(WATERMARK_POSITIONS)
+    text_color = style["text"]
+    box_color  = style["box"]
+
+    font_size = max(22, int(W * 0.042))
+    try:
+        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf", font_size)
+    except Exception:
+        font = ImageFont.load_default()
+
+    dummy = ImageDraw.Draw(img)
+    bbox  = dummy.textbbox((0, 0), WATERMARK_TEXT, font=font)
+    tw    = bbox[2] - bbox[0]
+    th    = bbox[3] - bbox[1]
+
+    pad_x, pad_y = int(font_size * 0.6), int(font_size * 0.35)
+    margin       = int(W * 0.025)
+    box_w = tw + pad_x * 2
+    box_h = th + pad_y * 2
+
+    corners = {
+        "bottom_right":  (W - box_w - margin,          H - box_h - margin),
+        "bottom_left":   (margin,                       H - box_h - margin),
+        "top_right":     (W - box_w - margin,           margin),
+        "top_left":      (margin,                       margin),
+        "bottom_center": ((W - box_w) // 2,             H - box_h - margin),
+    }
+    x0, y0 = corners[position]
+    x1, y1 = x0 + box_w, y0 + box_h
+
+    overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    draw    = ImageDraw.Draw(overlay)
+    radius  = int(box_h * 0.35)
+    draw.rounded_rectangle([x0, y0, x1, y1], radius=radius, fill=box_color)
+    draw.text((x0 + pad_x, y0 + pad_y), WATERMARK_TEXT, font=font, fill=text_color)
+
+    img = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
+
+    out = io.BytesIO()
+    img.save(out, format="JPEG", quality=92)
+    out.seek(0)
+    out.name = "cover.jpg"
+    return out
+
+
+async def _add_watermark(image_url: str) -> "io.BytesIO | None":
+    import asyncio
+    import aiohttp
 
     try:
         session = await _get_session()
@@ -136,56 +193,9 @@ async def _add_watermark(image_url: str) -> "io.BytesIO | None":
                 return None
             data = await resp.read()
 
-        original = Image.open(io.BytesIO(data)).convert("RGBA")
-
-        TARGET_W, TARGET_H = 1280, 720
-        img = original.resize((TARGET_W, TARGET_H), Image.LANCZOS)
-        W, H = img.size
-
-        style      = random.choice(WATERMARK_STYLES)
-        position   = random.choice(WATERMARK_POSITIONS)
-        text_color = style["text"]
-        box_color  = style["box"]
-
-        font_size = max(22, int(W * 0.042))
-        try:
-            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf", font_size)
-        except Exception:
-            font = ImageFont.load_default()
-
-        dummy = ImageDraw.Draw(img)
-        bbox  = dummy.textbbox((0, 0), WATERMARK_TEXT, font=font)
-        tw    = bbox[2] - bbox[0]
-        th    = bbox[3] - bbox[1]
-
-        pad_x, pad_y = int(font_size * 0.6), int(font_size * 0.35)
-        margin       = int(W * 0.025)
-        box_w = tw + pad_x * 2
-        box_h = th + pad_y * 2
-
-        corners = {
-            "bottom_right":  (W - box_w - margin,          H - box_h - margin),
-            "bottom_left":   (margin,                       H - box_h - margin),
-            "top_right":     (W - box_w - margin,           margin),
-            "top_left":      (margin,                       margin),
-            "bottom_center": ((W - box_w) // 2,             H - box_h - margin),
-        }
-        x0, y0 = corners[position]
-        x1, y1 = x0 + box_w, y0 + box_h
-
-        overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
-        draw    = ImageDraw.Draw(overlay)
-        radius  = int(box_h * 0.35)
-        draw.rounded_rectangle([x0, y0, x1, y1], radius=radius, fill=box_color)
-        draw.text((x0 + pad_x, y0 + pad_y), WATERMARK_TEXT, font=font, fill=text_color)
-
-        img = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
-
-        out = io.BytesIO()
-        img.save(out, format="JPEG", quality=92)
-        out.seek(0)
-        out.name = "cover.jpg"
-        return out
+        # Offload all blocking PIL work to a worker thread so the event
+        # loop (and therefore replies to other users) is never blocked.
+        return await asyncio.to_thread(_render_watermark_sync, data)
 
     except Exception as e:
         logger.warning(f"[WATERMARK] Failed: {e}")
