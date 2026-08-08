@@ -12,14 +12,8 @@ from info import MULTIPLE_DB, ADMINS
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
-
-
-# =========================================================
-# GLOBAL TASK CONTROL
-# =========================================================
 
 QUALITY_CLEANUP_SEMAPHORE = asyncio.Semaphore(2)
 QUALITY_TASK_LOCK = asyncio.Lock()
@@ -29,353 +23,85 @@ QUALITY_TASKS = {}
 CANCEL_Q_TASKS = {}
 DRY_RUN_CACHE = {}
 
-
 # =========================================================
 # QUALITY HIERARCHY
 # =========================================================
-#
-# IMPORTANT:
-# HIGH_QUALITY_SOURCES are PROTECTED.
-#
-# Their hierarchy score is still used to classify quality,
-# BUT HIGH files are NEVER deleted.
-#
-# Example:
-# HDRip -> BluRay
-# HDRip will NOT be deleted.
-#
-# WEBRip -> BluRay
-# WEBRip will NOT be deleted.
-#
-# =========================================================
-
 QUALITY_HIERARCHY = {
-    "camrip": 1,
-    "cam rip": 1,
-    "hdcam": 1,
-    "hd cam": 1,
-
-    "hdtc": 2,
-    "hd tc": 2,
-    "hdts": 2,
-    "hd ts": 2,
-    "ts": 2,
-    "tc": 2,
-    "telesync": 2,
-
-    "predvd": 3,
-    "predvdrip": 3,
-    "pre dvd": 3,
-
-    "dvdscr": 3,
-    "dvd scr": 3,
-
-    "dvdrip": 4,
-    "dvd rip": 4,
-
-    "tvrip": 5,
-    "tv rip": 5,
-    "hdtv": 5,
-    "hd tv": 5,
-
-    "webrip": 6,
-    "web rip": 6,
-
-    "web-dl": 7,
-    "web dl": 7,
-    "webdl": 7,
-
-    "hdrip": 8,
-    "hd rip": 8,
-
-    "bluray": 9,
-    "blu ray": 9,
-
-    "bdrip": 9,
-    "bd rip": 9,
-    "brrip": 9,
-    "br rip": 9,
+    "camrip": 1, "cam rip": 1, "hdcam": 1, "hd cam": 1,
+    "hdtc": 2, "hd tc": 2, "hdts": 2, "hd ts": 2,
+    "ts": 2, "tc": 2, "telesync": 2,
+    "predvd": 3, "predvdrip": 3, "pre dvd": 3,
+    "dvdscr": 3, "dvd scr": 3,
+    "dvdrip": 4, "dvd rip": 4,
+    "tvrip": 5, "tv rip": 5, "hdtv": 5, "hd tv": 5,
+    "webrip": 6, "web rip": 6,
+    "web-dl": 7, "web dl": 7, "webdl": 7,
+    "hdrip": 8, "hd rip": 8,
+    "bluray": 9, "blu ray": 9,
+    "bdrip": 9, "bd rip": 9, "brrip": 9, "br rip": 9,
 }
 
-
-# =========================================================
-# RESOLUTION HIERARCHY
-# =========================================================
-
+# Resolution is extracted/reporting only.
+# IMPORTANT: resolution is NEVER used to delete a file.
 RESOLUTION_HIERARCHY = {
-    "140p": 1,
-    "240p": 1,
-    "360p": 2,
-    "480p": 3,
-    "540p": 4,
-    "720p": 5,
-    "1080p": 6,
-    "1440p": 7,
-    "2160p": 8,
-    "4k": 8,
+    "140p": 1, "240p": 1, "360p": 2, "480p": 3, "540p": 4,
+    "720p": 5, "1080p": 6, "1440p": 7, "2160p": 8, "4k": 8,
 }
-
-
-# =========================================================
-# LANGUAGES
-# =========================================================
 
 LANGUAGES = {
-    "hindi": [
-        r"\bhindi\b",
-        r"\bhin\b",
-        r"\bhi\b",
-    ],
-
-    "english": [
-        r"\benglish\b",
-        r"\beng\b",
-        r"\ben\b",
-    ],
-
-    "tamil": [
-        r"\btamil\b",
-        r"\btam\b",
-        r"\bta\b",
-    ],
-
-    "telugu": [
-        r"\btelugu\b",
-        r"\btel\b",
-        r"\bte\b",
-    ],
-
-    "malayalam": [
-        r"\bmalayalam\b",
-        r"\bmal\b",
-        r"\bml\b",
-    ],
-
-    "kannada": [
-        r"\bkannada\b",
-        r"\bkan\b",
-        r"\bkn\b",
-    ],
-
-    "punjabi": [
-        r"\bpunjabi\b",
-        r"\bpan\b",
-        r"\bpbi\b",
-        r"\bpa\b",
-    ],
-
-    "bengali": [
-        r"\bbengali\b",
-        r"\bben\b",
-        r"\bbn\b",
-    ],
-
-    "marathi": [
-        r"\bmarathi\b",
-        r"\bmar\b",
-        r"\bmr\b",
-    ],
-
-    "gujarati": [
-        r"\bgujarati\b",
-        r"\bguj\b",
-        r"\bgujrat\b",
-        r"\bgu\b",
-    ],
-
-    "urdu": [
-        r"\burdu\b",
-        r"\burd\b",
-    ],
-
-    "korean": [
-        r"\bkorean\b",
-        r"\bkor\b",
-    ],
-
-    "japanese": [
-        r"\bjapanese\b",
-        r"\bjpn\b",
-    ],
+    "hindi": [r"\bhindi\b", r"\bhin\b", r"\bhi\b"],
+    "english": [r"\benglish\b", r"\beng\b", r"\ben\b"],
+    "tamil": [r"\btamil\b", r"\btam\b", r"\bta\b"],
+    "telugu": [r"\btelugu\b", r"\btel\b", r"\bte\b"],
+    "malayalam": [r"\bmalayalam\b", r"\bmal\b", r"\bml\b"],
+    "kannada": [r"\bkannada\b", r"\bkan\b", r"\bkn\b"],
+    "punjabi": [r"\bpunjabi\b", r"\bpan\b", r"\bpbi\b", r"\bpa\b"],
+    "bengali": [r"\bbengali\b", r"\bben\b", r"\bbn\b"],
+    "marathi": [r"\bmarathi\b", r"\bmar\b", r"\bmr\b"],
+    "gujarati": [r"\bgujarati\b", r"\bguj\b", r"\bgujrat\b", r"\bgu\b"],
+    "urdu": [r"\burdu\b", r"\burd\b"],
+    "korean": [r"\bkorean\b", r"\bkor\b"],
+    "japanese": [r"\bjapanese\b", r"\bjpn\b"],
 }
-
-
-# =========================================================
-# QUALITY GROUPS
-# =========================================================
 
 LOW_QUALITY_SOURCES = [
-    "camrip",
-    "cam rip",
-    "hdcam",
-    "hd cam",
-    "hdtc",
-    "hd tc",
-    "hdts",
-    "hd ts",
-    "ts",
-    "tc",
-    "telesync",
-    "predvd",
-    "predvdrip",
-    "pre dvd",
-    "dvdscr",
-    "dvd scr",
+    "camrip", "cam rip", "hdcam", "hd cam", "hdtc", "hd tc",
+    "hdts", "hd ts", "ts", "tc", "telesync", "predvd",
+    "predvdrip", "pre dvd", "dvdscr", "dvd scr",
 ]
-
 
 MEDIUM_QUALITY_SOURCES = [
-    "dvdrip",
-    "dvd rip",
-    "tvrip",
-    "tv rip",
-    "hdtv",
-    "hd tv",
+    "dvdrip", "dvd rip", "tvrip", "tv rip", "hdtv", "hd tv",
 ]
-
-
-# =========================================================
-# HIGH QUALITY
-# =========================================================
-#
-# !!! NEVER DELETE !!!
-#
-# DO NOT REMOVE THESE.
-#
-# HDRip is independent from BluRay.
-# BluRay must NOT delete HDRip.
-#
-# =========================================================
 
 HIGH_QUALITY_SOURCES = [
-    "webrip",
-    "web rip",
-
-    "web-dl",
-    "web dl",
-    "webdl",
-
-    "hdrip",
-    "hd rip",
-
-    "bluray",
-    "blu ray",
-
-    "bdrip",
-    "bd rip",
-
-    "brrip",
-    "br rip",
+    "webrip", "web rip", "web-dl", "web dl", "webdl",
+    "hdrip", "hd rip", "bluray", "blu ray", "bdrip", "bd rip",
+    "brrip", "br rip",
 ]
 
-
-# =========================================================
-# TITLE NOISE
-# =========================================================
-
 TITLE_NOISE_WORDS = {
-    "hevc",
-    "x265",
-    "x264",
-    "h264",
-    "avc",
-    "av1",
-    "aac",
-    "flac",
-    "dts",
-    "ac3",
-    "eac3",
-    "ddp",
-    "ddp5",
-    "ddp51",
-    "dd5",
-    "dd51",
-    "51",
-    "71",
-    "20",
-
-    "dub",
-    "dubbed",
-    "sub",
-    "subs",
-    "esub",
-    "esubs",
-    "multi",
-    "proper",
-    "uncut",
-    "repack",
-    "extended",
-    "complete",
-
-    "season",
-    "episode",
-    "ep",
-
-    "nf",
-    "netflix",
-    "amzn",
-    "amazon",
-    "prime",
-    "primevideo",
-    "sonyliv",
-    "sony",
-    "sliv",
-    "hotstar",
-    "jio",
-    "jhs",
-    "zee5",
-    "aha",
-    "hbo",
-    "paramount",
-    "apple",
-    "hoichoi",
-    "sunnxt",
-    "viki",
-
-    "movies4u",
-    "tokyo",
-    "updates",
-    "telly",
-    "www",
-
-    "web",
-    "dl",
-    "rip",
-    "ray",
-    "blu",
-    "bd",
-    "br",
-    "cam",
-    "tc",
-    "ts",
-    "hd",
-    "dvd",
-    "scr",
-    "tv",
-    "pre",
+    "hevc", "x265", "x264", "h264", "avc", "av1", "aac", "flac",
+    "dts", "ac3", "eac3", "ddp", "ddp5", "ddp51", "dd5", "dd51",
+    "51", "71", "20", "dub", "dubbed", "sub", "subs", "esub",
+    "esubs", "multi", "proper", "uncut", "repack", "extended",
+    "complete", "season", "episode", "ep", "nf", "netflix",
+    "amzn", "amazon", "prime", "primevideo", "sonyliv", "sony",
+    "sliv", "hotstar", "jio", "jhs", "zee5", "aha", "hbo",
+    "paramount", "apple", "hoichoi", "sunnxt", "viki",
+    "movies4u", "tokyo", "updates", "telly", "www",
+    "web", "dl", "rip", "ray", "blu", "bd", "br", "cam",
+    "tc", "ts", "hd", "dvd", "scr", "tv", "pre",
 }
 
-
-QUALITY_ALIASES = sorted(
-    QUALITY_HIERARCHY.keys(),
-    key=len,
-    reverse=True,
-)
-
-RESOLUTION_ALIASES = sorted(
-    RESOLUTION_HIERARCHY.keys(),
-    key=len,
-    reverse=True,
-)
-
+QUALITY_ALIASES = sorted(QUALITY_HIERARCHY.keys(), key=len, reverse=True)
+RESOLUTION_ALIASES = sorted(RESOLUTION_HIERARCHY.keys(), key=len, reverse=True)
 
 # =========================================================
 # LANGUAGE EXTRACTION
 # =========================================================
-
 def extract_language(text: str) -> List[str]:
     text = (text or "").lower()
-
     found = []
 
     for lang, patterns in LANGUAGES.items():
@@ -394,12 +120,7 @@ def extract_language(text: str) -> List[str]:
 # =========================================================
 # QUALITY EXTRACTION
 # =========================================================
-
-def extract_quality_info(
-    filename: str,
-    caption: str = ""
-) -> dict:
-
+def extract_quality_info(filename: str, caption: str = "") -> dict:
     text = f"{filename or ''} {caption or ''}".lower()
 
     info = {
@@ -410,141 +131,68 @@ def extract_quality_info(
         "resolution_score": 0,
     }
 
-    # -----------------------------------------------------
-    # SOURCE
-    # -----------------------------------------------------
-
     matches = []
-
     for source, score in QUALITY_HIERARCHY.items():
-
-        pattern = (
-            rf"(?<![a-z0-9])"
-            rf"{re.escape(source)}"
-            rf"(?![a-z0-9])"
-        )
-
+        pattern = rf"(?<![a-z0-9]){re.escape(source)}(?![a-z0-9])"
         if re.search(pattern, text, re.I):
             matches.append((score, source))
 
     if matches:
-        score, source = max(
-            matches,
-            key=lambda x: x[0]
-        )
-
+        score, source = max(matches, key=lambda x: x[0])
         info["source"] = source
         info["source_score"] = score
 
-    # -----------------------------------------------------
-    # RESOLUTION
-    # -----------------------------------------------------
-
     res_matches = []
-
     for res, score in RESOLUTION_HIERARCHY.items():
-
-        pattern = (
-            rf"(?<![a-z0-9])"
-            rf"{re.escape(res)}"
-            rf"(?![a-z0-9])"
-        )
-
+        pattern = rf"(?<![a-z0-9]){re.escape(res)}(?![a-z0-9])"
         if re.search(pattern, text, re.I):
             res_matches.append((score, res))
 
     if res_matches:
-        score, res = max(
-            res_matches,
-            key=lambda x: x[0]
-        )
-
+        score, res = max(res_matches, key=lambda x: x[0])
         info["resolution"] = res
         info["resolution_score"] = score
 
-    # -----------------------------------------------------
-    # FINAL SCORE
-    # -----------------------------------------------------
-
+    # Score is retained for reporting only.
+    # It is NOT used as a deletion decision.
     info["quality_score"] = (
-        info["source_score"] * 0.7
-        + info["resolution_score"] * 0.3
+        info["source_score"] * 0.7 +
+        info["resolution_score"] * 0.3
     )
 
     return info
 
 
-# =========================================================
-# QUALITY HELPERS
-# =========================================================
-
-def _normalize_source(source: str) -> str:
-    return (source or "").lower().strip()
-
-
-def _quality_score(source: str) -> int:
-    return QUALITY_HIERARCHY.get(
-        _normalize_source(source),
-        0,
+def is_low_quality_print(quality_info: dict) -> bool:
+    return (
+        (quality_info.get("source") or "").lower().strip()
+        in LOW_QUALITY_SOURCES
     )
 
 
-def _resolution_score(resolution: str) -> int:
-    return RESOLUTION_HIERARCHY.get(
-        _normalize_source(resolution),
-        0,
+def is_high_quality(quality_info: dict) -> bool:
+    return (
+        (quality_info.get("source") or "").lower().strip()
+        in HIGH_QUALITY_SOURCES
     )
-
-
-def is_low_quality_print(
-    quality_info: dict
-) -> bool:
-
-    source = _normalize_source(
-        quality_info.get("source")
-    )
-
-    return source in LOW_QUALITY_SOURCES
-
-
-def is_high_quality(
-    quality_info: dict
-) -> bool:
-
-    source = _normalize_source(
-        quality_info.get("source")
-    )
-
-    return source in HIGH_QUALITY_SOURCES
-
-
-def is_protected_high_quality(
-    source: str
-) -> bool:
-
-    return _normalize_source(source) in HIGH_QUALITY_SOURCES
 
 
 # =========================================================
 # SAFE TITLE / MOVIE IDENTITY
 # =========================================================
-
 def get_base_title(filename: str) -> str:
     """
     Conservative canonical title extraction.
 
-    Only known release metadata is removed.
-
     IMPORTANT:
-    High quality protection does NOT depend on title parsing.
-    If a file is HIGH quality, it is never deleted.
+    - Quality is removed.
+    - Resolution is removed.
+    - Release metadata is removed.
+    - Year is retained.
+    - No resolution comparison is involved in deletion.
     """
 
     text = (filename or "").strip().lower()
-
-    # -----------------------------------------------------
-    # Extension
-    # -----------------------------------------------------
 
     text = re.sub(
         r"\.(mkv|mp4|avi|mov|wmv|flv|webm|m4v|mpg|mpeg)$",
@@ -553,10 +201,7 @@ def get_base_title(filename: str) -> str:
         flags=re.I,
     )
 
-    # -----------------------------------------------------
-    # URLs / handles
-    # -----------------------------------------------------
-
+    # URLs / @handles
     text = re.sub(
         r"https?://\S+|www\.\S+|@\S+",
         " ",
@@ -564,168 +209,85 @@ def get_base_title(filename: str) -> str:
         flags=re.I,
     )
 
-    # -----------------------------------------------------
-    # Brackets
-    # -----------------------------------------------------
-
+    # Bracketed release metadata.
+    # Preserve a standalone year such as (2026).
     text = re.sub(
-        r"\[(?:[^\]]*)\]"
-        r"|\((?!(?:19|20)\d{2}\s*$)[^\)]*\)"
-        r"|\{[^\}]*\}",
+        r"\[(?:[^\]]*)\]|\((?!(?:19|20)\d{2}\s*$)[^\)]*\)|\{[^\}]*\}",
         " ",
         text,
         flags=re.I,
     )
 
-    # -----------------------------------------------------
-    # Normalize separators
-    # -----------------------------------------------------
+    # Normalize separators.
+    text = re.sub(r"[._\-–—]+", " ", text)
 
-    text = re.sub(
-        r"[._\-–—]+",
-        " ",
-        text,
-    )
-
-    # -----------------------------------------------------
-    # Season / Episode
-    # -----------------------------------------------------
-
+    # Remove season/episode markers.
     patterns = [
-        r"\bs\d{1,2}\s*e\d{1,3}"
-        r"(?:\s*(?:to|-)\s*e?\d{1,3})?\b",
-
+        r"\bs\d{1,2}\s*e\d{1,3}(?:\s*(?:to|-)\s*e?\d{1,3})?\b",
         r"\bs\d{1,2}\b",
-
         r"\bseason\s*\d{1,2}\b",
-
         r"\bepisode\s*\d{1,3}\b",
-
-        r"\bep(?:isode)?\s*\d{1,3}"
-        r"(?:\s*(?:to|-)\s*(?:ep(?:isode)?)?\s*\d{1,3})?\b",
+        r"\bep(?:isode)?\s*\d{1,3}(?:\s*(?:to|-)\s*(?:ep(?:isode)?)?\s*\d{1,3})?\b",
     ]
 
     for pattern in patterns:
+        text = re.sub(pattern, " ", text, flags=re.I)
+
+    # Remove quality/resolution tokens from title only.
+    for q in QUALITY_ALIASES + RESOLUTION_ALIASES:
         text = re.sub(
-            pattern,
+            rf"(?<![a-z0-9]){re.escape(q)}(?![a-z0-9])",
             " ",
             text,
             flags=re.I,
         )
 
-    # -----------------------------------------------------
-    # Remove quality tokens
-    # -----------------------------------------------------
-
-    for quality in (
-        QUALITY_ALIASES
-        + RESOLUTION_ALIASES
-    ):
-
-        text = re.sub(
-            rf"(?<![a-z0-9])"
-            rf"{re.escape(quality)}"
-            rf"(?![a-z0-9])",
-            " ",
-            text,
-            flags=re.I,
-        )
-
-    # -----------------------------------------------------
-    # Remove codec / release metadata
-    # -----------------------------------------------------
-
+    # Remove codecs / release metadata / language / platforms.
     noise_pattern = (
-        r"\b(?:"
-        r"hevc|x265|x264|h264|avc|av1|"
-        r"aac|flac|dts|ac3|eac3|"
-        r"ddp(?:5\.1)?|dd(?:5\.1)?|"
-        r"5\.1|7\.1|2\.0|"
-
-        r"dub(?:bed)?|sub(?:s)?|esub(?:s)?|"
-        r"multi|proper|uncut|repack|extended|complete|"
-
-        r"hindi|english|tamil|telugu|malayalam|"
-        r"kannada|punjabi|bengali|marathi|"
-        r"gujarati|urdu|korean|japanese|"
-
-        r"hin|eng|tam|tel|mal|kan|pan|pbi|"
-        r"ben|mar|guj|urd|kor|jpn|"
-
+        r"\b(?:hevc|x265|x264|h264|avc|av1|aac|flac|dts|ac3|eac3|"
+        r"ddp(?:5\.1)?|dd(?:5\.1)?|5\.1|7\.1|2\.0|"
+        r"dub(?:bed)?|sub(?:s)?|esub(?:s)?|multi|proper|uncut|repack|"
+        r"extended|complete|"
+        r"hindi|english|tamil|telugu|malayalam|kannada|punjabi|"
+        r"bengali|marathi|gujarati|urdu|korean|japanese|"
+        r"hin|eng|tam|tel|mal|kan|pan|pbi|ben|mar|guj|urd|kor|jpn|"
         r"hi|en|ta|te|ml|kn|pa|bn|mr|gu|"
-
-        r"nf|netflix|amzn|amazon|prime|primevideo|"
-        r"sonyliv|sony|sliv|hotstar|jio|jhs|"
-        r"zee5|aha|hbo|max|paramount|apple|"
-        r"hoichoi|sunnxt|viki|"
-
-        r"movies4u|telly|tokyo_updates|tokyoupdates"
-        r")\b"
+        r"nf|netflix|amzn|amazon|prime|primevideo|sonyliv|sony|sliv|"
+        r"hotstar|jio|jhs|zee5|aha|hbo|max|paramount|apple|hoichoi|"
+        r"sunnxt|viki|movies4u|telly|tokyo_updates|tokyoupdates)\b"
     )
 
+    text = re.sub(noise_pattern, " ", text, flags=re.I)
+
+    # Standalone release-group tokens.
     text = re.sub(
-        noise_pattern,
+        r"\b(?:web|dl|rip|bluray|bdrip|brrip|hdrip|dvdrip|dvdscr)\b",
         " ",
         text,
         flags=re.I,
     )
 
-    # -----------------------------------------------------
-    # Release group-ish tokens
-    # -----------------------------------------------------
-
-    text = re.sub(
-        r"\b(?:web|dl|rip|bluray|bdrip|brrip|"
-        r"hdrip|dvdrip|dvdscr)\b",
-        " ",
-        text,
-        flags=re.I,
-    )
-
-    # -----------------------------------------------------
-    # Keep normal title characters
-    # -----------------------------------------------------
-
+    # Keep alphanumeric + Devanagari.
     text = re.sub(
         r"[^a-z0-9\u0900-\u097f]+",
         " ",
         text,
         flags=re.I,
     )
-
-    text = re.sub(
-        r"\s+",
-        " ",
-        text,
-    ).strip()
-
-    # -----------------------------------------------------
-    # Generic movie / film
-    # -----------------------------------------------------
+    text = re.sub(r"\s+", " ", text).strip()
 
     tokens = text.split()
 
-    while tokens and tokens[0] in {
-        "movie",
-        "film",
-    }:
+    while tokens and tokens[0] in {"movie", "film"}:
         tokens.pop(0)
 
-    while tokens and tokens[-1] in {
-        "movie",
-        "film",
-    }:
+    while tokens and tokens[-1] in {"movie", "film"}:
         tokens.pop()
 
     return " ".join(tokens)
 
 
-# =========================================================
-# TITLE TOKENS
-# =========================================================
-
 def _title_tokens(title: str) -> List[str]:
-
     return [
         x
         for x in re.findall(
@@ -736,14 +298,24 @@ def _title_tokens(title: str) -> List[str]:
     ]
 
 
-# =========================================================
-# SAME MOVIE TITLE
-# =========================================================
+def _extract_year(title: str) -> Optional[str]:
+    match = re.search(r"\b((?:19|20)\d{2})\b", title or "")
+    return match.group(1) if match else None
 
-def same_movie_title(
-    title_a: str,
-    title_b: str
-) -> bool:
+
+def same_movie_title(title_a: str, title_b: str) -> bool:
+    """
+    VERY conservative title comparison.
+
+    SAFE RULES:
+      1. Canonical titles must match exactly, OR
+      2. Very high similarity + strong token overlap.
+
+    EXTRA SAFETY:
+      - If both titles contain a year, the years MUST match.
+      - Only 2 common words are never enough.
+      - One title being merely a longer title is not enough.
+    """
 
     a = get_base_title(title_a)
     b = get_base_title(title_b)
@@ -751,7 +323,13 @@ def same_movie_title(
     if not a or not b:
         return False
 
-    # Exact canonical title
+    # If both contain years, different years are different titles.
+    year_a = _extract_year(a)
+    year_b = _extract_year(b)
+
+    if year_a and year_b and year_a != year_b:
+        return False
+
     if a == b:
         return True
 
@@ -764,30 +342,15 @@ def same_movie_title(
     intersection = ta & tb
     union = ta | tb
 
-    jaccard = (
-        len(intersection) / len(union)
-        if union
-        else 0
-    )
-
-    ratio = SequenceMatcher(
-        None,
-        a,
-        b,
-    ).ratio()
+    jaccard = len(intersection) / len(union) if union else 0
+    ratio = SequenceMatcher(None, a, b).ratio()
 
     # Very strong match only.
-    if (
-        jaccard >= 0.80
-        and ratio >= 0.90
-    ):
+    if jaccard >= 0.80 and ratio >= 0.90:
         return True
 
-    if (
-        min(len(a), len(b)) >= 10
-        and ratio >= 0.94
-        and jaccard >= 0.75
-    ):
+    # Near-identical release-title variation only.
+    if min(len(a), len(b)) >= 10 and ratio >= 0.94 and jaccard >= 0.75:
         return True
 
     return False
@@ -796,31 +359,39 @@ def same_movie_title(
 # =========================================================
 # LANGUAGE MATCH
 # =========================================================
-
-def languages_match(
-    old_langs,
-    new_langs
-) -> bool:
-
+def languages_match(old_langs, new_langs) -> bool:
     old_set = set(old_langs or [])
     new_set = set(new_langs or [])
 
-    # Unknown old language = SAFE
+    # Unknown language is never safe for automatic deletion.
     if "unknown" in old_set:
         return False
 
-    # Unknown new language = SAFE
     if "unknown" in new_set:
         return False
 
-    # Existing language must be represented
-    # by the new file.
+    # Existing language(s) must be represented in new file.
     return old_set <= new_set
 
 
 # =========================================================
 # QUALITY DELETE DECISION
 # =========================================================
+def _quality_score(source: str) -> int:
+    return QUALITY_HIERARCHY.get(
+        (source or "").lower().strip(),
+        0,
+    )
+
+
+def _resolution_score(resolution: str) -> int:
+    # Reporting/helper only.
+    # NEVER use this for deletion.
+    return RESOLUTION_HIERARCHY.get(
+        (resolution or "").lower().strip(),
+        0,
+    )
+
 
 def should_delete_existing(
     existing_quality: dict,
@@ -828,262 +399,207 @@ def should_delete_existing(
     existing_langs: List[str],
     new_langs: List[str],
 ) -> bool:
+    """
+    AUTOMATIC DELETE RULES:
+
+    DELETE existing file ONLY when:
+      1. Existing source is LOW or MEDIUM.
+      2. New source is strictly higher in SOURCE hierarchy.
+      3. Languages safely match.
+
+    NEVER:
+      - delete HIGH_QUALITY_SOURCES;
+      - delete because of 720p/1080p/1440p/2160p;
+      - delete same-source files;
+      - delete equal-source files;
+      - delete when language is unknown.
+
+    Resolution is intentionally ignored.
+    """
 
     try:
-
-        old_source = _normalize_source(
-            existing_quality.get("source")
-        )
-
-        new_source = _normalize_source(
-            new_quality.get("source")
-        )
-
-        # -------------------------------------------------
-        # Unknown quality = NEVER DELETE
-        # -------------------------------------------------
+        old_source = (existing_quality.get("source") or "").lower().strip()
+        new_source = (new_quality.get("source") or "").lower().strip()
 
         if not old_source or not new_source:
             return False
 
-        # -------------------------------------------------
-        # 🔒 HIGH QUALITY = ABSOLUTELY PROTECTED
-        # -------------------------------------------------
-        #
-        # THIS IS THE MOST IMPORTANT CHANGE.
-        #
-        # HDRip will NOT be deleted by BluRay.
-        # WEBRip will NOT be deleted by BluRay.
-        # WEB-DL will NOT be deleted by BluRay.
-        # BluRay will NOT be deleted by anything.
-        #
-        # -------------------------------------------------
-
-        if is_protected_high_quality(old_source):
+        # HIGH_QUALITY_SOURCES are permanently protected.
+        if old_source in HIGH_QUALITY_SOURCES:
             return False
 
-        # -------------------------------------------------
-        # Language safety
-        # -------------------------------------------------
-
-        if not languages_match(
-            existing_langs,
-            new_langs,
+        # Only LOW/MEDIUM existing files are eligible.
+        if (
+            old_source not in LOW_QUALITY_SOURCES
+            and old_source not in MEDIUM_QUALITY_SOURCES
         ):
             return False
 
+        # New file must be a known quality source.
+        if new_source not in QUALITY_HIERARCHY:
+            return False
+
+        # New file must be strictly better SOURCE quality.
         old_q = _quality_score(old_source)
         new_q = _quality_score(new_source)
 
-        old_r = _resolution_score(
-            existing_quality.get("resolution")
-        )
-
-        new_r = _resolution_score(
-            new_quality.get("resolution")
-        )
-
-        if old_q == 0 or new_q == 0:
+        if old_q <= 0 or new_q <= 0:
             return False
 
-        # -------------------------------------------------
-        # New HIGH quality can delete LOW/MEDIUM.
-        # -------------------------------------------------
+        if new_q <= old_q:
+            return False
 
-        if (
-            is_protected_high_quality(new_source)
-            and old_source not in HIGH_QUALITY_SOURCES
-        ):
-            return True
+        # Language must be safely compatible.
+        if not languages_match(existing_langs, new_langs):
+            return False
 
-        # -------------------------------------------------
-        # Source upgrade for LOW/MEDIUM
-        # -------------------------------------------------
-
-        if new_q > old_q:
-
-            # Existing is guaranteed non-HIGH
-            return True
-
-        # -------------------------------------------------
-        # SAME source:
-        # Do NOT automatically delete based on resolution.
-        #
-        # This prevents:
-        # CAMRip 720p -> CAMRip 1080p
-        # DVDRip 720p -> DVDRip 1080p
-        #
-        # from deleting the old file.
-        # -------------------------------------------------
-
-        return False
+        # IMPORTANT:
+        # No resolution check here.
+        return True
 
     except Exception as e:
-
         logger.error(
             "[QUALITY] should_delete_existing error: %s",
             e,
             exc_info=True,
         )
-
         return False
 
 
-# =========================================================
-# MANUAL CLEANUP DECISION
-# =========================================================
+def can_delete_quality_file(
+    file_quality,
+    file_langs,
+    all_files,
+) -> bool:
+    """
+    Manual/helper decision.
+
+    A file can be deleted ONLY if:
+      - current file is LOW/MEDIUM;
+      - current file has a higher SOURCE-quality replacement;
+      - language matches.
+
+    HIGH sources are NEVER deleted.
+    Resolution is NEVER considered.
+    """
+
+    source = (file_quality or "").lower().strip()
+
+    if not source:
+        return False
+
+    if source in HIGH_QUALITY_SOURCES:
+        return False
+
+    if (
+        source not in LOW_QUALITY_SOURCES
+        and source not in MEDIUM_QUALITY_SOURCES
+    ):
+        return False
+
+    old_q = _quality_score(source)
+
+    for better in all_files:
+        better_source = (
+            better.get("quality") or ""
+        ).lower().strip()
+
+        if not better_source:
+            continue
+
+        if better_source not in QUALITY_HIERARCHY:
+            continue
+
+        if not languages_match(
+            file_langs,
+            better.get("languages", []),
+        ):
+            continue
+
+        new_q = _quality_score(better_source)
+
+        # SOURCE hierarchy only.
+        if new_q > old_q:
+            return True
+
+    return False
+
 
 def should_delete_file_against_files(
     current: dict,
     all_files: List[dict],
 ) -> bool:
+    """
+    Main manual/batch decision.
 
-    source = _normalize_source(
-        current.get("quality")
-    )
+    IMPORTANT:
+    Resolution is completely ignored.
 
-    # -----------------------------------------------------
-    # 🔒 HIGH QUALITY NEVER DELETE
-    # -----------------------------------------------------
+    Example:
+      480p WEB-DL + 1080p HDRip
+      -> WEB-DL is NOT deleted because HDRip is higher source? 
+         No. WEB-DL score 7 > HDRip score 8, so HDRip is considered
+         higher according to the configured hierarchy and WEB-DL can be
+         deleted only if WEB-DL is LOW/MEDIUM. Since WEB-DL is HIGH,
+         it is protected.
 
-    if not source:
+    Therefore HIGH_QUALITY_SOURCES are NEVER deleted regardless of
+    resolution or another source.
+    """
+
+    source = (current.get("quality") or "").lower().strip()
+
+    # HIGH = permanent protection.
+    if source in HIGH_QUALITY_SOURCES:
         return False
 
-    if is_protected_high_quality(source):
+    # Only LOW/MEDIUM are eligible for deletion.
+    if (
+        source not in LOW_QUALITY_SOURCES
+        and source not in MEDIUM_QUALITY_SOURCES
+    ):
         return False
 
     current_q = _quality_score(source)
 
-    # -----------------------------------------------------
-    # Compare against all other versions
-    # -----------------------------------------------------
+    if current_q <= 0:
+        return False
 
     for other in all_files:
-
         if other is current:
             continue
 
-        other_source = _normalize_source(
-            other.get("quality")
-        )
+        other_source = (
+            other.get("quality") or ""
+        ).lower().strip()
 
         if not other_source:
             continue
 
-        # -------------------------------------------------
-        # Unknown other quality is ignored
-        # -------------------------------------------------
-
-        other_q = _quality_score(other_source)
-
-        if other_q == 0:
+        if other_source not in QUALITY_HIERARCHY:
             continue
 
-        # -------------------------------------------------
-        # Language safety
-        # -------------------------------------------------
-
+        # Existing/current language must safely match replacement.
         if not languages_match(
             current.get("languages", []),
             other.get("languages", []),
         ):
             continue
 
-        # -------------------------------------------------
-        # Better source exists
-        # -------------------------------------------------
+        other_q = _quality_score(other_source)
 
+        # ONLY source hierarchy decides deletion.
+        # Resolution is deliberately NOT checked.
         if other_q > current_q:
-
-            # This includes:
-            #
-            # CAMRip -> HDRip       DELETE CAMRip
-            # HDTS   -> WEBRip      DELETE HDTS
-            # DVDRip -> WEB-DL      DELETE DVDRip
-            #
-            # But:
-            #
-            # HDRip -> BluRay       HDRip already protected
-            # WEBRip -> BluRay      WEBRip already protected
-            #
             return True
 
     return False
 
 
 # =========================================================
-# COMPATIBILITY HELPER
-# =========================================================
-
-def can_delete_quality_file(
-    file_quality,
-    file_langs,
-    all_files
-) -> bool:
-
-    """
-    Compatibility wrapper.
-
-    HIGH quality files are ALWAYS protected.
-
-    For LOW/MEDIUM files, deletion is allowed only when
-    a strictly better source exists with compatible language.
-    """
-
-    source = _normalize_source(file_quality)
-
-    if not source:
-        return False
-
-    # 🔒 HIGH QUALITY NEVER DELETE
-    if is_protected_high_quality(source):
-        return False
-
-    current_q = _quality_score(source)
-
-    if current_q == 0:
-        return False
-
-    current = {
-        "quality": source,
-        "languages": file_langs or [],
-    }
-
-    # Mark matching current files where possible.
-    for item in all_files:
-
-        item_source = _normalize_source(
-            item.get("quality")
-        )
-
-        if item_source != source:
-            continue
-
-        item_langs = item.get(
-            "languages",
-            [],
-        )
-
-        if item_langs == (file_langs or []):
-
-            current = item
-            break
-
-    return should_delete_file_against_files(
-        current,
-        all_files,
-    )
-
-
-# =========================================================
 # EVENT LOOP YIELD
 # =========================================================
-
-async def quality_yield(
-    counter: int,
-    every: int = 100
-):
-
+async def quality_yield(counter: int, every: int = 100):
     if counter % every == 0:
         await asyncio.sleep(0)
 
@@ -1091,7 +607,6 @@ async def quality_yield(
 # =========================================================
 # AUTOMATIC QUALITY CLEANUP
 # =========================================================
-
 async def find_and_delete_lower_quality(
     db_collection,
     new_filename: str,
@@ -1100,29 +615,24 @@ async def find_and_delete_lower_quality(
 ) -> Tuple[bool, str]:
 
     try:
-
         new_quality = extract_quality_info(
             new_filename,
             new_caption or "",
         )
 
-        new_source = _normalize_source(
-            new_quality.get("source")
-        )
+        new_source = (
+            new_quality.get("source") or ""
+        ).lower().strip()
 
-        # -------------------------------------------------
-        # Only known LOW/MEDIUM/HIGH sources participate
-        # -------------------------------------------------
-
+        # New LOW files do not trigger deletion.
+        # MEDIUM/HIGH can potentially replace LOW/MEDIUM.
         if (
             new_source not in HIGH_QUALITY_SOURCES
             and new_source not in MEDIUM_QUALITY_SOURCES
         ):
-            return True, "New file is low quality or unsupported"
+            return True, "New file is low quality"
 
-        base_title = get_base_title(
-            new_filename
-        )
+        base_title = get_base_title(new_filename)
 
         if not base_title:
             return True, "Could not extract title"
@@ -1140,6 +650,8 @@ async def find_and_delete_lower_quality(
         if not words:
             return True, "No significant words"
 
+        # Mongo search is only a candidate search.
+        # SAME MOVIE is verified again below.
         pattern = ".*".join(
             re.escape(w)
             for w in words[:5]
@@ -1153,9 +665,7 @@ async def find_and_delete_lower_quality(
         }
 
         if file_id:
-            search_query["_id"] = {
-                "$ne": file_id
-            }
+            search_query["_id"] = {"$ne": file_id}
 
         cursor = db_collection.find(
             search_query,
@@ -1171,35 +681,24 @@ async def find_and_delete_lower_quality(
         deleted_count = 0
 
         try:
-
             async for file_in_db in cursor:
-
                 processed += 1
 
                 existing_filename = file_in_db.get(
                     "file_name",
                     "",
                 )
+                existing_caption = (
+                    file_in_db.get("caption", "") or ""
+                )
 
-                existing_caption = file_in_db.get(
-                    "caption",
-                    ""
-                ) or ""
-
-                # -------------------------------------------------
-                # SAME MOVIE CHECK
-                # -------------------------------------------------
-
+                # CRITICAL SAFETY CHECK #1:
+                # Candidate must be the SAME movie.
                 if not same_movie_title(
                     new_filename,
                     existing_filename,
                 ):
-
-                    await quality_yield(
-                        processed,
-                        50,
-                    )
-
+                    await quality_yield(processed, 50)
                     continue
 
                 existing_quality = extract_quality_info(
@@ -1207,102 +706,53 @@ async def find_and_delete_lower_quality(
                     existing_caption,
                 )
 
-                existing_source = _normalize_source(
-                    existing_quality.get("source")
-                )
+                existing_source = (
+                    existing_quality.get("source") or ""
+                ).lower().strip()
 
-                # -------------------------------------------------
-                # Unknown quality = NEVER DELETE
-                # -------------------------------------------------
-
+                # CRITICAL SAFETY CHECK #2:
+                # Unknown quality is never deleted.
                 if not existing_source:
-
-                    await quality_yield(
-                        processed,
-                        50,
-                    )
-
+                    await quality_yield(processed, 50)
                     continue
 
-                # -------------------------------------------------
-                # 🔒 HARD HIGH-QUALITY PROTECTION
-                # -------------------------------------------------
-                #
-                # This check happens BEFORE all replacement logic.
-                #
-                # Therefore:
-                #
-                # HDRip -> BluRay = KEEP HDRip
-                # WEBRip -> BluRay = KEEP WEBRip
-                # WEB-DL -> BluRay = KEEP WEB-DL
-                # BluRay -> anything = KEEP BluRay
-                #
-                # -------------------------------------------------
-
-                if is_protected_high_quality(
-                    existing_source
-                ):
-
-                    await quality_yield(
-                        processed,
-                        50,
-                    )
-
+                # CRITICAL SAFETY CHECK #3:
+                # HIGH is NEVER deleted.
+                if existing_source in HIGH_QUALITY_SOURCES:
+                    await quality_yield(processed, 50)
                     continue
 
                 existing_langs = extract_language(
-                    f"{existing_filename} "
-                    f"{existing_caption}"
+                    f"{existing_filename} {existing_caption}"
                 )
 
-                # -------------------------------------------------
-                # LANGUAGE SAFETY
-                # -------------------------------------------------
-
+                # CRITICAL SAFETY CHECK #4:
+                # Language must match safely.
                 if not languages_match(
                     existing_langs,
                     new_langs,
                 ):
-
-                    await quality_yield(
-                        processed,
-                        50,
-                    )
-
+                    await quality_yield(processed, 50)
                     continue
 
-                # -------------------------------------------------
-                # FINAL DELETE DECISION
-                # -------------------------------------------------
-
+                # CRITICAL SAFETY CHECK #5:
+                # Only source hierarchy can cause deletion.
+                # Resolution is ignored.
                 if not should_delete_existing(
                     existing_quality,
                     new_quality,
                     existing_langs,
                     new_langs,
                 ):
-
-                    await quality_yield(
-                        processed,
-                        50,
-                    )
-
+                    await quality_yield(processed, 50)
                     continue
 
-                # -------------------------------------------------
-                # DELETE
-                # -------------------------------------------------
-
                 try:
-
                     result = await db_collection.delete_one(
-                        {
-                            "_id": file_in_db["_id"]
-                        }
+                        {"_id": file_in_db["_id"]}
                     )
 
                     if result.deleted_count:
-
                         deleted_count += 1
 
                         logger.warning(
@@ -1313,77 +763,57 @@ async def find_and_delete_lower_quality(
                         )
 
                 except Exception as e:
-
                     logger.error(
                         "[QUALITY] Delete error: %s",
                         e,
                     )
 
-                await quality_yield(
-                    processed,
-                    50,
-                )
+                await quality_yield(processed, 50)
 
         finally:
-
             try:
                 await cursor.close()
             except Exception:
                 pass
 
         if deleted_count:
-
             return (
                 True,
                 f"Deleted {deleted_count} lower-quality files",
             )
 
-        return (
-            True,
-            "No lower quality files",
-        )
+        return True, "No lower quality files"
 
     except Exception as e:
-
         logger.error(
             "[QUALITY] find_and_delete error: %s",
             e,
             exc_info=True,
         )
-
         return False, str(e)
 
 
 # =========================================================
 # BACKGROUND AUTO CLEANUP
 # =========================================================
-
 async def run_quality_cleanup_background(
     media_dbs,
     file_name: str,
     caption: str,
 ):
-
     async with QUALITY_CLEANUP_SEMAPHORE:
-
         try:
-
             for idx, media_cls in enumerate(
                 media_dbs,
                 start=1,
             ):
-
                 success, msg = await find_and_delete_lower_quality(
                     db_collection=media_cls.collection,
                     new_filename=file_name,
                     new_caption=caption,
                 )
 
-                if (
-                    success
-                    and "Deleted" in msg
-                ):
-
+                if success and "Deleted" in msg:
                     logger.warning(
                         "[QUALITY DB%d] %s -> %s",
                         idx,
@@ -1392,7 +822,6 @@ async def run_quality_cleanup_background(
                     )
 
         except Exception as e:
-
             logger.error(
                 "[QUALITY] Background cleanup failed: %s",
                 e,
@@ -1403,14 +832,12 @@ async def run_quality_cleanup_background(
 # =========================================================
 # STREAM MONGODB COLLECTION
 # =========================================================
-
 async def stream_collection_files(
     collection,
     task_id,
     projection=None,
     batch_size=200,
 ):
-
     cursor = collection.find(
         {},
         projection=projection,
@@ -1420,21 +847,17 @@ async def stream_collection_files(
     counter = 0
 
     try:
-
         async for document in cursor:
-
             if CANCEL_Q_TASKS.get(task_id):
                 break
 
             counter += 1
-
             yield document
 
             if counter % 100 == 0:
                 await asyncio.sleep(0)
 
     finally:
-
         try:
             await cursor.close()
         except Exception:
@@ -1444,7 +867,6 @@ async def stream_collection_files(
 # =========================================================
 # BUILD MOVIE GROUPS
 # =========================================================
-
 async def build_movie_groups(
     collection,
     task_id,
@@ -1454,7 +876,6 @@ async def build_movie_groups(
     cancel_markup=None,
     dry_run=False,
 ):
-
     movies = defaultdict(list)
 
     projection = {
@@ -1469,30 +890,19 @@ async def build_movie_groups(
         projection=projection,
         batch_size=200,
     ):
-
         if CANCEL_Q_TASKS.get(task_id):
             return None
 
         p_state["count"] += 1
-
         count = p_state["count"]
 
-        file_name = file.get(
-            "file_name",
-            "",
-        )
-
-        caption = file.get(
-            "caption",
-            ""
-        ) or ""
+        file_name = file.get("file_name", "")
+        caption = file.get("caption", "") or ""
 
         if not file_name:
             continue
 
-        base_title = get_base_title(
-            file_name
-        )
+        base_title = get_base_title(file_name)
 
         if not base_title:
             continue
@@ -1512,20 +922,13 @@ async def build_movie_groups(
             "quality": quality.get("source"),
             "resolution": quality.get("resolution"),
             "languages": languages,
-            "score": quality.get(
-                "quality_score",
-                0,
-            ),
+            "score": quality.get("quality_score", 0),
         })
 
         if count % 100 == 0:
             await asyncio.sleep(0)
 
-        if (
-            msg
-            and count % 5000 == 0
-        ):
-
+        if msg and count % 5000 == 0:
             percent = (
                 count / total_docs * 100
                 if total_docs
@@ -1533,7 +936,6 @@ async def build_movie_groups(
             )
 
             try:
-
                 mode = (
                     "DRY RUN"
                     if dry_run
@@ -1565,12 +967,10 @@ async def build_movie_groups(
 # =========================================================
 # ANALYZE MOVIE GROUPS
 # =========================================================
-
 async def analyze_movie_groups(
     movies,
     task_id,
 ):
-
     total_delete = 0
     duplicate_movies = []
 
@@ -1580,7 +980,6 @@ async def analyze_movie_groups(
     checked = 0
 
     for base_title, files in movies.items():
-
         if CANCEL_Q_TASKS.get(task_id):
             return None, None
 
@@ -1590,7 +989,6 @@ async def analyze_movie_groups(
         movie_delete = 0
 
         for file in files:
-
             if CANCEL_Q_TASKS.get(task_id):
                 return None, None
 
@@ -1598,7 +996,6 @@ async def analyze_movie_groups(
                 file,
                 files,
             ):
-
                 movie_delete += 1
 
             checked += 1
@@ -1607,7 +1004,6 @@ async def analyze_movie_groups(
                 await asyncio.sleep(0)
 
         if movie_delete:
-
             total_delete += movie_delete
 
             duplicate_movies.append({
@@ -1622,17 +1018,13 @@ async def analyze_movie_groups(
 # =========================================================
 # SINGLE MOVIE FINDER
 # =========================================================
-
 async def find_single_movie_files(
     collection,
     movie_name,
     task_id,
     max_files=1000,
 ):
-
-    base_title = get_base_title(
-        movie_name
-    )
+    base_title = get_base_title(movie_name)
 
     if not base_title:
         return []
@@ -1646,6 +1038,8 @@ async def find_single_movie_files(
     if not words:
         return []
 
+    # Candidate search only.
+    # same_movie_title() below is the final safety check.
     pattern = ".*".join(
         rf"\b{re.escape(w)}\b"
         for w in words[:5]
@@ -1669,9 +1063,7 @@ async def find_single_movie_files(
     results = []
 
     try:
-
         async for file in cursor:
-
             if CANCEL_Q_TASKS.get(task_id):
                 break
 
@@ -1679,7 +1071,6 @@ async def find_single_movie_files(
                 movie_name,
                 file.get("file_name", ""),
             ):
-
                 results.append(file)
 
             if len(results) >= max_files:
@@ -1689,7 +1080,6 @@ async def find_single_movie_files(
                 await asyncio.sleep(0)
 
     finally:
-
         try:
             await cursor.close()
         except Exception:
@@ -1701,35 +1091,26 @@ async def find_single_movie_files(
 # =========================================================
 # BACKGROUND TASK RUNNER
 # =========================================================
-
 async def run_quality_task(
     task_id,
     worker,
 ):
-
     global QUALITY_ACTIVE_TASK
 
     async with QUALITY_TASK_LOCK:
-
         QUALITY_ACTIVE_TASK = task_id
-
-        QUALITY_TASKS[
-            task_id
-        ] = asyncio.current_task()
+        QUALITY_TASKS[task_id] = asyncio.current_task()
 
         try:
-
             await worker()
 
         except asyncio.CancelledError:
-
             logger.warning(
                 "[QUALITY] Task cancelled: %s",
                 task_id,
             )
 
         except Exception as e:
-
             logger.error(
                 "[QUALITY] Background task error: %s",
                 e,
@@ -1737,52 +1118,30 @@ async def run_quality_task(
             )
 
         finally:
-
-            QUALITY_TASKS.pop(
-                task_id,
-                None,
-            )
-
-            CANCEL_Q_TASKS.pop(
-                task_id,
-                None,
-            )
-
+            QUALITY_TASKS.pop(task_id, None)
+            CANCEL_Q_TASKS.pop(task_id, None)
             QUALITY_ACTIVE_TASK = None
 
 
 # =========================================================
 # CANCEL CALLBACK
 # =========================================================
-
 @Client.on_callback_query(
-    filters.regex(
-        r"^cancel_q_task_(.*)"
-    )
+    filters.regex(r"^cancel_q_task_(.*)")
 )
-async def cancel_q_task(
-    client,
-    query,
-):
-
+async def cancel_q_task(client, query):
     task_id = query.data.split(
         "cancel_q_task_",
         1,
     )[-1]
 
     if task_id in CANCEL_Q_TASKS:
-
-        CANCEL_Q_TASKS[
-            task_id
-        ] = True
-
+        CANCEL_Q_TASKS[task_id] = True
         await query.answer(
             "🛑 Cancellation requested...",
             show_alert=True,
         )
-
     else:
-
         await query.answer(
             "⚠️ Task already finished.",
             show_alert=True,
@@ -1792,26 +1151,17 @@ async def cancel_q_task(
 # =========================================================
 # AUTO DELETE DRY RUN MESSAGE
 # =========================================================
-
 async def auto_delete_msg(
     msg,
     command_msg,
     task_id,
     delay=300,
 ):
-
     try:
-
         await asyncio.sleep(delay)
-
-        DRY_RUN_CACHE.pop(
-            task_id,
-            None,
-        )
-
+        DRY_RUN_CACHE.pop(task_id, None)
         await msg.delete()
         await command_msg.delete()
-
     except Exception:
         pass
 
@@ -1819,19 +1169,15 @@ async def auto_delete_msg(
 # =========================================================
 # DRY RUN PAGINATION
 # =========================================================
-
 async def send_dry_page(
     msg,
     task_id,
     page,
 ):
-
     data = DRY_RUN_CACHE.get(task_id)
 
     if not data:
-
         if hasattr(msg, "edit_text"):
-
             return await msg.edit_text(
                 "❌ Data expired or auto-deleted.\n"
                 "Please run command again."
@@ -1844,24 +1190,17 @@ async def send_dry_page(
 
     ITEMS_PER_PAGE = 15
 
-    total_files = len(
-        data["files"]
-    )
+    total_files = len(data["files"])
 
     total_pages = (
-        math.ceil(
-            total_files / ITEMS_PER_PAGE
-        )
+        math.ceil(total_files / ITEMS_PER_PAGE)
         if total_files
         else 1
     )
 
     page = max(
         0,
-        min(
-            page,
-            total_pages - 1,
-        ),
+        min(page, total_pages - 1),
     )
 
     chunk = data["files"][
@@ -1889,45 +1228,33 @@ async def send_dry_page(
     )
 
     if data["delete"] > 0:
-
         report += (
-            "👉 **Confirm & Delete:**\n"
-            f"`/cleanup_confirm_single "
-            f"{data['movie_name']}`\n\n"
+            f"👉 **Confirm & Delete:**\n"
+            f"`/cleanup_confirm_single {data['movie_name']}`\n\n"
         )
-
     else:
-
-        report += (
-            "ℹ️ No files to delete.\n\n"
-        )
+        report += "ℹ️ No files to delete.\n\n"
 
     report += "⏱️ Auto-delete in 5 minutes."
 
     buttons = []
 
     if page > 0:
-
         buttons.append(
             InlineKeyboardButton(
                 "⬅️ Previous",
                 callback_data=(
-                    f"dry_page_"
-                    f"{task_id}_"
-                    f"{page - 1}"
+                    f"dry_page_{task_id}_{page - 1}"
                 ),
             )
         )
 
     if page < total_pages - 1:
-
         buttons.append(
             InlineKeyboardButton(
                 "Next ➡️",
                 callback_data=(
-                    f"dry_page_"
-                    f"{task_id}_"
-                    f"{page + 1}"
+                    f"dry_page_{task_id}_{page + 1}"
                 ),
             )
         )
@@ -1939,23 +1266,18 @@ async def send_dry_page(
     )
 
     try:
-
         if hasattr(msg, "edit_text"):
-
             await msg.edit_text(
                 report,
                 reply_markup=reply_markup,
             )
-
         else:
-
             await msg.message.edit_text(
                 report,
                 reply_markup=reply_markup,
             )
 
     except Exception as e:
-
         logger.error(
             "[QUALITY] Pagination error: %s",
             e,
@@ -1965,7 +1287,6 @@ async def send_dry_page(
 # =========================================================
 # PAGINATION CALLBACK
 # =========================================================
-
 @Client.on_callback_query(
     filters.regex(r"^dry_page_")
 )
@@ -1973,11 +1294,8 @@ async def dry_page_callback(
     client,
     query,
 ):
-
     try:
-
         parts = query.data.split("_")
-
         task_id = parts[2]
         page = int(parts[3])
 
@@ -1990,7 +1308,6 @@ async def dry_page_callback(
         await query.answer()
 
     except Exception:
-
         await query.answer(
             "❌ Page expired.",
             show_alert=True,
@@ -2000,7 +1317,6 @@ async def dry_page_callback(
 # =========================================================
 # /QUALITY_REPORT
 # =========================================================
-
 @Client.on_message(
     filters.command("quality_report")
     & filters.user(ADMINS)
@@ -2009,28 +1325,21 @@ async def quality_report_cmd(
     bot,
     message,
 ):
-
     global QUALITY_ACTIVE_TASK
 
     if QUALITY_ACTIVE_TASK:
-
         return await message.reply_text(
             "⏳ **QUALITY TASK ALREADY RUNNING**\n\n"
             "Pehle current quality process complete hone do."
         )
 
     task_id = str(message.id)
-
-    CANCEL_Q_TASKS[
-        task_id
-    ] = False
+    CANCEL_Q_TASKS[task_id] = False
 
     cancel_markup = InlineKeyboardMarkup([[
         InlineKeyboardButton(
             "🛑 CANCEL",
-            callback_data=(
-                f"cancel_q_task_{task_id}"
-            ),
+            callback_data=f"cancel_q_task_{task_id}",
         )
     ]])
 
@@ -2043,27 +1352,22 @@ async def quality_report_cmd(
     )
 
     async def worker():
-
         try:
-
             total_docs = sum([
                 await media_cls.collection.estimated_document_count()
                 for media_cls in MEDIA_DBS
             ])
 
             if total_docs == 0:
-
                 return await msg.edit_text(
                     "❌ **DATABASE EMPTY**"
                 )
 
             processed = 0
-
             quality_dist = defaultdict(int)
             resolution_dist = defaultdict(int)
 
             for media_cls in MEDIA_DBS:
-
                 cursor = media_cls.collection.find(
                     {},
                     projection={
@@ -2074,13 +1378,8 @@ async def quality_report_cmd(
                 )
 
                 try:
-
                     async for file in cursor:
-
-                        if CANCEL_Q_TASKS.get(
-                            task_id
-                        ):
-
+                        if CANCEL_Q_TASKS.get(task_id):
                             return await msg.edit_text(
                                 "🛑 **QUALITY REPORT CANCELLED**"
                             )
@@ -2092,10 +1391,10 @@ async def quality_report_cmd(
                             "",
                         )
 
-                        caption = file.get(
-                            "caption",
-                            ""
-                        ) or ""
+                        caption = (
+                            file.get("caption", "")
+                            or ""
+                        )
 
                         qi = extract_quality_info(
                             filename,
@@ -2103,28 +1402,24 @@ async def quality_report_cmd(
                         )
 
                         quality_dist[
-                            qi.get("source")
-                            or "unknown"
+                            qi.get("source") or "unknown"
                         ] += 1
 
                         resolution_dist[
-                            qi.get("resolution")
-                            or "unknown"
+                            qi.get("resolution") or "unknown"
                         ] += 1
 
                         if processed % 100 == 0:
                             await asyncio.sleep(0)
 
                         if processed % 5000 == 0:
-
                             percent = (
-                                processed
-                                / total_docs
-                                * 100
+                                processed /
+                                total_docs *
+                                100
                             )
 
                             try:
-
                                 await msg.edit_text(
                                     "📊 **QUALITY REPORT**\n\n"
                                     f"📁 Scanned: **{processed:,} / {total_docs:,}**\n"
@@ -2133,20 +1428,17 @@ async def quality_report_cmd(
                                     "🤖 Bot Online",
                                     reply_markup=cancel_markup,
                                 )
-
                             except Exception:
                                 pass
 
                 finally:
-
                     try:
                         await cursor.close()
                     except Exception:
                         pass
 
             report = (
-                f"📊 **QUALITY REPORT "
-                f"({len(MEDIA_DBS)} DB"
+                f"📊 **QUALITY REPORT ({len(MEDIA_DBS)} DB"
                 f"{'s' if len(MEDIA_DBS) > 1 else ''})**\n"
                 "━━━━━━━━━━━━━━━━━━━━\n\n"
                 f"📁 **Total Files:** {total_docs:,}\n\n"
@@ -2155,40 +1447,22 @@ async def quality_report_cmd(
             )
 
             quality_order = [
-                "camrip",
-                "hdcam",
-                "hdtc",
-                "hdts",
-                "ts",
-                "tc",
-                "predvd",
-                "dvdscr",
-                "dvdrip",
-                "tvrip",
-                "hdtv",
-                "webrip",
-                "web-dl",
-                "webdl",
-                "hdrip",
-                "bluray",
-                "bdrip",
-                "brrip",
-                "unknown",
+                "camrip", "hdcam", "hdtc", "hdts",
+                "ts", "tc", "predvd", "dvdscr",
+                "dvdrip", "tvrip", "hdtv",
+                "webrip", "web-dl", "webdl",
+                "hdrip", "bluray", "bdrip",
+                "brrip", "unknown",
             ]
 
             for quality in quality_order:
-
                 if quality not in quality_dist:
                     continue
 
-                count = quality_dist[
-                    quality
-                ]
+                count = quality_dist[quality]
 
                 percent = (
-                    count
-                    / total_docs
-                    * 100
+                    count / total_docs * 100
                     if total_docs
                     else 0
                 )
@@ -2204,10 +1478,8 @@ async def quality_report_cmd(
                 )
 
                 report += (
-                    f"{emoji} "
-                    f"{quality.upper()}: "
-                    f"{count:,} "
-                    f"({percent:.1f}%)\n"
+                    f"{emoji} {quality.upper()}: "
+                    f"{count:,} ({percent:.1f}%)\n"
                 )
 
             report += (
@@ -2216,37 +1488,24 @@ async def quality_report_cmd(
             )
 
             for res in [
-                "140p",
-                "240p",
-                "360p",
-                "480p",
-                "540p",
-                "720p",
-                "1080p",
-                "1440p",
-                "2160p",
-                "unknown",
+                "140p", "240p", "360p", "480p",
+                "540p", "720p", "1080p", "1440p",
+                "2160p", "unknown",
             ]:
-
                 if res not in resolution_dist:
                     continue
 
-                count = resolution_dist[
-                    res
-                ]
+                count = resolution_dist[res]
 
                 percent = (
-                    count
-                    / total_docs
-                    * 100
+                    count / total_docs * 100
                     if total_docs
                     else 0
                 )
 
                 report += (
                     f"📹 {res}: "
-                    f"{count:,} "
-                    f"({percent:.1f}%)\n"
+                    f"{count:,} ({percent:.1f}%)\n"
                 )
 
             low_count = sum(
@@ -2268,10 +1527,9 @@ async def quality_report_cmd(
                 "\n━━━━━━━━━━━━━━━━━━━━\n"
                 f"⚠️ Low Quality: **{low_count:,}**\n"
                 f"⭐ Medium Quality: **{medium_count:,}**\n"
-                f"✨ High Quality: **{high_count:,}**\n\n"
-                "🛡️ **HIGH QUALITY FILES ARE PROTECTED**\n"
-                "HDRip / WEBRip / WEB-DL / BluRay / "
-                "BDRip / BRRip will never be deleted."
+                f"✨ High Quality: **{high_count:,}**\n"
+                "\n🛡️ HIGH quality aur resolution-based deletion "
+                "disabled hain."
             )
 
             await msg.edit_text(
@@ -2280,7 +1538,6 @@ async def quality_report_cmd(
             )
 
         except Exception as e:
-
             logger.error(
                 "[QUALITY] Report error: %s",
                 e,
@@ -2288,27 +1545,20 @@ async def quality_report_cmd(
             )
 
             try:
-
                 await msg.edit_text(
-                    f"❌ **ERROR**\n\n"
-                    f"`{str(e)[:1000]}`"
+                    f"❌ **ERROR**\n\n`{str(e)[:1000]}`"
                 )
-
             except Exception:
                 pass
 
     asyncio.create_task(
-        run_quality_task(
-            task_id,
-            worker,
-        )
+        run_quality_task(task_id, worker)
     )
 
 
 # =========================================================
 # /CLEANUP_DRY_SINGLE
 # =========================================================
-
 @Client.on_message(
     filters.command("cleanup_dry_single")
     & filters.user(ADMINS)
@@ -2317,11 +1567,9 @@ async def cleanup_dry_single_cmd(
     bot,
     message,
 ):
-
     global QUALITY_ACTIVE_TASK
 
     if len(message.command) < 2:
-
         return await message.reply_text(
             "❌ **Wrong Usage**\n\n"
             "Example:\n"
@@ -2329,7 +1577,6 @@ async def cleanup_dry_single_cmd(
         )
 
     if QUALITY_ACTIVE_TASK:
-
         return await message.reply_text(
             "⏳ **QUALITY TASK ALREADY RUNNING**\n\n"
             "Current process complete hone do."
@@ -2340,17 +1587,12 @@ async def cleanup_dry_single_cmd(
     )
 
     task_id = str(message.id)
-
-    CANCEL_Q_TASKS[
-        task_id
-    ] = False
+    CANCEL_Q_TASKS[task_id] = False
 
     cancel_markup = InlineKeyboardMarkup([[
         InlineKeyboardButton(
             "🛑 CANCEL",
-            callback_data=(
-                f"cancel_q_task_{task_id}"
-            ),
+            callback_data=f"cancel_q_task_{task_id}",
         )
     ]])
 
@@ -2363,13 +1605,10 @@ async def cleanup_dry_single_cmd(
     )
 
     async def worker():
-
         try:
-
             all_files = []
 
             for media_cls in MEDIA_DBS:
-
                 all_files.extend(
                     await find_single_movie_files(
                         media_cls.collection,
@@ -2380,13 +1619,11 @@ async def cleanup_dry_single_cmd(
                 )
 
             if CANCEL_Q_TASKS.get(task_id):
-
                 return await msg.edit_text(
                     "🛑 **PROCESS CANCELLED**"
                 )
 
             if not all_files:
-
                 return await msg.edit_text(
                     f"❌ No files found for:\n"
                     f"**{movie_name}**"
@@ -2395,16 +1632,15 @@ async def cleanup_dry_single_cmd(
             files_info = []
 
             for file in all_files:
-
                 filename = file.get(
                     "file_name",
                     "Unknown",
                 )
 
-                caption = file.get(
-                    "caption",
-                    ""
-                ) or ""
+                caption = (
+                    file.get("caption", "")
+                    or ""
+                )
 
                 qi = extract_quality_info(
                     filename,
@@ -2413,12 +1649,8 @@ async def cleanup_dry_single_cmd(
 
                 files_info.append({
                     "name": filename,
-                    "quality": qi.get(
-                        "source"
-                    ),
-                    "resolution": qi.get(
-                        "resolution"
-                    ),
+                    "quality": qi.get("source"),
+                    "resolution": qi.get("resolution"),
                     "languages": extract_language(
                         f"{filename} {caption}"
                     ),
@@ -2446,7 +1678,6 @@ async def cleanup_dry_single_cmd(
                 files_info,
                 1,
             ):
-
                 should_delete = (
                     should_delete_file_against_files(
                         file,
@@ -2461,28 +1692,16 @@ async def cleanup_dry_single_cmd(
                 )
 
                 quality_str = (
-                    file["quality"]
-                    or "N/A"
+                    file["quality"] or "N/A"
                 ).upper()
 
                 resolution_str = (
-                    file["resolution"]
-                    or "N/A"
+                    file["resolution"] or "N/A"
                 ).upper()
 
                 lang_str = ", ".join(
                     file["languages"]
                 ).upper()
-
-                # Extra safety display
-                if (
-                    file["quality"]
-                    and is_protected_high_quality(
-                        file["quality"]
-                    )
-                ):
-
-                    status = "🛡️ PROTECTED"
 
                 formatted_files.append(
                     f"\n**{idx}. {status}**\n"
@@ -2492,9 +1711,7 @@ async def cleanup_dry_single_cmd(
                     f"🌐 Language: {lang_str}\n"
                 )
 
-            DRY_RUN_CACHE[
-                task_id
-            ] = {
+            DRY_RUN_CACHE[task_id] = {
                 "movie_name": movie_name,
                 "files": formatted_files,
                 "keep": len(files_info) - to_delete,
@@ -2517,7 +1734,6 @@ async def cleanup_dry_single_cmd(
             )
 
         except Exception as e:
-
             logger.error(
                 "[QUALITY] Single dry error: %s",
                 e,
@@ -2525,27 +1741,20 @@ async def cleanup_dry_single_cmd(
             )
 
             try:
-
                 await msg.edit_text(
-                    f"❌ **ERROR**\n\n"
-                    f"`{str(e)[:1000]}`"
+                    f"❌ **ERROR**\n\n`{str(e)[:1000]}`"
                 )
-
             except Exception:
                 pass
 
     asyncio.create_task(
-        run_quality_task(
-            task_id,
-            worker,
-        )
+        run_quality_task(task_id, worker)
     )
 
 
 # =========================================================
 # /CLEANUP_CONFIRM_SINGLE
 # =========================================================
-
 @Client.on_message(
     filters.command("cleanup_confirm_single")
     & filters.user(ADMINS)
@@ -2554,11 +1763,9 @@ async def cleanup_confirm_single_cmd(
     bot,
     message,
 ):
-
     global QUALITY_ACTIVE_TASK
 
     if len(message.command) < 2:
-
         return await message.reply_text(
             "❌ **Wrong Usage**\n\n"
             "Example:\n"
@@ -2566,7 +1773,6 @@ async def cleanup_confirm_single_cmd(
         )
 
     if QUALITY_ACTIVE_TASK:
-
         return await message.reply_text(
             "⏳ **QUALITY TASK ALREADY RUNNING**\n\n"
             "Current process complete hone do."
@@ -2577,17 +1783,12 @@ async def cleanup_confirm_single_cmd(
     )
 
     task_id = str(message.id)
-
-    CANCEL_Q_TASKS[
-        task_id
-    ] = False
+    CANCEL_Q_TASKS[task_id] = False
 
     cancel_markup = InlineKeyboardMarkup([[
         InlineKeyboardButton(
             "🛑 CANCEL DELETE",
-            callback_data=(
-                f"cancel_q_task_{task_id}"
-            ),
+            callback_data=f"cancel_q_task_{task_id}",
         )
     ]])
 
@@ -2595,19 +1796,17 @@ async def cleanup_confirm_single_cmd(
         "⚠️ **SINGLE MOVIE DELETE**\n\n"
         f"🎬 Movie: **{movie_name}**\n\n"
         "🛡️ HIGH quality protected.\n"
+        "📐 Resolution is NOT a delete rule.\n"
         "⏳ Processing...",
         reply_markup=cancel_markup,
     )
 
     async def worker():
-
         try:
-
             total_deleted = 0
             deleted_files = []
 
             for media_cls in MEDIA_DBS:
-
                 collection = media_cls.collection
 
                 files = await find_single_movie_files(
@@ -2623,16 +1822,15 @@ async def cleanup_confirm_single_cmd(
                 files_info = []
 
                 for file in files:
-
                     filename = file.get(
                         "file_name",
                         "Unknown",
                     )
 
-                    caption = file.get(
-                        "caption",
-                        ""
-                    ) or ""
+                    caption = (
+                        file.get("caption", "")
+                        or ""
+                    )
 
                     qi = extract_quality_info(
                         filename,
@@ -2642,12 +1840,8 @@ async def cleanup_confirm_single_cmd(
                     files_info.append({
                         "file_id": file.get("_id"),
                         "name": filename,
-                        "quality": qi.get(
-                            "source"
-                        ),
-                        "resolution": qi.get(
-                            "resolution"
-                        ),
+                        "quality": qi.get("source"),
+                        "resolution": qi.get("resolution"),
                         "languages": extract_language(
                             f"{filename} {caption}"
                         ),
@@ -2656,11 +1850,8 @@ async def cleanup_confirm_single_cmd(
                     if len(files_info) % 50 == 0:
                         await asyncio.sleep(0)
 
-                # -------------------------------------------------
-                # Decide FIRST.
-                # Never change decision after deletion.
-                # -------------------------------------------------
-
+                # Decide BEFORE deleting anything.
+                # This keeps decisions stable.
                 delete_candidates = [
                     file
                     for file in files_info
@@ -2671,48 +1862,25 @@ async def cleanup_confirm_single_cmd(
                 ]
 
                 for file in delete_candidates:
-
                     if CANCEL_Q_TASKS.get(task_id):
-
                         return await msg.edit_text(
                             "🛑 **DELETE CANCELLED**\n\n"
                             f"Deleted before cancellation: "
                             f"**{total_deleted}**"
                         )
 
-                    # -------------------------------------------------
-                    # FINAL HARD SAFETY CHECK
-                    # -------------------------------------------------
-
-                    if is_protected_high_quality(
-                        file.get("quality")
-                    ):
-
-                        logger.warning(
-                            "[QUALITY] Protected HIGH skipped: %s",
-                            file.get("name", "Unknown"),
-                        )
-
-                        continue
-
                     try:
-
                         result = await collection.delete_one(
-                            {
-                                "_id": file["file_id"]
-                            }
+                            {"_id": file["file_id"]}
                         )
 
                         if result.deleted_count:
-
                             total_deleted += 1
-
                             deleted_files.append(
                                 file["name"]
                             )
 
                     except Exception as e:
-
                         logger.error(
                             "[QUALITY] Single delete error: %s",
                             e,
@@ -2722,26 +1890,21 @@ async def cleanup_confirm_single_cmd(
                         total_deleted
                         and total_deleted % 25 == 0
                     ):
-
                         await asyncio.sleep(0)
 
             if total_deleted:
-
                 preview = "".join(
                     f"{i}. {filename[:65]}\n"
-                    for i, filename
-                    in enumerate(
+                    for i, filename in enumerate(
                         deleted_files[:10],
                         1,
                     )
                 )
 
                 if len(deleted_files) > 10:
-
                     preview += (
                         f"\n... + "
-                        f"{len(deleted_files) - 10} "
-                        f"more"
+                        f"{len(deleted_files) - 10} more"
                     )
 
                 await msg.edit_text(
@@ -2751,23 +1914,21 @@ async def cleanup_confirm_single_cmd(
                     f"🗑️ Deleted: **{total_deleted}**\n\n"
                     "📋 **Sample Deleted:**\n"
                     f"{preview}\n\n"
-                    "🛡️ Same-title + language + quality "
-                    "checks active.\n"
-                    "✨ HIGH quality files were protected."
+                    "🛡️ Protected by same-title + language "
+                    "+ SOURCE-quality checks.\n"
+                    "📐 Resolution was NOT used for deletion."
                 )
 
             else:
-
                 await msg.edit_text(
                     "ℹ️ **NOTHING DELETED**\n\n"
                     f"🎬 Movie: **{movie_name}**\n\n"
-                    "No eligible lower-quality "
-                    "versions found.\n\n"
-                    "🛡️ HIGH quality files are safe."
+                    "No eligible lower-quality versions found.\n\n"
+                    "🛡️ HIGH quality protected.\n"
+                    "📐 Resolution does not cause deletion."
                 )
 
         except Exception as e:
-
             logger.error(
                 "[QUALITY] Single confirm error: %s",
                 e,
@@ -2775,22 +1936,17 @@ async def cleanup_confirm_single_cmd(
             )
 
             await msg.edit_text(
-                f"❌ **ERROR**\n\n"
-                f"`{str(e)[:1000]}`"
+                f"❌ **ERROR**\n\n`{str(e)[:1000]}`"
             )
 
     asyncio.create_task(
-        run_quality_task(
-            task_id,
-            worker,
-        )
+        run_quality_task(task_id, worker)
     )
 
 
 # =========================================================
 # /CLEANUP_DRY_BATCH
 # =========================================================
-
 @Client.on_message(
     filters.command("cleanup_dry_batch")
     & filters.user(ADMINS)
@@ -2799,28 +1955,21 @@ async def cleanup_dry_batch_cmd(
     bot,
     message,
 ):
-
     global QUALITY_ACTIVE_TASK
 
     if QUALITY_ACTIVE_TASK:
-
         return await message.reply_text(
             "⏳ **QUALITY CLEANUP ALREADY RUNNING**\n\n"
             "Ek time par sirf ek heavy quality process chalega."
         )
 
     task_id = str(message.id)
-
-    CANCEL_Q_TASKS[
-        task_id
-    ] = False
+    CANCEL_Q_TASKS[task_id] = False
 
     cancel_markup = InlineKeyboardMarkup([[
         InlineKeyboardButton(
             "🛑 CANCEL",
-            callback_data=(
-                f"cancel_q_task_{task_id}"
-            ),
+            callback_data=f"cancel_q_task_{task_id}",
         )
     ]])
 
@@ -2834,32 +1983,24 @@ async def cleanup_dry_batch_cmd(
     )
 
     async def worker():
-
         try:
-
             total_docs = sum([
                 await media_cls.collection.estimated_document_count()
                 for media_cls in MEDIA_DBS
             ])
 
             if total_docs == 0:
-
                 return await msg.edit_text(
                     "❌ **DATABASE EMPTY**"
                 )
 
-            p_state = {
-                "count": 0
-            }
-
+            p_state = {"count": 0}
             total_movies = 0
             total_delete = 0
             all_duplicates = []
 
             for media_cls in MEDIA_DBS:
-
                 if CANCEL_Q_TASKS.get(task_id):
-
                     return await msg.edit_text(
                         "🛑 **DRY RUN CANCELLED**"
                     )
@@ -2875,7 +2016,6 @@ async def cleanup_dry_batch_cmd(
                 )
 
                 if movies is None:
-
                     return await msg.edit_text(
                         "🛑 **DRY RUN CANCELLED**"
                     )
@@ -2888,18 +2028,13 @@ async def cleanup_dry_batch_cmd(
                 )
 
                 if delete_count is None:
-
                     return await msg.edit_text(
                         "🛑 **DRY RUN CANCELLED**"
                     )
 
                 total_movies += len(movies)
-
                 total_delete += delete_count
-
-                all_duplicates.extend(
-                    duplicates
-                )
+                all_duplicates.extend(duplicates)
 
             all_duplicates.sort(
                 key=lambda x: x["to_delete"],
@@ -2909,18 +2044,14 @@ async def cleanup_dry_batch_cmd(
             report = (
                 "📊 **QUALITY CLEANUP — DRY RUN**\n"
                 "━━━━━━━━━━━━━━━━━━━━\n\n"
-                f"📁 Files Scanned: "
-                f"**{p_state['count']:,}**\n"
-                f"🎬 Movie Groups: "
-                f"**{total_movies:,}**\n"
+                f"📁 Files Scanned: **{p_state['count']:,}**\n"
+                f"🎬 Movie Groups: **{total_movies:,}**\n"
                 f"📋 Movies with Duplicates: "
                 f"**{len(all_duplicates):,}**\n\n"
-                f"⚠️ **Would Delete: "
-                f"{total_delete:,} files**\n\n"
+                f"⚠️ **Would Delete: {total_delete:,} files**\n\n"
             )
 
             if all_duplicates:
-
                 report += (
                     "📋 **TOP DUPLICATES**\n"
                     "━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -2930,39 +2061,31 @@ async def cleanup_dry_batch_cmd(
                     all_duplicates[:15],
                     1,
                 ):
-
                     report += (
-                        f"**{i}. "
-                        f"{movie['title'][:45]}**\n"
-                        f"   📁 Versions: "
-                        f"{movie['count']}\n"
-                        f"   🗑️ Delete: "
-                        f"{movie['to_delete']}\n\n"
+                        f"**{i}. {movie['title'][:45]}**\n"
+                        f"   📁 Versions: {movie['count']}\n"
+                        f"   🗑️ Delete: {movie['to_delete']}\n\n"
                     )
 
                 if len(all_duplicates) > 15:
-
                     report += (
                         f"... + "
-                        f"{len(all_duplicates) - 15} "
-                        f"more\n\n"
+                        f"{len(all_duplicates) - 15} more\n\n"
                     )
 
                 report += (
                     "━━━━━━━━━━━━━━━━━━━━\n"
-                    "🛡️ Same-title + language + "
-                    "quality checks active.\n"
-                    "✨ HIGH quality protected.\n\n"
+                    "🛡️ Same-title + language + SOURCE-quality "
+                    "checks active.\n"
+                    "📐 Resolution is NOT a delete rule.\n\n"
                     "👉 **Actual Delete:**\n"
                     "`/cleanup_confirm_batch`"
                 )
 
             else:
-
                 report += (
                     "✅ **NO CLEANUP REQUIRED**\n\n"
-                    "No safe lower-quality "
-                    "duplicates found."
+                    "No safe lower-quality duplicates found."
                 )
 
             await msg.edit_text(
@@ -2971,7 +2094,6 @@ async def cleanup_dry_batch_cmd(
             )
 
         except Exception as e:
-
             logger.error(
                 "[QUALITY] Dry batch error: %s",
                 e,
@@ -2979,27 +2101,20 @@ async def cleanup_dry_batch_cmd(
             )
 
             try:
-
                 await msg.edit_text(
-                    f"❌ **ERROR**\n\n"
-                    f"`{str(e)[:1000]}`"
+                    f"❌ **ERROR**\n\n`{str(e)[:1000]}`"
                 )
-
             except Exception:
                 pass
 
     asyncio.create_task(
-        run_quality_task(
-            task_id,
-            worker,
-        )
+        run_quality_task(task_id, worker)
     )
 
 
 # =========================================================
 # /CLEANUP_CONFIRM_BATCH
 # =========================================================
-
 @Client.on_message(
     filters.command("cleanup_confirm_batch")
     & filters.user(ADMINS)
@@ -3008,28 +2123,21 @@ async def cleanup_confirm_batch_cmd(
     bot,
     message,
 ):
-
     global QUALITY_ACTIVE_TASK
 
     if QUALITY_ACTIVE_TASK:
-
         return await message.reply_text(
             "⏳ **QUALITY CLEANUP ALREADY RUNNING**\n\n"
             "Pehle current process complete hone do."
         )
 
     task_id = str(message.id)
-
-    CANCEL_Q_TASKS[
-        task_id
-    ] = False
+    CANCEL_Q_TASKS[task_id] = False
 
     cancel_markup = InlineKeyboardMarkup([[
         InlineKeyboardButton(
             "🛑 CANCEL DELETE",
-            callback_data=(
-                f"cancel_q_task_{task_id}"
-            ),
+            callback_data=f"cancel_q_task_{task_id}",
         )
     ]])
 
@@ -3037,42 +2145,34 @@ async def cleanup_confirm_batch_cmd(
         "⚠️ **BATCH DELETE STARTED**\n\n"
         "🗑️ LOW/MEDIUM eligible files delete hongi.\n"
         "🛡️ HIGH quality files protected hain.\n"
+        "📐 Resolution se koi delete nahi hoga.\n"
         "🤖 Bot background me kaam karega.\n\n"
         "⏳ Please wait...",
         reply_markup=cancel_markup,
     )
 
     async def worker():
-
         try:
-
             total_docs = sum([
                 await media_cls.collection.estimated_document_count()
                 for media_cls in MEDIA_DBS
             ])
 
             if total_docs == 0:
-
                 return await msg.edit_text(
                     "❌ **DATABASE EMPTY**"
                 )
 
-            p_state = {
-                "count": 0
-            }
-
+            p_state = {"count": 0}
             total_deleted = 0
             deleted_files = []
             movies_cleaned_set = set()
 
             for media_cls in MEDIA_DBS:
-
                 if CANCEL_Q_TASKS.get(task_id):
-
                     return await msg.edit_text(
                         "🛑 **DELETE CANCELLED**\n\n"
-                        f"Already deleted: "
-                        f"**{total_deleted}**"
+                        f"Already deleted: **{total_deleted}**"
                     )
 
                 collection = media_cls.collection
@@ -3088,30 +2188,23 @@ async def cleanup_confirm_batch_cmd(
                 )
 
                 if movies is None:
-
                     return await msg.edit_text(
                         "🛑 **DELETE CANCELLED**\n\n"
-                        f"Already deleted: "
-                        f"**{total_deleted}**"
+                        f"Already deleted: **{total_deleted}**"
                     )
 
                 for base_title, files in movies.items():
-
                     if CANCEL_Q_TASKS.get(task_id):
-
                         return await msg.edit_text(
                             "🛑 **DELETE CANCELLED**\n\n"
-                            f"Already deleted: "
-                            f"**{total_deleted}**"
+                            f"Already deleted: **{total_deleted}**"
                         )
 
                     if len(files) <= 1:
                         continue
 
-                    # -------------------------------------------------
-                    # Decide FIRST
-                    # -------------------------------------------------
-
+                    # Decide BEFORE deleting anything.
+                    # This keeps the decision stable.
                     delete_candidates = [
                         f
                         for f in files
@@ -3127,50 +2220,21 @@ async def cleanup_confirm_batch_cmd(
                     cleaned_movie = False
 
                     for file in delete_candidates:
-
                         if CANCEL_Q_TASKS.get(task_id):
-
                             return await msg.edit_text(
                                 "🛑 **DELETE CANCELLED**\n\n"
                                 f"Already deleted: "
                                 f"**{total_deleted}**"
                             )
 
-                        # -------------------------------------------------
-                        # 🔒 FINAL HARD HIGH QUALITY PROTECTION
-                        # -------------------------------------------------
-
-                        if is_protected_high_quality(
-                            file.get("quality")
-                        ):
-
-                            logger.warning(
-                                "[QUALITY] "
-                                "HIGH PROTECTED - SKIP: %s",
-                                file.get(
-                                    "name",
-                                    "Unknown",
-                                ),
-                            )
-
-                            continue
-
                         try:
-
                             result = await collection.delete_one(
-                                {
-                                    "_id": file[
-                                        "file_id"
-                                    ]
-                                }
+                                {"_id": file["file_id"]}
                             )
 
                             if result.deleted_count:
-
                                 total_deleted += 1
-
                                 cleaned_movie = True
-
                                 deleted_files.append(
                                     file.get(
                                         "name",
@@ -3179,10 +2243,8 @@ async def cleanup_confirm_batch_cmd(
                                 )
 
                         except Exception as e:
-
                             logger.error(
-                                "[QUALITY] "
-                                "Batch delete error: %s",
+                                "[QUALITY] Batch delete error: %s",
                                 e,
                             )
 
@@ -3190,55 +2252,48 @@ async def cleanup_confirm_batch_cmd(
                             total_deleted
                             and total_deleted % 25 == 0
                         ):
-
                             await asyncio.sleep(0)
 
                     if cleaned_movie:
-
                         movies_cleaned_set.add(
                             base_title
                         )
 
             if total_deleted:
-
                 preview = "".join(
                     f"{i}. {filename[:65]}\n"
-                    for i, filename
-                    in enumerate(
+                    for i, filename in enumerate(
                         deleted_files[:10],
                         1,
                     )
                 )
 
                 if len(deleted_files) > 10:
-
                     preview += (
                         f"\n... + "
-                        f"{len(deleted_files) - 10} "
-                        f"more"
+                        f"{len(deleted_files) - 10} more"
                     )
 
                 report = (
                     "✅ **BATCH CLEANUP COMPLETED**\n"
                     "━━━━━━━━━━━━━━━━━━━━\n\n"
-                    f"🗑️ Total Deleted: "
-                    f"**{total_deleted:,}**\n"
+                    f"🗑️ Total Deleted: **{total_deleted:,}**\n"
                     f"🎬 Movies Cleaned: "
                     f"**{len(movies_cleaned_set):,}**\n\n"
                     "📋 **Sample Deleted:**\n"
                     f"{preview}\n\n"
-                    "🛡️ Same-title + language + "
-                    "quality checks active.\n"
-                    "✨ HIGH quality files were protected."
+                    "🛡️ Same-title + language + SOURCE-quality "
+                    "checks active.\n"
+                    "📐 Resolution was NOT used."
                 )
 
             else:
-
                 report = (
                     "ℹ️ **NOTHING DELETED**\n\n"
-                    "No safe LOW/MEDIUM "
-                    "lower-quality duplicates found.\n\n"
-                    "🛡️ HIGH quality files are safe."
+                    "No safe LOW/MEDIUM lower-quality "
+                    "duplicates found.\n\n"
+                    "🛡️ HIGH quality files are safe.\n"
+                    "📐 Resolution does not cause deletion."
                 )
 
             await msg.edit_text(
@@ -3247,7 +2302,6 @@ async def cleanup_confirm_batch_cmd(
             )
 
         except Exception as e:
-
             logger.error(
                 "[QUALITY] Confirm batch error: %s",
                 e,
@@ -3255,27 +2309,20 @@ async def cleanup_confirm_batch_cmd(
             )
 
             try:
-
                 await msg.edit_text(
-                    f"❌ **DELETE ERROR**\n\n"
-                    f"`{str(e)[:1000]}`"
+                    f"❌ **DELETE ERROR**\n\n`{str(e)[:1000]}`"
                 )
-
             except Exception:
                 pass
 
     asyncio.create_task(
-        run_quality_task(
-            task_id,
-            worker,
-        )
+        run_quality_task(task_id, worker)
     )
 
 
 # =========================================================
-# COMMAND HELP
+# COMMAND HELP / EXAMPLES
 # =========================================================
-
 @Client.on_message(
     filters.command("quality_help")
     & filters.user(ADMINS)
@@ -3284,7 +2331,6 @@ async def quality_help_cmd(
     bot,
     message,
 ):
-
     help_text = """
 🛠️ **QUALITY MANAGER**
 
@@ -3304,7 +2350,7 @@ async def quality_help_cmd(
 Example:
 `/cleanup_dry_single Prem Prakaran 2026`
 
-➡️ Exact/safe title matching ke saath preview.
+➡️ Safe title matching ke saath preview.
 ➡️ Kuch delete nahi hoga.
 
 ━━━━━━━━━━━━━━━━━━━━
@@ -3312,9 +2358,10 @@ Example:
 🗑️ **3. SINGLE MOVIE DELETE**
 `/cleanup_confirm_single <movie name>`
 
-➡️ Sirf same movie + compatible language.
-➡️ LOW/MEDIUM lower-quality versions delete hongi.
-➡️ HIGH quality files protected.
+➡️ Sirf SAME movie + compatible language
+   + lower SOURCE quality.
+➡️ HIGH_QUALITY_SOURCES kabhi delete nahi hongi.
+➡️ Resolution ke basis par kabhi delete nahi hoga.
 
 ━━━━━━━━━━━━━━━━━━━━
 
@@ -3329,55 +2376,29 @@ Example:
 🗑️ **5. FULL DATABASE DELETE**
 `/cleanup_confirm_batch`
 
-➡️ Safe LOW/MEDIUM lower-quality duplicates delete karega.
+➡️ Sirf safe LOW/MEDIUM files delete karega.
+➡️ Higher SOURCE-quality replacement hona zaroori hai.
 
 ━━━━━━━━━━━━━━━━━━━━
 
-🛡️ **HIGH QUALITY PROTECTION**
+🛡️ **SAFETY RULES**
 
-❌ HDRip kabhi delete nahi hogi.
-❌ WEBRip kabhi delete nahi hogi.
-❌ WEB-DL kabhi delete nahi hogi.
-❌ BluRay kabhi delete nahi hogi.
-❌ BDRip kabhi delete nahi hogi.
-❌ BRRip kabhi delete nahi hogi.
-
-Example:
-
-HDRip 720p
-+
-BluRay 1080p
-
-➡️ **HDRip KEEP**
-➡️ **BluRay KEEP**
-
-WEBRip 720p
-+
-BluRay 1080p
-
-➡️ **WEBRip KEEP**
-➡️ **BluRay KEEP**
-
-━━━━━━━━━━━━━━━━━━━━
-
-🛡️ **OTHER SAFETY RULES**
-
-1️⃣ Same canonical movie title required.
-2️⃣ Sirf 2 common words enough NAHI hain.
-3️⃣ Language compatible hona zaroori hai.
-4️⃣ Unknown language automatically delete nahi hogi.
-5️⃣ Unknown quality automatically delete nahi hogi.
-6️⃣ LOW/MEDIUM ko better source replace kar sakta hai.
-7️⃣ Same-source resolution upgrade se old file delete nahi hogi.
-8️⃣ HIGH quality files NEVER delete hongi.
-9️⃣ Delete se pehle final HIGH-quality safety check bhi hota hai.
+1️⃣ Same movie title required.
+2️⃣ Different years ko same movie nahi maana jayega.
+3️⃣ Sirf 2 common words enough NAHI hain.
+4️⃣ Language compatible hona zaroori hai.
+5️⃣ Unknown language automatically delete nahi hogi.
+6️⃣ HIGH_QUALITY_SOURCES NEVER DELETE.
+7️⃣ Resolution 720p/1080p/1440p/2160p ke basis par
+   KABHI delete nahi hoga.
+8️⃣ Same SOURCE quality hone par delete nahi hoga.
+9️⃣ LOW/MEDIUM tabhi delete honge jab higher SOURCE
+   quality available ho.
+🔟 Dry run me kuch delete nahi hota.
 
 ━━━━━━━━━━━━━━━━━━━━
 
 🤖 Cleanup background me chalega.
 Search / file sending / normal bot functions continue rahenge.
 """
-
-    await message.reply_text(
-        help_text
-    )
+    await message.reply_text(help_text)
