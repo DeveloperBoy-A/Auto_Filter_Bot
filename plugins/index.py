@@ -201,6 +201,10 @@ async def index_files_to_db(lst_msg_id, chat, msg, bot):
                         errors += 1
                         continue
                 results = await asyncio.gather(*save_tasks, return_exceptions=True)
+                # ⚡ PERF FIX: give the event loop a breather between batches so
+                # other users' requests / Koyeb's health checks don't stall
+                # during large indexing jobs.
+                await asyncio.sleep(0.1)
                 for result in results:
                     if isinstance(result, Exception):
                         errors += 1
@@ -256,4 +260,3 @@ async def index_files_to_db(lst_msg_id, chat, msg, bot):
                 f"❌ Error: <code>{e}</code>",
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('Close', callback_data='close_data')]])
             )
-
