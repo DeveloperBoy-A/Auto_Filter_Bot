@@ -153,8 +153,6 @@ def extract_quality_info(filename: str, caption: str = "") -> dict:
         info["resolution"] = res
         info["resolution_score"] = score
 
-    # Score is retained for reporting only.
-    # It is NOT used as a deletion decision.
     info["quality_score"] = (
         info["source_score"] * 0.7 +
         info["resolution_score"] * 0.3
@@ -183,6 +181,7 @@ def is_high_quality(quality_info: dict) -> bool:
 def get_base_title(filename: str) -> str:
     """
     Conservative canonical title extraction.
+    - Years are STRIPPED from here because they are matched independently.
     """
     text = (filename or "").strip().lower()
 
@@ -193,7 +192,6 @@ def get_base_title(filename: str) -> str:
         flags=re.I,
     )
 
-    # URLs / @handles
     text = re.sub(
         r"https?://\S+|www\.\S+|@\S+",
         " ",
@@ -201,19 +199,14 @@ def get_base_title(filename: str) -> str:
         flags=re.I,
     )
 
-    # Bracketed release metadata.
-    # Preserve a standalone year such as (2026).
-    text = re.sub(
-        r"\[(?:[^\]]*)\]|\((?!(?:19|20)\d{2}\s*$)[^\)]*\)|\{[^\}]*\}",
-        " ",
-        text,
-        flags=re.I,
-    )
+    text = re.sub(r"\[[^\]]*\]|\{[^\}]*\}", " ", text)
+    text = re.sub(r"\((?!(?:19|20)\d{2}\))[^\)]*\)", " ", text)
+    text = re.sub(r"[\[\]\(\)\{\}]", " ", text)
 
-    # Normalize separators.
+    text = re.sub(r"\b(?:19|20)\d{2}\b", " ", text)
+
     text = re.sub(r"[._\-–—]+", " ", text)
 
-    # Remove season/episode markers.
     patterns = [
         r"\bs\d{1,2}\s*e\d{1,3}(?:\s*(?:to|-)\s*e?\d{1,3})?\b",
         r"\bs\d{1,2}\b",
@@ -225,7 +218,6 @@ def get_base_title(filename: str) -> str:
     for pattern in patterns:
         text = re.sub(pattern, " ", text, flags=re.I)
 
-    # Remove quality/resolution tokens from title only.
     for q in QUALITY_ALIASES + RESOLUTION_ALIASES:
         text = re.sub(
             rf"(?<![a-z0-9]){re.escape(q)}(?![a-z0-9])",
@@ -234,7 +226,6 @@ def get_base_title(filename: str) -> str:
             flags=re.I,
         )
 
-    # Remove codecs / release metadata / language / platforms.
     noise_pattern = (
         r"\b(?:hevc|x265|x264|h264|avc|av1|aac|flac|dts|ac3|eac3|"
         r"ddp(?:5\.1)?|dd(?:5\.1)?|5\.1|7\.1|2\.0|"
@@ -246,20 +237,12 @@ def get_base_title(filename: str) -> str:
         r"hi|en|ta|te|ml|kn|pa|bn|mr|gu|"
         r"nf|netflix|amzn|amazon|prime|primevideo|sonyliv|sony|sliv|"
         r"hotstar|jio|jhs|zee5|aha|hbo|max|paramount|apple|hoichoi|"
-        r"sunnxt|viki|movies4u|telly|tokyo_updates|tokyoupdates)\b"
+        r"sunnxt|viki|movies4u|tokyo|updates|telly|www|"
+        r"web|dl|rip|ray|blu|bd|br|cam|tc|ts|hd|dvd|scr|tv|pre)\b"
     )
 
     text = re.sub(noise_pattern, " ", text, flags=re.I)
 
-    # Standalone release-group tokens.
-    text = re.sub(
-        r"\b(?:web|dl|rip|bluray|bdrip|brrip|hdrip|dvdrip|dvdscr)\b",
-        " ",
-        text,
-        flags=re.I,
-    )
-
-    # Keep alphanumeric + Devanagari.
     text = re.sub(
         r"[^a-z0-9\u0900-\u097f]+",
         " ",
@@ -297,28 +280,33 @@ def _extract_year(title: str) -> Optional[str]:
 
 def same_movie_title(title_a: str, title_b: str) -> bool:
     """
-    Relaxed title comparison for better matching results.
+    STRICT TITLE MATCHING
+    - Pura movie naam match hona chahiye.
+    - Saal (Year) bhi same hona chahiye.
+    - Aadha-adhura naam match nahi hoga.
     """
+    year_a = _extract_year(title_a)
+    year_b = _extract_year(title_b)
+
+    # Strict Year Match: Agar saal alag hai, turant reject karega.
+    if year_a and year_b and year_a != year_b:
+        return False
+
     a = get_base_title(title_a)
     b = get_base_title(title_b)
 
     if not a or not b:
         return False
 
-    # Extract year from original titles, not base titles
-    year_a = _extract_year(title_a)
-    year_b = _extract_year(title_b)
-
-    if year_a and year_b and year_a != year_b:
-        return False
-
+    # Exact Match (100% same base title)
     if a == b:
         return True
 
     ta = set(_title_tokens(a))
     tb = set(_title_tokens(b))
 
-    if not ta or not tb:
+    # Strict condition: Agar naam exactly same nahi hai, toh kam se kam 2 words hone chahiye check karne ke liye.
+    if len(ta) < 2 or len(tb) < 2:
         return False
 
     intersection = ta & tb
@@ -327,8 +315,10 @@ def same_movie_title(title_a: str, title_b: str) -> bool:
     jaccard = len(intersection) / len(union) if union else 0
     ratio = SequenceMatcher(None, a, b).ratio()
 
-    # Relaxed matching logic to get more results
-    if jaccard >= 0.60 or ratio >= 0.80:
+    # STRICT MATCHING RULES:
+    # Jaccard >= 0.85 (85% words exact same hone chahiye)
+    # Ratio >= 0.90 (Text 90% same hona chahiye, minor typing mistake chalegi bas)
+    if jaccard >= 0.85 and ratio >= 0.90:
         return True
 
     return False
@@ -341,14 +331,11 @@ def languages_match(old_langs, new_langs) -> bool:
     old_set = set(old_langs or [])
     new_set = set(new_langs or [])
 
-    # Unknown language is never safe for automatic deletion.
     if "unknown" in old_set:
         return False
-
     if "unknown" in new_set:
         return False
-
-    # Existing language(s) must be represented in new file.
+        
     return old_set <= new_set
 
 
@@ -362,24 +349,12 @@ def _quality_score(source: str) -> int:
     )
 
 
-def _resolution_score(resolution: str) -> int:
-    # Reporting/helper only.
-    # NEVER use this for deletion.
-    return RESOLUTION_HIERARCHY.get(
-        (resolution or "").lower().strip(),
-        0,
-    )
-
-
 def should_delete_existing(
     existing_quality: dict,
     new_quality: dict,
     existing_langs: List[str],
     new_langs: List[str],
 ) -> bool:
-    """
-    AUTOMATIC DELETE RULES:
-    """
     try:
         old_source = (existing_quality.get("source") or "").lower().strip()
         new_source = (new_quality.get("source") or "").lower().strip()
@@ -422,62 +397,10 @@ def should_delete_existing(
         return False
 
 
-def can_delete_quality_file(
-    file_quality,
-    file_langs,
-    all_files,
-) -> bool:
-    """
-    Manual/helper decision.
-    """
-    source = (file_quality or "").lower().strip()
-
-    if not source:
-        return False
-
-    if source in HIGH_QUALITY_SOURCES:
-        return False
-
-    if (
-        source not in LOW_QUALITY_SOURCES
-        and source not in MEDIUM_QUALITY_SOURCES
-    ):
-        return False
-
-    old_q = _quality_score(source)
-
-    for better in all_files:
-        better_source = (
-            better.get("quality") or ""
-        ).lower().strip()
-
-        if not better_source:
-            continue
-
-        if better_source not in QUALITY_HIERARCHY:
-            continue
-
-        if not languages_match(
-            file_langs,
-            better.get("languages", []),
-        ):
-            continue
-
-        new_q = _quality_score(better_source)
-
-        if new_q > old_q:
-            return True
-
-    return False
-
-
 def should_delete_file_against_files(
     current: dict,
     all_files: List[dict],
 ) -> bool:
-    """
-    Main manual/batch decision.
-    """
     source = (current.get("quality") or "").lower().strip()
 
     if source in HIGH_QUALITY_SOURCES:
@@ -606,78 +529,42 @@ async def find_and_delete_lower_quality(
             async for file_in_db in cursor:
                 processed += 1
 
-                existing_filename = file_in_db.get(
-                    "file_name",
-                    "",
-                )
-                existing_caption = (
-                    file_in_db.get("caption", "") or ""
-                )
+                existing_filename = file_in_db.get("file_name", "")
+                existing_caption = file_in_db.get("caption", "") or ""
 
-                if not same_movie_title(
-                    new_filename,
-                    existing_filename,
-                ):
+                if not same_movie_title(new_filename, existing_filename):
                     await quality_yield(processed, 50)
                     continue
 
-                existing_quality = extract_quality_info(
-                    existing_filename,
-                    existing_caption,
-                )
+                existing_quality = extract_quality_info(existing_filename, existing_caption)
+                existing_source = (existing_quality.get("source") or "").lower().strip()
 
-                existing_source = (
-                    existing_quality.get("source") or ""
-                ).lower().strip()
-
-                if not existing_source:
+                if not existing_source or existing_source in HIGH_QUALITY_SOURCES:
                     await quality_yield(processed, 50)
                     continue
 
-                if existing_source in HIGH_QUALITY_SOURCES:
+                existing_langs = extract_language(f"{existing_filename} {existing_caption}")
+
+                if not languages_match(existing_langs, new_langs):
                     await quality_yield(processed, 50)
                     continue
 
-                existing_langs = extract_language(
-                    f"{existing_filename} {existing_caption}"
-                )
-
-                if not languages_match(
-                    existing_langs,
-                    new_langs,
-                ):
-                    await quality_yield(processed, 50)
-                    continue
-
-                if not should_delete_existing(
-                    existing_quality,
-                    new_quality,
-                    existing_langs,
-                    new_langs,
-                ):
+                if not should_delete_existing(existing_quality, new_quality, existing_langs, new_langs):
                     await quality_yield(processed, 50)
                     continue
 
                 try:
-                    result = await db_collection.delete_one(
-                        {"_id": file_in_db["_id"]}
-                    )
-
+                    result = await db_collection.delete_one({"_id": file_in_db["_id"]})
                     if result.deleted_count:
                         deleted_count += 1
-
                         logger.warning(
                             "[QUALITY] Deleted %s: %s -> %s",
                             existing_source.upper(),
                             existing_filename[:100],
                             new_source.upper(),
                         )
-
                 except Exception as e:
-                    logger.error(
-                        "[QUALITY] Delete error: %s",
-                        e,
-                    )
+                    logger.error("[QUALITY] Delete error: %s", e)
 
                 await quality_yield(processed, 50)
 
@@ -688,25 +575,15 @@ async def find_and_delete_lower_quality(
                 pass
 
         if deleted_count:
-            return (
-                True,
-                f"Deleted {deleted_count} lower-quality files",
-            )
+            return True, f"Deleted {deleted_count} lower-quality files"
 
         return True, "No lower quality files"
 
     except Exception as e:
-        logger.error(
-            "[QUALITY] find_and_delete error: %s",
-            e,
-            exc_info=True,
-        )
+        logger.error("[QUALITY] find_and_delete error: %s", e, exc_info=True)
         return False, str(e)
 
 
-# =========================================================
-# BACKGROUND AUTO CLEANUP
-# =========================================================
 async def run_quality_cleanup_background(
     media_dbs,
     file_name: str,
@@ -714,10 +591,7 @@ async def run_quality_cleanup_background(
 ):
     async with QUALITY_CLEANUP_SEMAPHORE:
         try:
-            for idx, media_cls in enumerate(
-                media_dbs,
-                start=1,
-            ):
+            for idx, media_cls in enumerate(media_dbs, start=1):
                 success, msg = await find_and_delete_lower_quality(
                     db_collection=media_cls.collection,
                     new_filename=file_name,
@@ -731,7 +605,6 @@ async def run_quality_cleanup_background(
                         file_name[:60],
                         msg,
                     )
-
         except Exception as e:
             logger.error(
                 "[QUALITY] Background cleanup failed: %s",
@@ -749,7 +622,6 @@ async def stream_collection_files(
     projection=None,
     batch_size=1000,
 ):
-    # MongoDB Pre-Filtering to prevent full DB scan memory issues
     quality_keywords = (
         "camrip|hdcam|hdtc|hdts|telesync|predvd|dvdscr|dvdrip|"
         "tvrip|hdtv|webrip|web-dl|webdl|hdrip|bluray|bdrip|brrip"
@@ -769,7 +641,6 @@ async def stream_collection_files(
     )
 
     counter = 0
-
     try:
         async for document in cursor:
             if CANCEL_Q_TASKS.get(task_id):
@@ -778,10 +649,8 @@ async def stream_collection_files(
             counter += 1
             yield document
 
-            # Free the event loop frequently
             if counter % 50 == 0:
                 await asyncio.sleep(0.01)
-
     finally:
         try:
             await cursor.close()
@@ -853,7 +722,6 @@ async def build_movie_groups(
         if count % 50 == 0:
             await asyncio.sleep(0.01)
 
-        # Progress Bar mapping: exactly every 200 files
         if msg and count % 200 == 0:
             percent = (
                 count / total_docs * 100
@@ -883,7 +751,6 @@ async def build_movie_groups(
                     f"{delete_text}",
                     reply_markup=cancel_markup,
                 )
-
             except Exception:
                 pass
 
@@ -964,7 +831,6 @@ async def find_single_movie_files(
     if not words:
         return []
 
-    # Optimized pattern: Removed \b to prevent failure on symbols
     pattern = ".*".join(
         re.escape(w)
         for w in words[:3]
@@ -1006,7 +872,6 @@ async def find_single_movie_files(
 
             if processed % 50 == 0:
                 await asyncio.sleep(0.01)
-
     finally:
         try:
             await cursor.close()
@@ -1340,7 +1205,6 @@ async def quality_report_cmd(
                         if processed % 50 == 0:
                             await asyncio.sleep(0.01)
 
-                        # Progress Bar mapping: exactly every 200 files
                         if processed % 200 == 0:
                             percent = (
                                 processed /
@@ -2250,7 +2114,7 @@ async def cleanup_confirm_batch_cmd(
 
 
 # =========================================================
-# /CLEANUP_DRY_YEAR (NEW)
+# /CLEANUP_DRY_YEAR
 # =========================================================
 @Client.on_message(
     filters.command("cleanup_dry_year")
@@ -2446,7 +2310,7 @@ async def cleanup_dry_year_cmd(
 
 
 # =========================================================
-# /CLEANUP_CONFIRM_YEAR (NEW)
+# /CLEANUP_CONFIRM_YEAR
 # =========================================================
 @Client.on_message(
     filters.command("cleanup_confirm_year")
