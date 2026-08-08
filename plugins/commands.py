@@ -1442,7 +1442,7 @@ async def reset_trial(client, message):
 
 from motor.motor_asyncio import AsyncIOMotorClient
 
-@Client.on_message(filters.command("cleandb") & filters.user(ADMINS))
+@Client.on_message(filters.command("old_cleandb") & filters.user(ADMINS))
 async def clean_db_command(client, message):
     await message.reply_text("🧹 Cleaning database(s)... Please wait ⏳")
 
@@ -1471,3 +1471,92 @@ async def clean_db_command(client, message):
     except Exception as e:
         await message.reply_text(f"❌ <b>Error while cleaning DB:</b>\n<code>{e}</code>")
 
+
+
+@Client.on_message(filters.command("cleandb") & filters.user(ADMINS))
+async def clean_db_command(client, message):
+    status_msg = await message.reply_text(
+        "🧹 <b>Cleaning database(s)...</b>\n"
+        "⏳ Please wait..."
+    )
+
+    try:
+        fields_to_unset = {
+            "file_ref": "",
+            "file_type": "",
+            "mime_type": "",
+            "caption": ""
+        }
+
+        summary = []
+
+        # Small batches to reduce MongoDB update pressure
+        BATCH_SIZE = 100
+
+        # Clean every configured DB (1 to 5)
+        for idx, media_cls in enumerate(MEDIA_DBS, start=1):
+            collection = media_cls.collection
+
+            total_matched = 0
+            total_modified = 0
+
+            while True:
+                # Only find documents which actually contain
+                # at least one field that needs to be removed.
+                docs = await collection.find(
+                    {
+                        "$or": [
+                            {"file_ref": {"$exists": True}},
+                            {"file_type": {"$exists": True}},
+                            {"mime_type": {"$exists": True}},
+                            {"caption": {"$exists": True}}
+                        ]
+                    },
+                    {"_id": 1}
+                ).limit(BATCH_SIZE).to_list(length=BATCH_SIZE)
+
+                if not docs:
+                    break
+
+                ids = [doc["_id"] for doc in docs]
+
+                result = await collection.update_many(
+                    {"_id": {"$in": ids}},
+                    {"$unset": fields_to_unset}
+                )
+
+                total_matched += result.matched_count
+                total_modified += result.modified_count
+
+                # Give MongoDB a little breathing room
+                await asyncio.sleep(0.1)
+
+                # Safety: avoid infinite loop
+                if result.modified_count == 0:
+                    break
+
+            summary.append(
+                f"🗃️ DB{idx} — "
+                f"Matched: <code>{total_matched}</code>, "
+                f"Modified: <code>{total_modified}</code>"
+            )
+
+        if len(MEDIA_DBS) == 1:
+            summary.append(
+                "⚙️ MULTIPLE_DB = False → "
+                "Sirf DB1 configured/cleaned hua."
+            )
+
+        await status_msg.edit_text(
+            "✅ <b>Cleanup Complete!</b>\n\n"
+            + "\n".join(summary)
+            + "\n\n"
+            "📌 Files/documents delete nahi kiye gaye.\n"
+            "🧹 Sirf unnecessary fields remove ki gayi hain."
+        )
+
+    except Exception as e:
+        await status_msg.edit_text(
+            "❌ <b>Error while cleaning DB:</b>\n"
+            f"<code>{e}</code>"
+        )
