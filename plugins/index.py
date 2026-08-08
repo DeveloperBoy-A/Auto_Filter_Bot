@@ -205,7 +205,9 @@ async def index_files_to_db(lst_msg_id, chat, msg, bot):
                     if isinstance(result, Exception):
                         errors += 1
                     else:
-                        ok, code = result
+                        # ✅ FIX: save_file ab 3 values deta hai (real filename bhi),
+                        # bulk indexing me filename ki zaroorat nahi to ignore kar dete hain
+                        ok, code, _real_name = result
                         if ok:
                             total_files += 1
                         elif code == 0:
