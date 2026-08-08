@@ -213,49 +213,73 @@ async def get_movie_detailsx(query, id=False, file=None):
         logger.error(f"API down → fallback IMDb: {e}")
         return await get_movie_details(q)
 
-    # Normalize fields
-    details = {}
-    details['title'] = data.get('title') or data.get('localized_title')
-    details['year'] = (data.get('year', 0)) if data.get('year') else None
-    details['release_date'] = data.get('release_date')
-    details['rating'] = round(float(data.get('rating', 0)), 1) if data.get('rating') is not None else None
-    details['votes'] = int(data.get('votes', 0))
-    details['runtime'] = data.get('runtime')
-    details['certificates'] = data.get('certificates')
-    details['tmdb_url'] = data.get('url')
+    # ✅ FIX: Ab poori normalization try/except ke andar hai. Pehle 'votes' field
+    # crash kar sakta tha (agar API "votes": null bheje), aur crash try/except ke
+    # BAHAR hone ki wajah se IMDb fallback tak kabhi pahunchta hi nahi tha — isliye
+    # kai baar poster hi missing aata tha. Ab koi bhi parsing error ho, IMDb fallback
+    # zaroor try hoga.
+    try:
+        # Normalize fields
+        details = {}
+        details['title'] = data.get('title') or data.get('localized_title')
+        details['year'] = data.get('year') or None
+        details['release_date'] = data.get('release_date')
+        details['rating'] = round(float(data.get('rating') or 0), 1) if data.get('rating') is not None else None
+        # ✅ FIX: 'votes' None hone par crash nahi hoga ab
+        details['votes'] = int(data.get('votes') or 0)
+        details['runtime'] = data.get('runtime')
+        details['certificates'] = data.get('certificates')
+        details['tmdb_url'] = data.get('url')
 
-    for key in ('genres', 'languages', 'countries'):
-        raw = data.get(key)
-        details[key] = [s.strip() for s in raw.split(',')] if raw else []
-    for role in ('director', 'writer', 'producer', 'composer', 'cinematographer', 'cast'):
-        raw = data.get(role)
-        details[role] = [s.strip() for s in raw.split(',')] if raw else []
+        for key in ('genres', 'languages', 'countries'):
+            raw = data.get(key)
+            details[key] = [s.strip() for s in raw.split(',')] if raw else []
+        for role in ('director', 'writer', 'producer', 'composer', 'cinematographer', 'cast'):
+            raw = data.get(role)
+            details[role] = [s.strip() for s in raw.split(',')] if raw else []
 
-    details['plot'] = data.get('plot')
-    details['tagline'] = data.get('tagline')
-    details['box_office'] = (data.get('box_office', 0)) if data.get('box_office') else None
-    raw_dist = data.get('distributors')
-    details['distributors'] = [d.strip() for d in raw_dist.split(',')] if raw_dist else []
-    details['imdb_id'] = data.get('imdb_id')
-    details['tmdb_id'] = data.get('tmdb_id')
+        details['plot'] = data.get('plot')
+        details['tagline'] = data.get('tagline')
+        details['box_office'] = data.get('box_office') or None
+        raw_dist = data.get('distributors')
+        details['distributors'] = [d.strip() for d in raw_dist.split(',')] if raw_dist else []
+        details['imdb_id'] = data.get('imdb_id')
+        details['tmdb_id'] = data.get('tmdb_id')
 
-    posters = data.get('images', {}).get('posters', {})
-    original_language = data.get('images', {}).get('original_language')
-    poster_url = data.get('poster_url')
-    if not poster_url:
-        for key in ('en', original_language, 'xx'):
-            if key and posters.get(key):
-                poster_url = posters[key][0]
-                break
-    details['poster_url'] = poster_url.replace("/original/", "/w1280/") if poster_url else None
+        posters = data.get('images', {}).get('posters', {})
+        original_language = data.get('images', {}).get('original_language')
+        poster_url = data.get('poster_url')
+        if not poster_url:
+            for key in ('en', original_language, 'xx'):
+                if key and posters.get(key):
+                    poster_url = posters[key][0]
+                    break
+        details['poster_url'] = poster_url.replace("/original/", "/w1280/") if poster_url else None
+    except Exception as e:
+        logger.error(f"Failed to parse TMDB response for '{q}', falling back to IMDb: {e}")
+        return await get_movie_details(q)
 
     backdrops = data.get('images', {}).get('backdrops', {})
     original_language = data.get('images', {}).get('original_language')
     backdrop_url = None
-    for key in ('en', original_language, 'xx' or 'no_lang'):
+    # ✅ FIX: 'xx' or 'no_lang' hamesha 'xx' hi banta tha (dead code) — clean kar diya
+    for key in ('en', original_language, 'xx'):
         if key and backdrops.get(key):
             backdrop_url = backdrops[key][0]
             break
     details['backdrop_url'] = backdrop_url.replace("/original/", "/w1280/") if backdrop_url else None
+
+    # ✅ FIX: "real poster aana hi chahiye" — agar TMDB se poster/backdrop dono nahi
+    # mile (API success hui par data khaali tha), to IMDb se poster try karo aur
+    # sirf poster_url (aur zaroorat pade to backdrop) us par se le lo, baaki saari
+    # rich TMDB details (cast, genres, plot, etc.) waisi hi rakho.
+    if not details.get('poster_url') and not details.get('backdrop_url'):
+        try:
+            imdb_details = await get_movie_details(q)
+            if imdb_details and imdb_details.get('poster_url'):
+                details['poster_url'] = imdb_details['poster_url']
+                logger.info(f"[POSTER] TMDB se poster nahi mila, IMDb se liya: '{q}'")
+        except Exception as e:
+            logger.warning(f"IMDb poster fallback failed for '{q}': {e}")
 
     return details
