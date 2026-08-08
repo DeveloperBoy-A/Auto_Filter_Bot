@@ -528,11 +528,11 @@ def extract_pure_title(original_name):
     clean_name = re.sub(r'^@\w+[\s_\-–]*', '', clean_name).strip()
     clean_name = re.sub(r'[@\[\]\(\)_]+', ' ', clean_name)
     clean_name = re.sub(r"[._\-]+", " ", clean_name)
-    
+
     # URL aur Telegram links ko udana
     clean_name = re.sub(r'(?:https?://)?(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*)', '', clean_name, flags=re.IGNORECASE)
     clean_name = re.sub(r't\.me/[a-zA-Z0-9_]+', '', clean_name, flags=re.IGNORECASE)
-    
+
     # Bewajah ke "Movie" ya "Video" words udana
     clean_name = re.sub(r'\b(full|hindi|tamil|english|telugu|malayalam|kannada|bengali|new|latest|hd|mp4)\s+(movie|video)\b', '', clean_name, flags=re.IGNORECASE).strip()
     clean_name = re.sub(r'\b(web[\s\-]?series|tv[\s\-]?series)\b', '', clean_name, flags=re.IGNORECASE).strip()
@@ -647,10 +647,10 @@ def normalize_season_episode(text):
     text = text.lower()
 
     # ===== SEASON + EPISODE RANGES =====
-    
+
     # S02.E01 -> S02 E01
     text = re.sub(r'\bs(\d{1,2})\.e(\d{1,4})\b', r's\1 e\2', text)
-    
+
     # ✨ NEW: S01E01 to S01E10 / S01E01-S01E10 (full SxxExx repeated on both
     # bounds of the range, optionally joined by "to"/"and"/"&"). Previously
     # unhandled -> only the first SxxExx got captured, and the leftover
@@ -661,19 +661,19 @@ def normalize_season_episode(text):
     # S02E01E04 or S02_E01_E04 or S02-E01-E04 or S02E01~E04
     text = re.sub(r'\bs(\d{1,2})[\s\-_~]*e(\d{1,4})[\s\-_~]*e(\d{1,4})\b', 
                   lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}-{int(m.group(3)):02d}", text)
-    
+
     # S02 E01 to E04 / S02 E01 and E04 / S02 E01 & E04
     text = re.sub(r'\bs(\d{1,2})[\s\-_]*e(\d{1,4})[\s\-_]*(?:to|&|and)[\s\-_]*e?(\d{1,4})\b', 
                   lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}-{int(m.group(3)):02d}", text)
-    
+
     # S02-E01-E04 (multiple separators)
     text = re.sub(r'\bs(\d{1,2})[\s\-_]+e(\d{1,4})[\s\-_]+e?(\d{1,4})\b', 
                   lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}-{int(m.group(3)):02d}", text)
-    
+
     # 2x01-04 or 2x01 04
     text = re.sub(r'\b(\d{1,2})[xX](\d{1,4})[\s\-_]+(?:\d{1,2}[xX])?(\d{1,4})\b', 
                   lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}-{int(m.group(3)):02d}", text)
-    
+
     # ✨ NEW: word-form season range — "Season 1 to Season 3", "Season 1-3"
     text = re.sub(r'\bseason[\s\-_]*(\d{1,2})[\s\-_~]+(?:to|and|&)?[\s\-_~]*(?:season[\s\-_]*)?(\d{1,2})\b',
                   lambda m: f"s{int(m.group(1)):02d}-{int(m.group(2)):02d}", text)
@@ -682,17 +682,17 @@ def normalize_season_episode(text):
     # tilde as a separator, e.g. "S01 to S03", "S01~S03".
     text = re.sub(r'\bs(\d{1,2})[\s\-_~]+(?:to|and|&)?[\s\-_~]*s?(\d{1,2})\b', 
                   lambda m: f"s{int(m.group(1)):02d}-{int(m.group(2)):02d}", text)
-    
+
     # ===== EPISODE RANGES =====
-    
+
     # ✨ E01TE04 or E01T04 (T for "to") - NEW PATTERN
     text = re.sub(r'\be(\d{1,4})[tT]e?(\d{1,4})\b', 
                   lambda m: f"e{int(m.group(1)):02d}-{int(m.group(2)):02d}", text)
-    
+
     # ✨ E01_E04 or E01-E04 with underscore/dash - NEW PATTERN
     text = re.sub(r'\be(\d{1,4})[\s\-_]e(\d{1,4})\b', 
                   lambda m: f"e{int(m.group(1)):02d}-{int(m.group(2)):02d}", text)
-    
+
     # ✨ FIX: EP01-EP10 / EP01 TO EP10 (repeated "ep" prefix on both bounds) —
     # previously unhandled, so ranges like this fell through to the single-ep
     # rules below and got mangled into two separate bogus fragments.
@@ -710,27 +710,27 @@ def normalize_season_episode(text):
     # separator, so a standalone episode number is never split.
     text = re.sub(r'\bep(?:isode)?[\s\-_]*\(?(\d{1,4})(?:[\s\-–~]+(?:to|and|&)?[\s\-–~]*(\d{1,4}))?\)?\b', 
                   lambda m: f"e{int(m.group(1)):02d}-{int(m.group(2)):02d}" if m.group(2) else f"e{int(m.group(1)):02d}", text)
-    
+
     # e01-e04 or e01 to e04 or e01~e04 — same fix as above.
     text = re.sub(r'\be(\d{1,4})(?:[\s\-–~]+(?:to|and|&)?[\s\-–~]*e?(\d{1,4}))?\b', 
                   lambda m: f"e{int(m.group(1)):02d}-{int(m.group(2)):02d}" if m.group(2) else f"e{int(m.group(1)):02d}", text)
-    
+
     # 01-04 (only if both numbers < 60)
     text = re.sub(r'\b(\d{2})[\s\-–]+(\d{2})\b', 
                   lambda m: f"e{int(m.group(1)):02d}-{int(m.group(2)):02d}" if int(m.group(1)) < 60 and int(m.group(2)) < 60 else m.group(0), text)
-    
+
     # 2x01
     text = re.sub(r'\b(\d{1,2})[xX](\d{1,4})\b', 
                   lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}", text)
-    
+
     # ===== STANDALONE PATTERNS =====
-    
+
     # Season (season 2, s 2, season2, s2)
     text = re.sub(r'\b(?:season)[\s\-_]*(\d{1,2})\b', 
                   lambda m: f"s{int(m.group(1)):02d}", text)
     text = re.sub(r'\bs[\s\-_]*(\d{1,2})\b', 
                   lambda m: f"s{int(m.group(1)):02d}", text)
-    
+
     # Episode (episode 5, ep 5, e 5, episode5)
     text = re.sub(r'\b(?:episode)[\s\-_]*(\d{1,4})\b', 
                   lambda m: f"e{int(m.group(1)):02d}", text)
@@ -738,12 +738,12 @@ def normalize_season_episode(text):
                   lambda m: f"e{int(m.group(1)):02d}", text)
     text = re.sub(r'\be[\s\-_]*(\d{1,4})\b', 
                   lambda m: f"e{int(m.group(1)):02d}", text)
-    
+
     # ===== FINAL CLEANUP =====
-    
+
     text = re.sub(r'\bs(\d{2})e(\d{2,4})\b', r's\1 e\2', text)
     text = re.sub(r'\s+', ' ', text).strip()
-    
+
     return text.upper()
 
 
@@ -751,7 +751,7 @@ def normalize_season_episode(text):
 
 def extract_episode_title(text):
     text = re.sub(r'\.[a-z0-9]{2,4}$', '', text, flags=re.IGNORECASE)
-    
+
     # Aur jyada strict stop words aur emojis add kiye
     stop_keywords = [
         r'19\d{2}', r'20\d{2}', r'2160p', r'1080p', r'720p', r'480p',
@@ -760,7 +760,7 @@ def extract_episode_title(text):
         r'dual', r'multi', r'combined', r'complete', r'jhs', r'netflix', r'amazon', r'🗃️'
     ]
     stop_pattern = '|'.join(stop_keywords)
-    
+
     # 🗃️ emoji aur ajeeb symbols par turant ruk jayega
     lookahead = rf'(?=\b(?:{stop_pattern})\b|$|\[|\(|@|🗃️)'
 
@@ -780,7 +780,7 @@ def extract_episode_title(text):
         if match:
             title = match.group(1)
             title = re.sub(r'[\s._\-()\[\]]+', ' ', title).strip()
-            
+
             # Agar title mein sirf numbers ya symbols bhare hain, toh usko ignore karo
             if len(title) > 2 and not re.fullmatch(r'[\d\s\-🗃️]+', title):
                 # ✅ FIX: Reject leftover range/connector junk like "25 To 25",
@@ -1117,7 +1117,11 @@ async def save_file(media, bot=None, extracted_info=None):  # ✅ NEW: Added ext
 
         text_to_scan = f"{original_name} {getattr(media, 'caption', '') or ''}"
 
-        extracted = extract_languages_quality(text_to_scan)
+        # ⚡ PERF FIX: extract_languages_quality is a heavy chain of 30+ regex
+        # substitutions. Running it directly here blocks the event loop and
+        # spikes CPU to 100% during uploads/bulk indexing (freezes the whole
+        # bot for other users). Offload it to a worker thread instead.
+        extracted = await asyncio.to_thread(extract_languages_quality, text_to_scan)
 
         # ✅ FIX #2: Use pre-extracted language info if available
         # This ensures language from caption is properly saved to database
@@ -1150,7 +1154,9 @@ async def save_file(media, bot=None, extracted_info=None):  # ✅ NEW: Added ext
                 audio_tags.append("AAC")
             extracted["extra_tags"] = audio_tags
 
-        cleaned_title = extract_pure_title(base_name)
+        # ⚡ PERF FIX: same reasoning as above — extract_pure_title also runs a
+        # long regex chain, so keep it off the event loop too.
+        cleaned_title = await asyncio.to_thread(extract_pure_title, base_name)
 
         formatted_words = []
         for word in cleaned_title.split():
