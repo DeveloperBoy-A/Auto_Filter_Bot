@@ -73,14 +73,16 @@ class script(object):
 │
 """
 
-    # {0}=db number, {1}=file count, {2}=used storage, {3}=cluster storage, {4}=free storage
+    # {0}=db number, {1}=file count, {2}=storage used by files themselves,
+    # {3}=true total cluster usage, {4}=cluster storage cap, {5}=free storage,
+    # {6}=warning line (empty if under threshold)
     MULTI_STATUS_DB_BLOCK_TXT = """├────[ 🗃 ᴅᴀᴛᴀʙᴀsᴇ {0} 🗃 ]────⍟
 │
 ├⋟ ᴀʟʟ ꜰɪʟᴇs ⋟ {1}
-├⋟ ᴜsᴇᴅ sᴛᴏʀᴀɢᴇ ⋟ {2}
-├⋟ ᴄʟᴜsᴛᴇʀ sᴛᴏʀᴀɢᴇ ⋟ {3}
-├⋟ ꜰʀᴇᴇ sᴛᴏʀᴀɢᴇ ⋟ {4}
-│
+├⋟ ꜰɪʟᴇs sᴛᴏʀᴀɢᴇ ⋟ {2}
+├⋟ ᴛᴏᴛᴀʟ ᴜsᴇᴅ ⋟ {3} / {4}
+├⋟ ꜰʀᴇᴇ sᴛᴏʀᴀɢᴇ ⋟ {5}
+{6}│
 """
 
     # {0}=uptime, {1}=ram%, {2}=cpu%, {3}=grand total files across all DBs
@@ -104,15 +106,15 @@ class script(object):
 ├────[ 🗃 ᴅᴀᴛᴀʙᴀsᴇ 🗃 ]────⍟
 │
 ├⋟ ᴀʟʟ ꜰɪʟᴇs ⋟ {3}
-├⋟ ᴜsᴇᴅ sᴛᴏʀᴀɢᴇ ⋟ {4}
-├⋟ ᴄʟᴜsᴛᴇʀ sᴛᴏʀᴀɢᴇ - {5}
-├⋟ ꜰʀᴇᴇ sᴛᴏʀᴀɢᴇ ⋟ {6}
-│
+├⋟ ꜰɪʟᴇs sᴛᴏʀᴀɢᴇ ⋟ {4}
+├⋟ ᴛᴏᴛᴀʟ ᴜsᴇᴅ ⋟ {5} / {6}
+├⋟ ꜰʀᴇᴇ sᴛᴏʀᴀɢᴇ ⋟ {7}
+{11}│
 ├────[ 🤖 ʙᴏᴛ ᴅᴇᴛᴀɪʟs 🤖 ]────⍟   
 │
-├⋟ ᴜᴘᴛɪᴍᴇ ⋟ {7}
-├⋟ ʀᴀᴍ ⋟ {8}%
-├⋟ ᴄᴘᴜ ⋟ {9}%   
+├⋟ ᴜᴘᴛɪᴍᴇ ⋟ {8}
+├⋟ ʀᴀᴍ ⋟ {9}%
+├⋟ ᴄᴘᴜ ⋟ {10}%   
 │
 ╰─────────────────────⍟</b>"""
 
@@ -260,7 +262,7 @@ Mᴇꜱꜱᴀɢᴇ : <code>{}</code>"""
 
 
     MOVIE_UPDATE_NOTIFY_TXT = """
-<b>📌𝑵𝒆𝒘 𝑭𝒊𝒍𝒆 𝑼𝒑𝒍𝒐𝒂𝒅✓\n<code>【{filename}】</code></b> ✅
+<b><a href="{poster_url}">📌𝑵𝒆𝒘 𝑭𝒊𝒍𝒆 𝑼𝒑𝒍𝒐𝒂𝒅✓</a><a href="{imdb_url}">🆕</a></b>\n <b><code>【{filename}】</code></b> ✅
 
 🎭 𝑮𝒆𝒏𝒓𝒆𝒔 : <b>{genres}</b>
 📺 𝑶𝑻𝑻 : <b>{ott}</b>
@@ -530,19 +532,6 @@ This Is An Open-Source Project. You Can Use It Freely, But Selling The Source Co
 • /get_premium - <code>ɢᴇᴛ ɪɴꜰᴏ ᴏꜰ ᴀɴʏ ᴘʀᴇᴍɪᴜᴍ ᴜꜱᴇʀ.</code>
 • /restart - <code>ʀᴇꜱᴛᴀʀᴛ ᴛʜᴇ ʙᴏᴛ.</code>"""
 
-    # ============================
-    # Daily Download Limit System
-    # ============================
-    DOWNLOAD_LIMIT_TXT = """🚫 <b>Daily download limit reached.</b>
-
-📦 Free users can download only <b>{0}</b> files every 24 hours.
-
-💎 Upgrade to Premium for unlimited downloads.
-
-📦 Remaining limit: <b>0/{0}</b>"""
-
-    REMAINING_LIMIT_TXT = """📦 Remaining limit: <b>{}/{}</b>"""
-
     GROUP_CMD = """ʜᴇʏ 👋,
 📚 ʜᴇʀᴇ ᴀʀᴇ ᴍʏ ᴄᴏᴍᴍᴀɴᴅꜱ ʟɪꜱᴛ ꜰᴏʀ ᴄᴜꜱᴛᴏᴍɪᴢᴇᴅ ɢʀᴏᴜᴘꜱ ⇊
 
@@ -560,4 +549,3 @@ This Is An Open-Source Project. You Can Use It Freely, But Selling The Source Co
 • /remove_fsub - ʀᴇᴍᴏᴠᴇ ᴄᴜꜱᴛᴏᴍ ꜰᴏʀᴄᴇ ꜱᴜʙ ᴄʜᴀɴɴᴇʟ.
 • /reset_group - ʀᴇꜱᴇᴛ ʏᴏᴜʀ ꜱᴇᴛᴛɪɴɢꜱ.
 • /details - ᴄʜᴇᴄᴋ ʏᴏᴜʀ ꜱᴇᴛᴛɪɴɢꜱ."""    
-
