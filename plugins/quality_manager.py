@@ -10,6 +10,18 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from collections import defaultdict
 
 logger = logging.getLogger(__name__)
+# ✅ FIX: Quality manager ke routine INFO/DEBUG logs ab console/file me nahi aayenge,
+# sirf WARNING+ (actual delete/error jaisi important cheezein) dikhengi.
+# Isse "file saved" logs ke beech quality-check ka noise nahi aayega.
+logger.setLevel(logging.WARNING)
+
+# ✅ FIX: Bulk upload (100-150 files ek saath) par bot freeze/restart hone ka root cause:
+# har HIGH quality file ke liye DB par ek heavy unindexed regex scan hota tha, aur wo
+# seedha upload flow ke andar `await` hoke chalta tha. Isse saare uploads us scan ke
+# khatam hone tak block ho jaate the. Ab ye scan background me chalega aur ek saath
+# max 2 hi cleanup scans chalenge (baaki queue me wait karenge) taaki DB/CPU pe load
+# na pade aur naye uploads block na hon.
+QUALITY_CLEANUP_SEMAPHORE = asyncio.Semaphore(2)
 
 # Quality hierarchy
 QUALITY_HIERARCHY = {
@@ -276,13 +288,22 @@ async def find_and_delete_lower_quality(
                 if file_id:
                     search_query['_id'] = {'$ne': file_id}
                 
-                # Get cursor instead of loading all at once
-                cursor = db_collection.find(search_query)
+                # ✅ FIX: Cap max docs scanned per pattern (worst case pe bhi bot na atke)
+                cursor = db_collection.find(search_query).limit(300)
                 
                 # Process one file at a time (MEMORY EFFICIENT!)
                 async for file_in_db in cursor:
                     try:
                         processed_count += 1
+
+                        # ✅ FIX: Bahut zyada files scan na ho jayein ek hi upload ke liye
+                        if processed_count >= 500:
+                            logger.warning("[QUALITY] Scan cap (500) reached, stopping this pattern early")
+                            break
+
+                        # ✅ FIX: Har 50 files ke baad event loop ko breathing room do
+                        if processed_count % 50 == 0:
+                            await asyncio.sleep(0)
                         
                         existing_filename = file_in_db.get('file_name', '')
                         existing_caption = file_in_db.get('caption', '')
@@ -382,6 +403,23 @@ async def find_and_delete_lower_quality(
         return False, f"Error: {str(e)}"
 
 
+# ✅ FIX: Background runner — upload flow ko block kiye bina, throttled tarike se
+# duplicate/low-quality cleanup chalata hai. channel.py isko asyncio.create_task()
+# se fire-and-forget call karta hai taaki file save turant confirm ho jaye aur
+# agli file ka processing turant shuru ho jaye.
+async def run_quality_cleanup_background(media_dbs, file_name: str, caption: str):
+    async with QUALITY_CLEANUP_SEMAPHORE:
+        try:
+            for idx, media_cls in enumerate(media_dbs, start=1):
+                cleanup_success, cleanup_msg = await find_and_delete_lower_quality(
+                    db_collection=media_cls.collection,
+                    new_filename=file_name,
+                    new_caption=caption,
+                )
+                if cleanup_success and "Deleted" in cleanup_msg:
+                    logger.warning(f"[QUALITY DB{idx}] {file_name[:60]} -> {cleanup_msg}")
+        except Exception as e:
+            logger.error(f"[QUALITY] Background cleanup failed for {file_name[:60]}: {e}", exc_info=True)
 
 
 # ✅ MODIFIED cleanup_duplicates function
