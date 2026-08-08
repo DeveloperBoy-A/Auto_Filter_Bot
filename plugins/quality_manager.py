@@ -345,10 +345,7 @@ async def find_and_delete_lower_quality(
                             
                             if existing_set <= new_set:
                                 logger.warning(
-                                    f"[QUALITY] ✅ DELETE LOW QUALITY:\n"
-                                    f"  📄 {existing_filename[:70]}\n"
-                                    f"  Source: {existing_source.upper()}\n"
-                                    f"  Reason: LOW quality file replaced by {new_source.upper()}"
+                                    f"[QUALITY] 🗑️ Deleted LOW ({existing_source.upper()}): {existing_filename[:70]} — replaced by {new_source.upper()}"
                                 )
                                 
                                 try:
@@ -368,10 +365,7 @@ async def find_and_delete_lower_quality(
                                 
                                 if existing_set <= new_set:
                                     logger.warning(
-                                        f"[QUALITY] ✅ DELETE MEDIUM QUALITY:\n"
-                                        f"  📄 {existing_filename[:70]}\n"
-                                        f"  Source: {existing_source.upper()}\n"
-                                        f"  Reason: MEDIUM quality file replaced by {new_source.upper()}"
+                                        f"[QUALITY] 🗑️ Deleted MEDIUM ({existing_source.upper()}): {existing_filename[:70]} — replaced by {new_source.upper()}"
                                     )
                                     
                                     try:
