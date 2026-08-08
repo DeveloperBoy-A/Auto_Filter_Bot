@@ -50,7 +50,7 @@ async def _fetch_cover_url(title: str) -> str | None:
 
     # --- Step 1: TMDB ---
     try:
-        logger.info(f"[COVER] Trying TMDB for: '{title}'")
+        logger.debug(f"[COVER] Trying TMDB for: '{title}'")
         base_url = "https://tmdb.blazeposters.workers.dev/api/movie-posters"
         params = {"query": title.strip()}
         if TMDB_API_KEY:
@@ -100,7 +100,7 @@ async def _fetch_cover_url(title: str) -> str | None:
                             if backdrop_url:
                                 backdrop_url = backdrop_url.replace("/original/", "/w1280/")
                             details = {"poster_url": poster_url, "backdrop_url": backdrop_url}
-                            logger.info(f"[COVER] TMDB success | poster={poster_url} | backdrop={backdrop_url}")
+                            logger.debug(f"[COVER] TMDB success | poster={poster_url} | backdrop={backdrop_url}")
                 else:
                     logger.warning(f"[COVER] TMDB status {resp.status} for '{title}'")
     except Exception as e:
@@ -109,7 +109,7 @@ async def _fetch_cover_url(title: str) -> str | None:
     # --- Step 2: IMDB fallback ---
     if not details:
         try:
-            logger.info(f"[COVER] Trying IMDB for: '{title}'")
+            logger.debug(f"[COVER] Trying IMDB for: '{title}'")
             from plugins.Dreamxfutures.Imdbposter import get_movie_details
             imdb_data = await get_movie_details(title)
             if imdb_data and imdb_data.get("poster_url"):
@@ -117,7 +117,7 @@ async def _fetch_cover_url(title: str) -> str | None:
                     "poster_url": imdb_data.get("poster_url"),
                     "backdrop_url": None
                 }
-                logger.info(f"[COVER] IMDB success | poster={details['poster_url']}")
+                logger.debug(f"[COVER] IMDB success | poster={details['poster_url']}")
             else:
                 logger.warning(f"[COVER] IMDB also returned nothing for '{title}'")
         except Exception as e:
@@ -217,7 +217,7 @@ async def _add_watermark(image_url: str) -> "io.BytesIO | None":
 async def _upload_cover(bot, image_url: str) -> str | None:
     try:
         if not COVER_WATERMARK:
-            logger.info(f"[COVER] Watermark OFF — plain URL save ho raha hai")
+            logger.debug(f"[COVER] Watermark OFF — plain URL save ho raha hai")
             return image_url
 
         wm_image = await _add_watermark(image_url)
@@ -226,7 +226,7 @@ async def _upload_cover(bot, image_url: str) -> str | None:
 
         msg = await bot.send_photo(chat_id=BIN_CHANNEL, photo=wm_image)
         file_id = msg.photo.file_id
-        logger.info(f"[COVER] Watermarked cover uploaded | file_id={file_id}")
+        logger.debug(f"[COVER] Watermarked cover uploaded | file_id={file_id}")
         return file_id
     except Exception as e:
         logger.warning(f"[COVER] Upload failed: {e}")
@@ -1047,7 +1047,7 @@ async def _fetch_and_save_cover(file_id: str, final_title: str, year: str | None
             # 1. Sabse pehle fast memory cache check karo
             if lock_key in _COVER_CACHE:
                 cover_url = _COVER_CACHE[lock_key]
-                logger.info(f"[COVER] Reused cover from memory cache for '{final_title}' ({year})")
+                logger.debug(f"[COVER] Reused cover from memory cache for '{final_title}' ({year})")
             else:
                 # 2. Agar cache mein nahi hai, tabhi Database check karo (sabhi configured DBs mein)
                 # ✅ FIX: pehle ye `file_name` par sirf a PREFIX regex (`^title`) match karta tha,
@@ -1074,20 +1074,20 @@ async def _fetch_and_save_cover(file_id: str, final_title: str, year: str | None
                 if existing and existing.cover:
                     cover_url = existing.cover
                     _COVER_CACHE[lock_key] = cover_url 
-                    logger.info(f"[COVER] Reused existing cover from DB for '{final_title}'")
+                    logger.debug(f"[COVER] Reused existing cover from DB for '{final_title}'")
                 else:
                     # 3. DB mein bhi nahi hai, to finally fetch karo
                     search_query = f"{final_title} {year}" if year else final_title
                     raw_url = await _fetch_cover_url(search_query)
 
                     if not raw_url:
-                        logger.info(f"[COVER] No cover found for '{final_title}'")
+                        logger.debug(f"[COVER] No cover found for '{final_title}'")
                         return
 
                     cover_url = await _upload_cover(bot, raw_url) if bot else raw_url
                     if cover_url:
                         _COVER_CACHE[lock_key] = cover_url 
-                        logger.info(f"[COVER] Fetched new cover for '{final_title}'")
+                        logger.debug(f"[COVER] Fetched new cover for '{final_title}'")
                     else:
                         return
 
@@ -1095,7 +1095,7 @@ async def _fetch_and_save_cover(file_id: str, final_title: str, year: str | None
             # baaki DBs par matched_count 0 hoga aur kuch nahi hota)
             for media_cls in MEDIA_DBS:
                 await media_cls.collection.update_one({"_id": file_id}, {"$set": {"cover": cover_url}})
-            logger.info(f"[COVER] DB updated | file_id={file_id}")
+            logger.debug(f"[COVER] DB updated | file_id={file_id}")
 
         except Exception as e:
             logger.warning(f"[COVER] Background task error for '{final_title}': {e}")
@@ -1124,7 +1124,7 @@ async def save_file(media, bot=None, extracted_info=None):  # ✅ NEW: Added ext
         if extracted_info and extracted_info.get("language") and extracted_info.get("language") != "N/A":
             # Convert comma-separated language string to list
             extracted["languages"] = [lang.strip() for lang in extracted_info["language"].split(",")]
-            logger.info(f"[LANGUAGE] Using pre-extracted languages: {extracted['languages']}")
+            logger.debug(f"[LANGUAGE] Using pre-extracted languages: {extracted['languages']}")
 
         # --- SMART AUTO-ADD LOGIC ---
         # 1. Agar Resolution nahi mili, to automatically 720P add karo
@@ -1261,7 +1261,7 @@ async def save_file(media, bot=None, extracted_info=None):  # ✅ NEW: Added ext
         # different DB than the one we're about to save into)
         for media_cls in MEDIA_DBS:
             if await media_cls.count_documents({"_id": file_id}):
-                return False, 0
+                return False, 0, None
 
         # Auto-route: pick whichever configured DB still has room. Once the
         # active one crosses DB_SIZE_LIMIT_MB, new files automatically start
@@ -1286,13 +1286,15 @@ async def save_file(media, bot=None, extracted_info=None):  # ✅ NEW: Added ext
         await record.commit()
         logger.info(f"[SAVED] {file_name}")
         clear_search_cache()  # 🚀 new file added -> old cached search/filter results are stale
-        return True, 1
+        # ✅ FIX: real/final saved filename bhi return karo, taaki callers (channel.py)
+        # raw telegram filename ki jagah wahi asli naam use karein jo DB me store hua.
+        return True, 1, file_name
 
     except DuplicateKeyError:
-        return False, 0
+        return False, 0, None
     except Exception as e:
         logger.error(f"Error saving file: {e}", exc_info=True)
-        return False, 0
+        return False, 0, None
 
 #__________________________________
 # FOR GET SEARCH RESULT THIS CODE UPDATE BY 🅰️NKIT MEENA 
