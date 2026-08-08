@@ -158,6 +158,57 @@ async def re_enable_chat(bot, message):
 
 
 
+# ---------- Storage warning threshold ----------
+STORAGE_WARNING_THRESHOLD = 400 * 1024 * 1024  # 400 MB
+
+
+async def _get_true_cluster_usage(mongo_client):
+    """
+    Sum sizeOnDisk across every real database living in this Atlas
+    deployment (My_Tg_files, movie_updates, requests, users, groups,
+    broadcast_db, admin_database, etc.) — this is what Atlas's own
+    "Data Size" number on the dashboard reflects.
+
+    A single database's dbStats() only covers that one database, which is
+    why the old /stats used-storage number (based on just the files DB)
+    never matched what Atlas showed. `admin` and `local` are excluded
+    because they're internal system databases (oplog, auth) that Atlas
+    doesn't count against the 512 MB quota.
+    """
+    try:
+        result = await mongo_client.admin.command("listDatabases")
+        total = 0
+        for db_info in result.get("databases", []):
+            if db_info.get("name") not in ("admin", "local", "config"):
+                total += db_info.get("sizeOnDisk", 0)
+        return total
+    except Exception as e:
+        logging.error(f"[STATS] listDatabases failed: {e}")
+        return None
+
+
+async def _get_files_only_storage(media_cls):
+    """
+    Storage used by just the files collection itself (e.g. My_Tg_files),
+    via collStats — separate from movie_updates/requests/users/etc that
+    live in the same database but aren't "files".
+    """
+    try:
+        stats = await media_cls.collection.database.command(
+            "collStats", media_cls.collection.name
+        )
+        return stats.get("storageSize", 0) + stats.get("totalIndexSize", 0)
+    except Exception as e:
+        logging.error(f"[STATS] collStats failed: {e}")
+        return 0
+
+
+def _storage_warning_line(used_bytes):
+    if used_bytes is not None and used_bytes >= STORAGE_WARNING_THRESHOLD:
+        return "├⋟ ⚠️ <b>ᴡᴀʀɴɪɴɢ: sᴛᴏʀᴀɢᴇ ᴄʀᴏssᴇᴅ 400 ᴍʙ, ᴄʟᴇᴀɴᴜᴘ sᴏᴏɴ!</b>\n"
+    return ""
+
+
 @Client.on_message(filters.command('stats') & filters.user(ADMINS))
 async def get_stats(bot, message):
     try:
@@ -178,21 +229,32 @@ async def get_stats(bot, message):
         # ---------- Single DB (fast path, keeps old layout) ----------
         if len(MEDIA_DBS) == 1:
             file1 = await Media.count_documents()
-            dbstats = await db_stats.command("dbStats")
-            current_db_size = dbstats['storageSize'] + dbstats['indexSize']
-            free = max(DB_SIZE - current_db_size, 0)
+
+            files_storage = await _get_files_only_storage(Media)
+
+            true_used = await _get_true_cluster_usage(client)
+            if true_used is None:
+                # Fallback if listDatabases ever fails (e.g. permissions) —
+                # just this one database's own size, not the full cluster.
+                dbstats = await db_stats.command("dbStats")
+                true_used = dbstats['storageSize'] + dbstats['indexSize']
+
+            free = max(DB_SIZE - true_used, 0)
+            warning_line = _storage_warning_line(true_used)
 
             await msg.edit(script.STATUS_TXT.format(
                 total_users,
                 totl_chats,
                 premium,
                 file1,
-                get_size(current_db_size),
+                get_size(files_storage),
+                get_size(true_used),
                 get_size(DB_SIZE),
                 get_size(free),
                 uptime,
                 ram,
-                cpu
+                cpu,
+                warning_line
             ))
             return
 
@@ -203,16 +265,25 @@ async def get_stats(bot, message):
             file_count = await media_cls.count_documents()
             grand_total_files += file_count
 
-            stats = await media_cls.collection.database.command("dbStats")
-            used = stats['storageSize'] + stats['indexSize']
-            free = max(DB_SIZE - used, 0)
+            files_storage = await _get_files_only_storage(media_cls)
+
+            mongo_client = media_cls.collection.database.client
+            true_used = await _get_true_cluster_usage(mongo_client)
+            if true_used is None:
+                stats = await media_cls.collection.database.command("dbStats")
+                true_used = stats['storageSize'] + stats['indexSize']
+
+            free = max(DB_SIZE - true_used, 0)
+            warning_line = _storage_warning_line(true_used)
 
             db_blocks.append(script.MULTI_STATUS_DB_BLOCK_TXT.format(
                 idx,
                 file_count,
-                get_size(used),
+                get_size(files_storage),
+                get_size(true_used),
                 get_size(DB_SIZE),
-                get_size(free)
+                get_size(free),
+                warning_line
             ))
 
         header = script.MULTI_STATUS_HEADER_TXT.format(total_users, totl_chats, premium)
