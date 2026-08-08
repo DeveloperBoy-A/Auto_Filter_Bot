@@ -5,7 +5,7 @@ from datetime import datetime
 from collections import defaultdict
 from plugins.Dreamxfutures.Imdbposter import get_movie_detailsx, fetch_image, get_movie_details
 from database.users_chats_db import db
-from plugins.quality_manager import extract_quality_info, is_high_quality, find_and_delete_lower_quality
+from plugins.quality_manager import extract_quality_info, is_high_quality, run_quality_cleanup_background
 
 from pyrogram import Client, filters, enums
 from info import CHANNELS, MOVIE_UPDATE_CHANNEL, LINK_PREVIEW, ABOVE_PREVIEW, BAD_WORDS, ADMINS, LANDSCAPE_POSTER, TMDB_POSTER, MULTIPLE_DB
@@ -263,38 +263,29 @@ async def media_handler(bot, message):
     if not success:
         return
 
+    # === Save confirmation: single clean line, no quality-manager noise in between ===
+    logger.info(f"✅ File Saved: {media.file_name[:80]}")
+
     # === Quality Management Start ===
     try:
         quality_info = extract_quality_info(media.file_name, media.caption)
 
-        file_source = quality_info.get('source', 'Unknown').upper() if quality_info.get('source') else 'UNKNOWN'
-        file_res = quality_info.get('resolution', 'Unknown').upper() if quality_info.get('resolution') else 'UNKNOWN'
-
-        logger.info(
-            f"[QUALITY UPLOAD] File saved:\n"
-            f"  📄 {media.file_name[:70]}\n"
-            f"  🎬 Quality: {file_source}\n"
-            f"  📐 Resolution: {file_res}\n"
-            f"  📊 Score: {quality_info.get('quality_score', 0):.1f}\n"
-            f"  🗣️  Language: {extracted_info.get('language', 'N/A')}"
+        # Detailed breakdown sirf DEBUG level pe (default me suppressed) — console/file
+        # clean rehta hai, chahiye ho to logger level DEBUG karke dekha ja sakta hai.
+        logger.debug(
+            f"[QUALITY] {media.file_name[:70]} | "
+            f"source={quality_info.get('source')} | "
+            f"resolution={quality_info.get('resolution')} | "
+            f"score={quality_info.get('quality_score', 0):.1f} | "
+            f"lang={extracted_info.get('language', 'N/A')}"
         )
 
         if is_high_quality(quality_info):
-            logger.info(f"[QUALITY] ✨ High quality file detected - checking for lower quality duplicates...")
-
-            for idx, media_cls in enumerate(MEDIA_DBS, start=1):
-                cleanup_success, cleanup_msg = await find_and_delete_lower_quality(
-                    db_collection=media_cls.collection,
-                    new_filename=media.file_name,
-                    new_caption=media.caption
-                )
-                if cleanup_success:
-                    logger.info(f"[QUALITY DB{idx}] {cleanup_msg}")
-        else:
-            logger.info(
-                f"[QUALITY] ℹ️  Lower/Standard quality file uploaded:\n"
-                f"  Quality: {file_source} ({quality_info.get('quality_score', 0):.1f})\n"
-                f"  Note: Will be deleted ONLY if higher quality version uploaded later"
+            # ✅ FIX: Ab ye await nahi hota — background task ki tarah fire hota hai,
+            # taaki heavy DB regex scan agli files ke save hone ko block na kare.
+            # QUALITY_CLEANUP_SEMAPHORE (max 2 parallel) DB/CPU overload se bachata hai.
+            asyncio.create_task(
+                run_quality_cleanup_background(MEDIA_DBS, media.file_name, media.caption)
             )
 
     except Exception as e:
