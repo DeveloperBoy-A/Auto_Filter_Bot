@@ -259,21 +259,28 @@ async def media_handler(bot, message):
     extracted_info = extract_media_info(media.file_name, media.caption or "")
 
     # Pass extracted_info to save_file
-    success, info = await save_file(media, bot=bot, extracted_info=extracted_info)
+    # ✅ FIX: save_file ab teesra value bhi deta hai — real/final filename jo
+    # actually DB me save hua (renamed, cleaned). Aage jahan bhi filename ka use
+    # hoga (quality check, cleanup, movie-update post), wahi asli naam use hoga —
+    # raw telegram filename (media.file_name) nahi.
+    success, info, real_file_name = await save_file(media, bot=bot, extracted_info=extracted_info)
     if not success:
         return
 
-    # === Save confirmation: single clean line, no quality-manager noise in between ===
-    logger.info(f"✅ File Saved: {media.file_name[:80]}")
+    # Fallback safety: agar kisi reason se real_file_name na mile, raw naam use karo
+    real_file_name = real_file_name or media.file_name
+
+    # Note: Save confirmation ab sirf database/ia_filterdb.py ke [SAVED] log se aata hai
+    # (wahi real/final filename hota hai jo DB me store hua). Yahan duplicate log nahi lagate.
 
     # === Quality Management Start ===
     try:
-        quality_info = extract_quality_info(media.file_name, media.caption)
+        quality_info = extract_quality_info(real_file_name, media.caption)
 
         # Detailed breakdown sirf DEBUG level pe (default me suppressed) — console/file
         # clean rehta hai, chahiye ho to logger level DEBUG karke dekha ja sakta hai.
         logger.debug(
-            f"[QUALITY] {media.file_name[:70]} | "
+            f"[QUALITY] {real_file_name[:70]} | "
             f"source={quality_info.get('source')} | "
             f"resolution={quality_info.get('resolution')} | "
             f"score={quality_info.get('quality_score', 0):.1f} | "
@@ -285,7 +292,7 @@ async def media_handler(bot, message):
             # taaki heavy DB regex scan agli files ke save hone ko block na kare.
             # QUALITY_CLEANUP_SEMAPHORE (max 2 parallel) DB/CPU overload se bachata hai.
             asyncio.create_task(
-                run_quality_cleanup_background(MEDIA_DBS, media.file_name, media.caption)
+                run_quality_cleanup_background(MEDIA_DBS, real_file_name, media.caption)
             )
 
     except Exception as e:
@@ -294,7 +301,7 @@ async def media_handler(bot, message):
     # === Update Processing Start ===
     try:
         if await db.movie_update_status(bot.me.id):
-            await process_and_send_update(bot, media.file_name, media.caption)
+            await process_and_send_update(bot, real_file_name, media.caption)
     except Exception:
         logger.exception("Error processing media")
 
