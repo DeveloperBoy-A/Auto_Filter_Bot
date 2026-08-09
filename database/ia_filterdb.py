@@ -1263,11 +1263,22 @@ async def save_file(media, bot=None, extracted_info=None):  # ✅ NEW: Added ext
                 bot=bot
             ))
 
-        # Duplicate check across ALL configured DBs (file might already live in a
-        # different DB than the one we're about to save into)
-        for media_cls in MEDIA_DBS:
-            if await media_cls.count_documents({"_id": file_id}):
-                return False, 0, None
+        # Duplicate check across ALL configured DBs
+for db_index, media_cls in enumerate(MEDIA_DBS):
+    existing_file = await media_cls.find_one({"_id": file_id})
+
+    if existing_file:
+        db_label = _DB_LABELS[db_index] if db_index < len(_DB_LABELS) else f"DB {db_index + 1}"
+        existing_name = existing_file.file_name or "Unknown"
+
+        logger.warning(
+            f"⚠️ [DUPLICATE SKIPPED] "
+            f"📄 {original_name} | "
+            f"🗄️ {db_label} | "
+            f"♻️ Existing: {existing_name}"
+        )
+
+        return False, 0, None
 
         # Auto-route: pick whichever configured DB still has room. Once the
         # active one crosses DB_SIZE_LIMIT_MB, new files automatically start
@@ -1290,8 +1301,17 @@ async def save_file(media, bot=None, extracted_info=None):  # ✅ NEW: Added ext
             year=extracted.get("year")    # ✅ NEW: stored for exact cover-reuse matching
         )
         await record.commit()
-        logger.info(f"[SAVED] {file_name}")
-        clear_search_cache()  # 🚀 new file added -> old cached search/filter results are stale
+
+db_index = MEDIA_DBS.index(target_media)
+db_label = _DB_LABELS[db_index] if db_index < len(_DB_LABELS) else f"DB {db_index + 1}"
+
+logger.info(
+    f"✅ [FILE SAVED] "
+    f"📄 {file_name} | "
+    f"🗄️ {db_label}"
+)
+
+clear_search_cache()  # 🚀 new file added -> old cached search/filter results are stale
         # ✅ FIX: real/final saved filename bhi return karo, taaki callers (channel.py)
         # raw telegram filename ki jagah wahi asli naam use karein jo DB me store hua.
         return True, 1, file_name
