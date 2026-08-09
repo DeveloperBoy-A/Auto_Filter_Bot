@@ -5,7 +5,7 @@ from datetime import datetime
 from collections import defaultdict
 from plugins.Dreamxfutures.Imdbposter import get_movie_detailsx, fetch_image, get_movie_details
 from database.users_chats_db import db
-from plugins.quality_manager import extract_quality_info, is_high_quality, run_quality_cleanup_background
+from plugins.quality_manager import extract_quality_info, run_quality_cleanup_background
 
 from pyrogram import Client, filters, enums
 from info import CHANNELS, MOVIE_UPDATE_CHANNEL, LINK_PREVIEW, ABOVE_PREVIEW, BAD_WORDS, ADMINS, LANDSCAPE_POSTER, TMDB_POSTER, MULTIPLE_DB
@@ -287,10 +287,17 @@ async def media_handler(bot, message):
             f"lang={extracted_info.get('language', 'N/A')}"
         )
 
-        if is_high_quality(quality_info):
-            # ✅ FIX: Ab ye await nahi hota — background task ki tarah fire hota hai,
-            # taaki heavy DB regex scan agli files ke save hone ko block na kare.
-            # QUALITY_CLEANUP_SEMAPHORE (max 2 parallel) DB/CPU overload se bachata hai.
+        # ✅ FIX: Pehle sirf HIGH quality (WEB-DL/BluRay) uploads par cleanup
+        # trigger hota tha (is_high_quality check). Isse MEDIUM quality uploads
+        # (DVDRip/TVRip/HDTV) — jo LOW quality (HDCAM/CAMRip/TS) files ko
+        # replace kar sakti thi — kabhi cleanup trigger hi nahi karti thi.
+        # find_and_delete_lower_quality() khud hi andar HIGH/MEDIUM check karta
+        # hai aur LOW/unknown source wale naye uploads ko safely skip karta hai,
+        # isliye yahan guard hata kar seedha call karna safe hai.
+        if quality_info.get("source"):
+            # Background task ki tarah fire hota hai, taaki heavy DB regex scan
+            # agli files ke save hone ko block na kare. QUALITY_CLEANUP_SEMAPHORE
+            # (max 2 parallel) DB/CPU overload se bachata hai.
             asyncio.create_task(
                 run_quality_cleanup_background(MEDIA_DBS, real_file_name, media.caption)
             )
