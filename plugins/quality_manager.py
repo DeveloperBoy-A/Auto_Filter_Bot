@@ -603,28 +603,15 @@ async def find_and_delete_lower_quality(
 async def run_quality_cleanup_background(
     media_dbs,
     file_name: str,
-    caption: str = "",
-    file_id: Optional[str] = None,
+    caption: str,
 ):
-    """Run automatic quality cleanup after a file has been committed.
-
-    The new file is explicitly excluded by _id so the cleanup can safely be
-    triggered from the central save_file() path as well as live channel uploads.
-    """
     async with QUALITY_CLEANUP_SEMAPHORE:
         try:
-            logger.info(
-                "[QUALITY AUTO] Triggered for: %s | file_id=%s",
-                file_name[:120],
-                file_id,
-            )
-
             for idx, media_cls in enumerate(media_dbs, start=1):
                 success, msg, deleted_count = await find_and_delete_lower_quality(
                     db_collection=media_cls.collection,
                     new_filename=file_name,
-                    new_caption=caption or "",
-                    file_id=file_id,
+                    new_caption=caption,
                 )
 
                 if success and deleted_count:
@@ -640,6 +627,214 @@ async def run_quality_cleanup_background(
                 e,
                 exc_info=True,
             )
+
+
+
+# =========================================================
+# LIVE UPLOAD AUTO QUALITY CLEANUP
+# =========================================================
+# This listener makes quality cleanup work using ONLY this file.
+# No change is required in index.py / channel.py / ia_filterdb.py.
+#
+# Flow:
+#   New channel upload -> wait for DB indexing -> scan all MEDIA_DBS
+#   -> if a higher SOURCE quality exists -> delete old LOW/MEDIUM DB entry.
+#
+# NOTE: This deletes the old indexed MongoDB entry, NOT the Telegram
+# channel message itself.
+QUALITY_AUTO_TASKS = {}
+QUALITY_AUTO_DELAY = 3
+QUALITY_AUTO_RETRIES = 3
+
+
+def _get_uploaded_file_name(message) -> str:
+    """Get the real Telegram media filename from a channel post."""
+    try:
+        media = getattr(message, "document", None)
+        if media and getattr(media, "file_name", None):
+            return media.file_name
+
+        media = getattr(message, "video", None)
+        if media and getattr(media, "file_name", None):
+            return media.file_name
+
+        media = getattr(message, "audio", None)
+        if media and getattr(media, "file_name", None):
+            return media.file_name
+
+        # Some indexers store/send a file with a generic media object.
+        for attr in ("document", "video", "audio"):
+            media = getattr(message, attr, None)
+            if media:
+                name = getattr(media, "file_name", None)
+                if name:
+                    return name
+    except Exception:
+        pass
+
+    return ""
+
+
+async def _run_live_quality_auto_cleanup(
+    file_name: str,
+    caption: str,
+    telegram_file_id: str = "",
+):
+    """
+    Background worker for a newly uploaded channel file.
+
+    A small delay + retries are intentional: Pyrogram handlers can receive
+    the channel post before the indexing handler has finished inserting the
+    document into MongoDB.
+    """
+    try:
+        quality = extract_quality_info(file_name, caption)
+        source = (quality.get("source") or "").lower().strip()
+
+        # A low-quality upload cannot replace anything, and therefore does
+        # not need an automatic cleanup scan.
+        if source not in HIGH_QUALITY_SOURCES and source not in MEDIUM_QUALITY_SOURCES:
+            logger.warning(
+                "[QUALITY AUTO] Ignored upload (no replacement quality): %s",
+                file_name[:120],
+            )
+            return
+
+        logger.warning(
+            "[QUALITY AUTO] 🚀 Triggered for new upload: %s [%s]",
+            file_name[:120],
+            source.upper(),
+        )
+
+        # Wait until the normal indexer has had time to save the new file.
+        for attempt in range(1, QUALITY_AUTO_RETRIES + 1):
+            await asyncio.sleep(QUALITY_AUTO_DELAY)
+
+            total_deleted = 0
+
+            for idx, media_cls in enumerate(MEDIA_DBS, start=1):
+                try:
+                    success, msg, deleted_count = await find_and_delete_lower_quality(
+                        db_collection=media_cls.collection,
+                        new_filename=file_name,
+                        new_caption=caption,
+                    )
+
+                    if deleted_count:
+                        total_deleted += deleted_count
+                        logger.warning(
+                            "[QUALITY AUTO DB%d] 🗑️ Deleted %d old lower-quality "
+                            "file(s) after upload: %s",
+                            idx,
+                            deleted_count,
+                            file_name[:100],
+                        )
+
+                except Exception as e:
+                    logger.error(
+                        "[QUALITY AUTO DB%d] Attempt %d failed for %s: %s",
+                        idx,
+                        attempt,
+                        file_name[:100],
+                        e,
+                        exc_info=True,
+                    )
+
+            # One successful scan is enough. If nothing was found, retry
+            # because the indexing handler may still be writing to MongoDB.
+            if total_deleted:
+                logger.warning(
+                    "[QUALITY AUTO] ✅ Completed: %s | Deleted: %d",
+                    file_name[:100],
+                    total_deleted,
+                )
+                return
+
+            if attempt < QUALITY_AUTO_RETRIES:
+                logger.warning(
+                    "[QUALITY AUTO] No old file found yet; retrying "
+                    "(%d/%d): %s",
+                    attempt,
+                    QUALITY_AUTO_RETRIES,
+                    file_name[:100],
+                )
+
+        logger.warning(
+            "[QUALITY AUTO] Finished: no lower-quality replacement found: %s",
+            file_name[:100],
+        )
+
+    except asyncio.CancelledError:
+        raise
+    except Exception as e:
+        logger.error(
+            "[QUALITY AUTO] Worker failed for %s: %s",
+            file_name[:100],
+            e,
+            exc_info=True,
+        )
+
+
+@Client.on_message(filters.channel & filters.media, group=999)
+async def quality_auto_upload_trigger(bot, message):
+    """
+    Automatic trigger for every new media post in a channel.
+
+    It intentionally runs at a late Pyrogram handler group so the normal
+    indexing handlers get a chance to process the upload first.
+    """
+    try:
+        file_name = _get_uploaded_file_name(message)
+        if not file_name:
+            return
+
+        caption = getattr(message, "caption", "") or ""
+
+        quality = extract_quality_info(file_name, caption)
+        source = (quality.get("source") or "").lower().strip()
+
+        # Only a better SOURCE quality can cause deletion.
+        if source not in HIGH_QUALITY_SOURCES and source not in MEDIUM_QUALITY_SOURCES:
+            return
+
+        # Prevent duplicate cleanup for the same Telegram message.
+        task_key = f"{getattr(message, 'chat', None) and getattr(message.chat, 'id', '')}:{getattr(message, 'id', '')}"
+
+        old_task = QUALITY_AUTO_TASKS.get(task_key)
+        if old_task and not old_task.done():
+            return
+
+        telegram_file_id = ""
+        try:
+            media = (
+                getattr(message, "document", None)
+                or getattr(message, "video", None)
+                or getattr(message, "audio", None)
+            )
+            telegram_file_id = getattr(media, "file_id", "") or ""
+        except Exception:
+            pass
+
+        task = asyncio.create_task(
+            _run_live_quality_auto_cleanup(
+                file_name=file_name,
+                caption=caption,
+                telegram_file_id=telegram_file_id,
+            )
+        )
+        QUALITY_AUTO_TASKS[task_key] = task
+
+        def _cleanup_task_reference(_task):
+            QUALITY_AUTO_TASKS.pop(task_key, None)
+
+        task.add_done_callback(_cleanup_task_reference)
+
+    except Exception as e:
+        logger.error(
+            "[QUALITY AUTO] Trigger error: %s",
+            e,
+            exc_info=True,
+        )
 
 
 # =========================================================
