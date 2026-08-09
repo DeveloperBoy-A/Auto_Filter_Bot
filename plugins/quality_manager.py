@@ -335,7 +335,7 @@ def languages_match(old_langs, new_langs) -> bool:
         return False
     if "unknown" in new_set:
         return False
-        
+
     return old_set <= new_set
 
 
@@ -461,7 +461,7 @@ async def find_and_delete_lower_quality(
     new_filename: str,
     new_caption: str = "",
     file_id: Optional[str] = None,
-) -> Tuple[bool, str]:
+) -> Tuple[bool, str, int]:
 
     try:
         new_quality = extract_quality_info(
@@ -477,12 +477,12 @@ async def find_and_delete_lower_quality(
             new_source not in HIGH_QUALITY_SOURCES
             and new_source not in MEDIUM_QUALITY_SOURCES
         ):
-            return True, "New file is low quality"
+            return True, "New file is low quality", 0
 
         base_title = get_base_title(new_filename)
 
         if not base_title:
-            return True, "Could not extract title"
+            return True, "Could not extract title", 0
 
         new_langs = extract_language(
             f"{new_filename} {new_caption or ''}"
@@ -495,7 +495,7 @@ async def find_and_delete_lower_quality(
         ]
 
         if not words:
-            return True, "No significant words"
+            return True, "No significant words", 0
 
         pattern = ".*".join(
             re.escape(w)
@@ -512,6 +512,8 @@ async def find_and_delete_lower_quality(
         if file_id:
             search_query["_id"] = {"$ne": file_id}
 
+        SCAN_LIMIT = 500
+
         cursor = db_collection.find(
             search_query,
             projection={
@@ -520,7 +522,7 @@ async def find_and_delete_lower_quality(
                 "caption": 1,
             },
             batch_size=100,
-        ).limit(500)
+        ).limit(SCAN_LIMIT)
 
         processed = 0
         deleted_count = 0
@@ -557,8 +559,16 @@ async def find_and_delete_lower_quality(
                     result = await db_collection.delete_one({"_id": file_in_db["_id"]})
                     if result.deleted_count:
                         deleted_count += 1
+
+                        category = (
+                            "LOW"
+                            if existing_source in LOW_QUALITY_SOURCES
+                            else "MEDIUM"
+                        )
+
                         logger.warning(
-                            "[QUALITY] Deleted %s: %s -> %s",
+                            "[QUALITY] 🗑️ Deleted %s (%s): %s — replaced by %s",
+                            category,
                             existing_source.upper(),
                             existing_filename[:100],
                             new_source.upper(),
@@ -568,6 +578,12 @@ async def find_and_delete_lower_quality(
 
                 await quality_yield(processed, 50)
 
+            if processed >= SCAN_LIMIT:
+                logger.warning(
+                    "[QUALITY] Scan cap (%d) reached, stopping this pattern early",
+                    SCAN_LIMIT,
+                )
+
         finally:
             try:
                 await cursor.close()
@@ -575,13 +591,13 @@ async def find_and_delete_lower_quality(
                 pass
 
         if deleted_count:
-            return True, f"Deleted {deleted_count} lower-quality files"
+            return True, f"Deleted {deleted_count} lower-quality files", deleted_count
 
-        return True, "No lower quality files"
+        return True, "No lower quality files", 0
 
     except Exception as e:
         logger.error("[QUALITY] find_and_delete error: %s", e, exc_info=True)
-        return False, str(e)
+        return False, str(e), 0
 
 
 async def run_quality_cleanup_background(
@@ -592,18 +608,18 @@ async def run_quality_cleanup_background(
     async with QUALITY_CLEANUP_SEMAPHORE:
         try:
             for idx, media_cls in enumerate(media_dbs, start=1):
-                success, msg = await find_and_delete_lower_quality(
+                success, msg, deleted_count = await find_and_delete_lower_quality(
                     db_collection=media_cls.collection,
                     new_filename=file_name,
                     new_caption=caption,
                 )
 
-                if success and "Deleted" in msg:
+                if success and deleted_count:
                     logger.warning(
-                        "[QUALITY DB%d] %s -> %s",
+                        "[QUALITY DB%d] %s -> ✅ Deleted %d LOW/MEDIUM quality files",
                         idx,
                         file_name[:60],
-                        msg,
+                        deleted_count,
                     )
         except Exception as e:
             logger.error(
@@ -858,7 +874,7 @@ async def find_single_movie_files(
         async for file in cursor:
             if CANCEL_Q_TASKS.get(task_id):
                 break
-                
+
             processed += 1
 
             if same_movie_title(
@@ -1070,11 +1086,8 @@ async def send_dry_page(
                 reply_markup=reply_markup,
             )
 
-    except Exception as e:
-        logger.error(
-            "[QUALITY] Pagination error: %s",
-            e,
-        )
+    except Exception:
+        pass
 
 
 # =========================================================
@@ -2183,9 +2196,9 @@ async def cleanup_dry_year_cmd(
             for media_cls in MEDIA_DBS:
                 if CANCEL_Q_TASKS.get(task_id):
                     break
-                
+
                 collection = media_cls.collection
-                
+
                 # MongoDB Regex to find exact year for fast processing
                 cursor = collection.find(
                     {"file_name": {"$regex": rf"\b{year}\b"}},
@@ -2196,26 +2209,26 @@ async def cleanup_dry_year_cmd(
                     },
                     batch_size=500,
                 )
-                
+
                 movies = defaultdict(list)
-                
+
                 async for file in cursor:
                     if CANCEL_Q_TASKS.get(task_id):
                         break
-                        
+
                     global_processed += 1
-                    
+
                     file_name = file.get("file_name", "")
                     caption = file.get("caption", "") or ""
-                    
+
                     base_title = get_base_title(file_name)
-                    
+
                     if base_title:
                         quality = extract_quality_info(
                             file_name,
                             caption,
                         )
-                        
+
                         movies[base_title].append({
                             "file_id": file.get("_id"),
                             "name": file_name,
@@ -2224,10 +2237,10 @@ async def cleanup_dry_year_cmd(
                                 f"{file_name} {caption}"
                             ),
                         })
-                    
+
                     if global_processed % 50 == 0:
                         await asyncio.sleep(0.01)
-                        
+
                     # Advanced Progress Bar exactly every 200 files
                     if global_processed % 200 == 0:
                         percent = (
@@ -2257,7 +2270,7 @@ async def cleanup_dry_year_cmd(
                             for f in files
                             if should_delete_file_against_files(f, files)
                         )
-                        
+
                         if movie_delete > 0:
                             total_delete += movie_delete
                             all_duplicates.append({
@@ -2265,40 +2278,40 @@ async def cleanup_dry_year_cmd(
                                 "count": len(files),
                                 "to_delete": movie_delete,
                             })
-                            
+
                 total_movies += len(movies)
 
             all_duplicates.sort(
                 key=lambda x: x["to_delete"],
                 reverse=True,
             )
-            
+
             report = (
                 f"📊 **YEAR {year} DRY RUN REPORT**\n"
                 "━━━━━━━━━━━━━━━━━━━━\n\n"
                 f"🎬 Movies Found: **{total_movies:,}**\n"
                 f"⚠️ **Would Delete: {total_delete:,} files**\n\n"
             )
-            
+
             if all_duplicates:
                 report += "📋 **TOP DUPLICATES**\n\n"
-                
+
                 for i, movie in enumerate(all_duplicates[:10], 1):
                     report += (
                         f"**{i}. {movie['title'][:45]}**\n"
                         f"   (Delete: {movie['to_delete']})\n"
                     )
-                    
+
                 report += (
                     f"\n👉 **To Delete Run:**\n"
                     f"`/cleanup_confirm_year {year}`"
                 )
-            
+
             await msg.edit_text(
                 report,
                 reply_markup=None,
             )
-            
+
         except Exception as e:
             await msg.edit_text(
                 f"❌ **ERROR**\n\n`{str(e)[:500]}`"
@@ -2373,13 +2386,13 @@ async def cleanup_confirm_year_cmd(
 
             total_deleted = 0
             global_processed = 0
-            
+
             for media_cls in MEDIA_DBS:
                 if CANCEL_Q_TASKS.get(task_id):
                     break
-                    
+
                 collection = media_cls.collection
-                
+
                 cursor = collection.find(
                     {"file_name": {"$regex": rf"\b{year}\b"}},
                     projection={
@@ -2389,26 +2402,26 @@ async def cleanup_confirm_year_cmd(
                     },
                     batch_size=500,
                 )
-                
+
                 movies = defaultdict(list)
-                
+
                 async for file in cursor:
                     if CANCEL_Q_TASKS.get(task_id):
                         break
-                        
+
                     global_processed += 1
-                    
+
                     file_name = file.get("file_name", "")
                     caption = file.get("caption", "") or ""
-                    
+
                     base_title = get_base_title(file_name)
-                    
+
                     if base_title:
                         quality = extract_quality_info(
                             file_name,
                             caption,
                         )
-                        
+
                         movies[base_title].append({
                             "file_id": file.get("_id"),
                             "name": file_name,
@@ -2417,10 +2430,10 @@ async def cleanup_confirm_year_cmd(
                                 f"{file_name} {caption}"
                             ),
                         })
-                        
+
                     if global_processed % 50 == 0:
                         await asyncio.sleep(0.01)
-                        
+
                     # Advanced Progress Bar exactly every 200 files
                     if global_processed % 200 == 0:
                         percent = (
@@ -2446,26 +2459,26 @@ async def cleanup_confirm_year_cmd(
                 for base_title, files in movies.items():
                     if CANCEL_Q_TASKS.get(task_id):
                         break
-                        
+
                     if len(files) > 1:
                         delete_candidates = [
                             f
                             for f in files
                             if should_delete_file_against_files(f, files)
                         ]
-                        
+
                         for file in delete_candidates:
                             try:
                                 res = await collection.delete_one(
                                     {"_id": file["file_id"]}
                                 )
-                                
+
                                 if res.deleted_count:
                                     total_deleted += 1
-                                    
+
                             except Exception:
                                 pass
-                                
+
                             await asyncio.sleep(0.01)
 
             report = (
@@ -2474,12 +2487,12 @@ async def cleanup_confirm_year_cmd(
                 f"🗑️ Total Deleted: **{total_deleted:,}** files.\n"
                 "🛡️ Protected by same-title + language + quality checks."
             )
-            
+
             await msg.edit_text(
                 report,
                 reply_markup=None,
             )
-            
+
         except Exception as e:
             await msg.edit_text(
                 f"❌ **ERROR**\n\n`{str(e)[:500]}`"
