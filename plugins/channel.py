@@ -5,7 +5,7 @@ from datetime import datetime
 from collections import defaultdict
 from plugins.Dreamxfutures.Imdbposter import get_movie_detailsx, fetch_image, get_movie_details
 from database.users_chats_db import db
-from plugins.quality_manager import extract_quality_info, run_quality_cleanup_background
+from plugins.quality_manager import extract_quality_info, is_high_quality, run_quality_cleanup_background
 
 from pyrogram import Client, filters, enums
 from info import CHANNELS, MOVIE_UPDATE_CHANNEL, LINK_PREVIEW, ABOVE_PREVIEW, BAD_WORDS, ADMINS, LANDSCAPE_POSTER, TMDB_POSTER, MULTIPLE_DB
@@ -130,12 +130,12 @@ def extract_season_episode(filename: str) -> Tuple[Optional[int], Optional[str]]
 def extract_language(filename: str, caption: str = "") -> str:
     """🎯 IMPROVED: Better language detection"""
     combined_text = f"{filename} {caption}".lower()
-    
+
     languages = set()
     for pattern, lang_name in CAPTION_LANGUAGES.items():
         if re.search(pattern, combined_text):
             languages.add(lang_name)
-    
+
     if languages:
         return ", ".join(sorted(languages))
     return "N/A"
@@ -156,10 +156,10 @@ def extract_media_info(filename: str, caption: str):
     # 1. Mentions/Links clean karo, par Hyphens aur Underscores ko Regex ke liye bacha kar rakho
     clean_raw = clean_mentions_links(filename).title()
     caption_clean = clean_mentions_links(caption).lower() if caption else ""
-    
+
     # 2. Episodes ko extract karo PEHLE, normalize hone se pehle!
     season, episode = extract_season_episode(clean_raw)
-    
+
     # 3. Ab normalize karo baaki strings/quality nikalne ke liye
     filename_norm = normalize(clean_raw)
     unified = f"{caption_clean} {filename_norm.lower()}".strip()
@@ -179,7 +179,7 @@ def extract_media_info(filename: str, caption: str):
                  NAMED_REGEX.search(clean_raw) or EP_ONLY_RANGE.search(clean_raw)):
             match_str = m.group(0)
             end_idx = clean_raw.lower().find(match_str.lower()) + len(match_str)
-            
+
             base_raw = clean_raw[:clean_raw.lower().find(match_str.lower())].strip()
             processed_raw = clean_raw[:end_idx]
 
@@ -287,17 +287,10 @@ async def media_handler(bot, message):
             f"lang={extracted_info.get('language', 'N/A')}"
         )
 
-        # ✅ FIX: Pehle sirf HIGH quality (WEB-DL/BluRay) uploads par cleanup
-        # trigger hota tha (is_high_quality check). Isse MEDIUM quality uploads
-        # (DVDRip/TVRip/HDTV) — jo LOW quality (HDCAM/CAMRip/TS) files ko
-        # replace kar sakti thi — kabhi cleanup trigger hi nahi karti thi.
-        # find_and_delete_lower_quality() khud hi andar HIGH/MEDIUM check karta
-        # hai aur LOW/unknown source wale naye uploads ko safely skip karta hai,
-        # isliye yahan guard hata kar seedha call karna safe hai.
-        if quality_info.get("source"):
-            # Background task ki tarah fire hota hai, taaki heavy DB regex scan
-            # agli files ke save hone ko block na kare. QUALITY_CLEANUP_SEMAPHORE
-            # (max 2 parallel) DB/CPU overload se bachata hai.
+        if is_high_quality(quality_info):
+            # ✅ FIX: Ab ye await nahi hota — background task ki tarah fire hota hai,
+            # taaki heavy DB regex scan agli files ke save hone ko block na kare.
+            # QUALITY_CLEANUP_SEMAPHORE (max 2 parallel) DB/CPU overload se bachata hai.
             asyncio.create_task(
                 run_quality_cleanup_background(MEDIA_DBS, real_file_name, media.caption)
             )
@@ -333,7 +326,7 @@ async def _process_with_lock(bot, filename, caption, media_info, base_name, proc
 
     movie_doc = await db.movie_updates.find_one({"_id": base_name})
     error_tmdb = False
-    
+
     file_data = {
         "filename": filename,
         "processed": processed,
@@ -609,13 +602,13 @@ def generate_movie_message(movie_doc, base_name):
             episodes = sorted(list(episodes_by_season[season]), 
                             key=lambda x: int(x.split('-')[0]) if '-' in x else int(x))
             ep_list = ", ".join(episodes)
-            
+
             line = (
                 f"<b>┇ 💠 Season {int(season):02d}</b>\n"
                 f"<b>┇ </b>ᴇᴘɪsᴏᴅᴇs: <code>{ep_list}</code>"
             )
             episode_lines.append(line)
-        
+
         if episode_lines:
             epi_str = "\n".join(episode_lines)
             epi_block = f"\n<b>━━━━━━━━━━━━━━━━━</b>\n{epi_str}\n<b>━━━━━━━━━━━━━━━━━</b>"
@@ -624,13 +617,13 @@ def generate_movie_message(movie_doc, base_name):
     styled_title = get_styled_text(base_name, style_type="bold_serif")
     raw_genres = movie_doc.get("genres", "N/A")
     styled_genres = get_styled_text(raw_genres, style_type="small_caps")
-    
+
     raw_languages = ", ".join(sorted(all_languages)) if all_languages else "N/A"
     styled_languages = get_styled_text(raw_languages, style_type="small_caps")
-    
+
     raw_quality = ", ".join(sorted(all_qualities)) if all_qualities else "N/A"
     styled_quality = get_styled_text(raw_quality, style_type="small_caps")
-    
+
     raw_ott = ", ".join(sorted(all_ott_platforms)) if all_ott_platforms else "N/A"
     styled_ott = get_styled_text(raw_ott, style_type="small_caps")
 
