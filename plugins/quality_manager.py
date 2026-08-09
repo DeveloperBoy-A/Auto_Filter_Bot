@@ -603,15 +603,28 @@ async def find_and_delete_lower_quality(
 async def run_quality_cleanup_background(
     media_dbs,
     file_name: str,
-    caption: str,
+    caption: str = "",
+    file_id: Optional[str] = None,
 ):
+    """Run automatic quality cleanup after a file has been committed.
+
+    The new file is explicitly excluded by _id so the cleanup can safely be
+    triggered from the central save_file() path as well as live channel uploads.
+    """
     async with QUALITY_CLEANUP_SEMAPHORE:
         try:
+            logger.info(
+                "[QUALITY AUTO] Triggered for: %s | file_id=%s",
+                file_name[:120],
+                file_id,
+            )
+
             for idx, media_cls in enumerate(media_dbs, start=1):
                 success, msg, deleted_count = await find_and_delete_lower_quality(
                     db_collection=media_cls.collection,
                     new_filename=file_name,
-                    new_caption=caption,
+                    new_caption=caption or "",
+                    file_id=file_id,
                 )
 
                 if success and deleted_count:
