@@ -2443,7 +2443,7 @@ async def ai_spell_check(chat_id, wrong_name):
             return movie
         movie_list.remove(movie)
 
-async def advantage_spell_chok(client, message):
+async def old_advantage_spell_chok(client, message):
     search = message.text
     query = re.sub(
         r"\b(pl(i|e)*?(s|z+|ease|se|ese|(e+)s(e)?)|((send|snd|giv(e)?|gib)(\sme)?)|movie(s)?|new|latest|br((o|u)h?)*|^h(e|a)?(l)*(o)*|mal(ayalam)?|t(h)?amil|file|that|find|und(o)*|kit(t(i|y)?)?o(w)?|thar(u)?(o)*w?|kittum(o)*|aya(k)*(um(o)*)?|full\smovie|any(one)|with\ssubtitle(s)?)",
@@ -2493,3 +2493,89 @@ async def advantage_spell_chok(client, message):
         await message.delete()
     except Exception:
         pass
+
+
+
+async def advantage_spell_chok(client, message):
+    search = message.text
+    
+    # Clean the input text by removing unwanted words
+    query = re.sub(
+        r"\b(pl(i|e)?(s|z+|ease|se|ese|(e+)s(e)?)|((send|snd|giv(e)?|gib)(\sme)?)|movie(s)?|new|latest|br((o|u)h?)|^h(e|a)?(l)(o)|mal(ayalam)?|t(h)?amil|file|that|find|und(o)|kit(t(i|y)?)?o(w)?|thar(u)?(o)w?|kittum(o)|aya(k)(um(o)*)?|full\smovie|any(one)|with\ssubtitle(s)?)\b",
+        "", 
+        search, 
+        flags=re.IGNORECASE
+    )
+    
+    # Strip spaces. DO NOT append " movie" here as it ruins exact IMDb matches.
+    query = query.strip()
+    
+    if not query:
+        return
+
+    try:
+        # FIX: Pass 'query' (cleaned text) instead of 'search' (uncleaned text)
+        movies = await get_poster(query, bulk=True)
+    except Exception as e:
+        logger.exception("get_poster failed for query=%s: %s", query, e)
+        movies = None
+
+    if not movies:
+        google = quote_plus(query)
+        button = [[InlineKeyboardButton(
+            "🔍 ᴄʜᴇᴄᴋ sᴘᴇʟʟɪɴɢ ᴏɴ ɢᴏᴏɢʟᴇ 🔍", 
+            url=f"https://www.google.com/search?q={google}"
+        )]]
+        k = await message.reply_text(
+            text=script.I_CUDNT.format(search), 
+            reply_markup=InlineKeyboardMarkup(button)
+        )
+        await asyncio.sleep(60)
+        try:
+            await k.delete()
+            await message.delete()
+        except Exception:
+            pass
+        return
+
+    user = message.from_user.id if message.from_user else 0
+    buttons = []
+    seen_titles = set()
+
+    for movie in movies:
+        # Handle both dictionary and object formats safely based on get_poster return type
+        title = getattr(movie, "title", None) or (movie.get("title") if isinstance(movie, dict) else None)
+        imdb_id = getattr(movie, "imdb_id", None) or (movie.get("imdb_id") if isinstance(movie, dict) else getattr(movie, "movieID", None))
+        
+        if not title or not imdb_id:
+            continue
+            
+        # Filter duplicate titles to show only exact, clean IMDb titles
+        title_lower = title.lower()
+        if title_lower not in seen_titles:
+            seen_titles.add(title_lower)
+            buttons.append([
+                InlineKeyboardButton(
+                    text=title, 
+                    callback_data=f"spol#{imdb_id}#{user}"
+                )
+            ])
+
+    if not buttons:
+        return
+
+    buttons.append([InlineKeyboardButton(text="🚫 ᴄʟᴏsᴇ 🚫", callback_data='close_data')])
+    
+    d = await message.reply_text(
+        text=script.CUDNT_FND.format(message.from_user.mention), 
+        reply_markup=InlineKeyboardMarkup(buttons), 
+        reply_to_message_id=message.id
+    )
+    
+    await asyncio.sleep(60)
+    try:
+        await d.delete()
+        await message.delete()
+    except Exception:
+        pass
+        
