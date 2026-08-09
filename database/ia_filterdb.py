@@ -1264,21 +1264,21 @@ async def save_file(media, bot=None, extracted_info=None):  # ✅ NEW: Added ext
             ))
 
         # Duplicate check across ALL configured DBs
-for db_index, media_cls in enumerate(MEDIA_DBS):
-    existing_file = await media_cls.find_one({"_id": file_id})
+        for db_index, media_cls in enumerate(MEDIA_DBS):
+            existing_file = await media_cls.find_one({"_id": file_id})
 
-    if existing_file:
-        db_label = _DB_LABELS[db_index] if db_index < len(_DB_LABELS) else f"DB {db_index + 1}"
-        existing_name = existing_file.file_name or "Unknown"
+            if existing_file:
+                db_label = _DB_LABELS[db_index] if db_index < len(_DB_LABELS) else f"DB {db_index + 1}"
+                existing_name = existing_file.file_name or "Unknown"
 
-        logger.warning(
-            f"⚠️ [DUPLICATE SKIPPED] "
-            f"📄 {original_name} | "
-            f"🗄️ {db_label} | "
-            f"♻️ Existing: {existing_name}"
-        )
+                logger.warning(
+                    f"⚠️ [DUPLICATE SKIPPED] "
+                    f"📄 {original_name} | "
+                    f"🗄️ {db_label} | "
+                    f"♻️ Existing: {existing_name}"
+                )
 
-        return False, 0, None
+                return False, 0, None
 
         # Auto-route: pick whichever configured DB still has room. Once the
         # active one crosses DB_SIZE_LIMIT_MB, new files automatically start
@@ -1302,16 +1302,16 @@ for db_index, media_cls in enumerate(MEDIA_DBS):
         )
         await record.commit()
 
-db_index = MEDIA_DBS.index(target_media)
-db_label = _DB_LABELS[db_index] if db_index < len(_DB_LABELS) else f"DB {db_index + 1}"
+        db_index = MEDIA_DBS.index(target_media)
+        db_label = _DB_LABELS[db_index] if db_index < len(_DB_LABELS) else f"DB {db_index + 1}"
 
-logger.info(
-    f"✅ [FILE SAVED] "
-    f"📄 {file_name} | "
-    f"🗄️ {db_label}"
-)
+        logger.info(
+            f"✅ [FILE SAVED] "
+            f"📄 {file_name} | "
+            f"🗄️ {db_label}"
+        )
 
-clear_search_cache()  # 🚀 new file added -> old cached search/filter results are stale
+        clear_search_cache()  # 🚀 new file added -> old cached search/filter results are stale
         # ✅ FIX: real/final saved filename bhi return karo, taaki callers (channel.py)
         # raw telegram filename ki jagah wahi asli naam use karein jo DB me store hua.
         return True, 1, file_name
@@ -1321,6 +1321,7 @@ clear_search_cache()  # 🚀 new file added -> old cached search/filter results 
     except Exception as e:
         logger.error(f"Error saving file: {e}", exc_info=True)
         return False, 0, None
+
 
 #__________________________________
 # FOR GET SEARCH RESULT THIS CODE UPDATE BY 🅰️NKIT MEENA 
