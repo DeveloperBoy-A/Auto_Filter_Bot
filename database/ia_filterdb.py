@@ -664,39 +664,9 @@ def extract_pure_title(original_name):
     else:
         pure_title = clean_name.strip()
 
-    # ✅ FIX: pehle ye loop trailing language word ko HAMESHA kaat deta tha —
-    # chahe genuine title hi kisi language-name par khatam ho raha ho
-    # (e.g. title "... Korean" ka last word hi "Korean" ho). Isse asli title
-    # ka part galti se udh jaata tha.
-    # Ab hum sirf tabhi trailing language word kaatenge jab wo clearly
-    # ek "tag artifact" ho — matlab clean_name (poore, un-cut string) mein
-    # us language word ke turant baad koi aur technical/prefix tag
-    # (quality/source/season/year/etc.) bhi mil raha ho. Iska matlab wo
-    # language word asal mein ek tag-chain ka hissa tha jo stop-anchor
-    # slicing ke boundary par accidentally pure_title ke end mein reh gaya.
-    # Agar aisa koi follow-up tag nahi milta, to language word ko genuine
-    # title ka hissa maan kar chhod diya jaata hai.
-    _tech_tag_re = re.compile('(?:' + '|'.join(prefix_tags) + ')', re.IGNORECASE)
-
     for lang, aliases in LANGUAGE_ALIASES.items():
         for alias in aliases:
-            m = re.search(rf'\b{re.escape(alias)}\b$', pure_title, flags=re.IGNORECASE)
-            if not m:
-                continue
-
-            # clean_name (full, un-sliced string) mein isi trailing match
-            # ke baad kya aata hai, wo check karo.
-            follow_start = m.start() + len(pure_title[m.start():m.end()])
-            # pure_title clean_name ka hi prefix hai (stop-anchor slice),
-            # isliye wahi offset clean_name mein bhi valid hai.
-            rest_of_clean = clean_name[follow_start:]
-            sep_m = re.match(r'[\s_\-]*', rest_of_clean)
-            after = rest_of_clean[sep_m.end():] if sep_m else rest_of_clean
-
-            if _tech_tag_re.match(after):
-                # Genuinely ek tag-chain ka leftover hai — strip karo.
-                pure_title = pure_title[:m.start()].strip()
-            # warna: genuine title ka hissa maan kar chhod do, kuch mat karo.
+            pure_title = re.sub(rf'\b{re.escape(alias)}\b$', '', pure_title, flags=re.IGNORECASE).strip()
 
     return re.sub(r'\s+', ' ', pure_title).strip()
 
@@ -1384,6 +1354,7 @@ async def save_file(media, bot=None, extracted_info=None):  # ✅ NEW: Added ext
     except Exception as e:
         logger.error(f"Error saving file: {e}", exc_info=True)
         return False, 0, None
+
 
 
 
