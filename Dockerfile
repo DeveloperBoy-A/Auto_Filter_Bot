@@ -1,4 +1,4 @@
-FROM python:3.12.2-slim
+FROM python:3.12.11-slim
 
 # Yahan humne 'git' add kar diya hai
 RUN apt-get update && \
