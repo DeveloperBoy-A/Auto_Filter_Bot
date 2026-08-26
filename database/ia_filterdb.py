@@ -269,6 +269,7 @@ def create_media_model(instance_obj):
         mime_type = fields.StrField(allow_none=True)
         caption = fields.StrField(allow_none=True)
         cover = fields.StrField(allow_none=True)
+        orig_thumb = fields.StrField(allow_none=True)  # File's own embedded thumbnail (fallback when COVERX off)
         media_type = fields.StrField(allow_none=True)
         file_date = fields.DateTimeField(allow_none=True) # Upload timestamp for sorting
         title = fields.StrField(allow_none=True)          # Extracted title for cover reuse
@@ -390,24 +391,24 @@ def unpack_new_file_id(new_file_id):
 RELEASE_TAG = "~[Tokyo_Updates]"
 
 LANGUAGE_ALIASES = {
-    "Hindi": [r'\bhindi\b', r'\bhin\b', r'\bhi\b'],
-    "English": [r'\benglish\b', r'\beng\b', r'\ben\b'],
+    "Hindi": [r'\bhindi\b', r'\bhin\b'],
+    "English": [r'\benglish\b', r'\beng\b'],
     "Tamil": [r'\btamil\b', r'\btam\b'],
-    "Telugu": [r'\btelugu\b', r'\btel\b', r'\btelgu\b'],
-    "Malayalam": [r'\bmalayalam\b', r'\bmal\b', r'\bmallu\b'],
-    "Kannada": [r'\bkannada\b', r'\bkan\b', r'\bknd\b'],
-    "Punjabi": [r'\bpunjabi\b', r'\bpan\b', r'\bpbi\b', r'\bpunj\b'],
-    "Bengali": [r'\bbengali\b', r'\bben\b', r'\bbangla\b', r'\bbangali\b', r'\bbong\b'],
+    "Telugu": [r'\btelugu\b', r'\btel\b'],
+    "Malayalam": [r'\bmalayalam\b', r'\bmal\b'],
+    "Kannada": [r'\bkannada\b', r'\bkan\b'],
+    "Punjabi": [r'\bpunjabi\b', r'\bpan\b', r'\bpbi\b'],
+    "Bengali": [r'\bbengali\b', r'\bben\b'],
     "Gujarati": [r'\bgujarati\b', r'\bguj\b', r'\bgujrat\b', r'\bgujrati\b'],
-    "Marathi": [r'\bmarathi\b', r'\bmar\b', r'\bmrt\b'],
+    "Marathi": [r'\bmarathi\b', r'\bmar\b'],
     "Korean": [r'\bkorean\b', r'\bkor\b', r'\bk-drama\b', r'\bkdrama\b'],
-    "Japanese": [r'\bjapanese\b', r'\bjap\b', r'\bjpn\b'],
-    "Chinese": [r'\bchinese\b', r'\bmandarin\b', r'\bchi\b', r'\bcantonese\b'],
+    "Japanese": [r'\bjapanese\b', r'\bjap\b'],
+    "Chinese": [r'\bchinese\b', r'\bmandarin\b', r'\bchi\b'],
     "Spanish": [r'\bspanish\b', r'\besp\b', r'\bspa\b'],
     "Russian": [r'\brussian\b', r'\brus\b'],
     "French": [r'\bfrench\b', r'\bfre\b', r'\bfra\b'],
-    "Urdu": [r'\burdu\b', r'\burd\b'],
-    "Bhojpuri": [r'\bbhojpuri\b', r'\bbho\b', r'\bbhoj\b']
+    "Urdu": [r'\burdu\b'],
+    "Bhojpuri": [r'\bbhojpuri\b', r'\bbho\b']
 }
 
 OTT_MAP = {
@@ -978,6 +979,15 @@ async def save_file(media, bot=None, extracted_info=None):
     """
     try:
         file_id, file_ref = unpack_new_file_id(media.file_id)
+
+        # Capture the file's own embedded thumbnail (used as fallback cover when COVERX is off)
+        orig_thumb_id = None
+        try:
+            if getattr(media, "thumbs", None):
+                orig_thumb_id = media.thumbs[-1].file_id
+        except Exception:
+            orig_thumb_id = None
+
         original_name = str(media.file_name or "Unnamed File")
         base_name, ext = os.path.splitext(original_name)
 
@@ -1145,6 +1155,7 @@ async def save_file(media, bot=None, extracted_info=None):
             mime_type=media.mime_type,
             caption=getattr(media.caption, "html", None) if media.caption else None,
             cover=None,
+            orig_thumb=orig_thumb_id,
             media_type=("series" if is_series_file(file_name) else "movie"),
             file_date=datetime.utcnow(), 
             title=final_title,
