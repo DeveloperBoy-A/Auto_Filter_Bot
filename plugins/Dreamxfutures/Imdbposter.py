@@ -1,3 +1,4 @@
+
 import re
 import asyncio
 import aiohttp
@@ -195,10 +196,123 @@ async def get_movie_details(query, id=False, file=None):
         logger.exception(f"An error occurred in get_movie_details: {e}")
         return None
 
+def _split_title_year(query: str):
+    """Splits a 'Title YYYY' style query into (title, year). year is None if not found."""
+    q = str(query).strip()
+    m = re.search(r'(?:^|\s)([1-2]\d{3})\s*$', q)
+    if m:
+        year = m.group(1)
+        title = q[:m.start()].strip()
+        return title, year
+    return q, None
+
+
+def _release_year_matches(release_date, year) -> bool:
+    if not year:
+        return True
+    if not release_date:
+        return True
+    return str(release_date)[:4] == str(year)
+
+
+async def _search_official_tmdb(title: str, year: str | None):
+    """Direct TMDB search (accurate, year-filtered). Returns a details dict or None."""
+    if not TMDB_API_KEY:
+        return None
+    try:
+        session = await get_session()
+        params = {"api_key": TMDB_API_KEY, "query": title, "include_adult": "false"}
+        if year:
+            params["year"] = year
+
+        async with session.get(
+            "https://api.themoviedb.org/3/search/movie", params=params
+        ) as resp:
+            if resp.status != 200:
+                return None
+            data = await resp.json()
+            results = data.get("results") or []
+            if not results:
+                return None
+
+            chosen = None
+            if year:
+                for r in results:
+                    if _release_year_matches(r.get("release_date"), year):
+                        chosen = r
+                        break
+            if not chosen:
+                chosen = results[0]
+                if year and not _release_year_matches(chosen.get("release_date"), year):
+                    logger.info(
+                        f"[TMDB] No {year} match for '{title}', closest is "
+                        f"'{chosen.get('title')}' ({chosen.get('release_date')}) — skipping"
+                    )
+                    return None
+
+        # Fetch full details (genres, cast, plot, etc.) using the correctly-matched movie id
+        movie_id = chosen.get("id")
+        async with session.get(
+            f"https://api.themoviedb.org/3/movie/{movie_id}",
+            params={"api_key": TMDB_API_KEY, "append_to_response": "credits"},
+        ) as resp:
+            if resp.status != 200:
+                return None
+            full = await resp.json()
+
+        credits = full.get("credits", {})
+        crew = credits.get("crew", []) or []
+        cast = credits.get("cast", []) or []
+
+        def crew_names(job):
+            return ", ".join(c["name"] for c in crew if c.get("job") == job) or None
+
+        poster_path = full.get("poster_path")
+        backdrop_path = full.get("backdrop_path")
+
+        return {
+            "title": full.get("title"),
+            "year": (full.get("release_date") or "")[:4] or None,
+            "release_date": full.get("release_date"),
+            "rating": round(full.get("vote_average") or 0, 1),
+            "votes": int(full.get("vote_count") or 0),
+            "runtime": full.get("runtime"),
+            "certificates": None,
+            "tmdb_url": f"https://www.themoviedb.org/movie/{movie_id}",
+            "genres": [g["name"] for g in full.get("genres", [])],
+            "languages": [full.get("original_language")] if full.get("original_language") else [],
+            "countries": [c["name"] for c in full.get("production_countries", [])],
+            "director": crew_names("Director"),
+            "writer": crew_names("Writer") or crew_names("Screenplay"),
+            "producer": crew_names("Producer"),
+            "composer": crew_names("Original Music Composer"),
+            "cinematographer": crew_names("Director of Photography"),
+            "cast": ", ".join(c["name"] for c in cast[:6]) or None,
+            "plot": full.get("overview"),
+            "tagline": full.get("tagline"),
+            "box_office": None,
+            "distributors": [],
+            "imdb_id": full.get("imdb_id"),
+            "tmdb_id": movie_id,
+            "poster_url": f"https://image.tmdb.org/t/p/w1280{poster_path}" if poster_path else None,
+            "backdrop_url": f"https://image.tmdb.org/t/p/w1280{backdrop_path}" if backdrop_path else None,
+        }
+    except Exception as e:
+        logger.warning(f"[TMDB] Official API error for '{title}' ({year}): {e}")
+        return None
+
+
 async def get_movie_detailsx(query, id=False, file=None):
     # base_url = "https://bharath-boy-api.vercel.app/api/movie-posters" Monthly limit reached
     base_url = "https://tmdb.blazeposters.workers.dev/api/movie-posters"
     q = str(query).strip()
+    title, year = _split_title_year(q)
+
+    # --- Step 0: Official TMDB search (accurate, year-filtered) ---
+    official = await _search_official_tmdb(title, year)
+    if official and (official.get("poster_url") or official.get("backdrop_url")):
+        return official
+
     try:
         session = await get_session()
         params = {"query": q, "api_key": TMDB_API_KEY}
@@ -211,6 +325,14 @@ async def get_movie_detailsx(query, id=False, file=None):
             data = await resp.json()
     except Exception as e:
         logger.error(f"API down → fallback IMDb: {e}")
+        return await get_movie_details(q)
+
+    # Reject a same-named-but-wrong-year match from the proxy (it has no year filter of its own)
+    if year and not _release_year_matches(data.get("release_date"), year):
+        logger.info(
+            f"[TMDB proxy] Year mismatch for '{title}' ({year}): got "
+            f"'{data.get('title')}' ({data.get('release_date')}) — falling back to IMDb"
+        )
         return await get_movie_details(q)
 
     # ✅ FIX: Ab poori normalization try/except ke andar hai. Pehle 'votes' field
