@@ -360,7 +360,7 @@ async def start(client, message):
                 else:
                     btn = [[InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]]
 
-                cover_url = getattr(files1, 'cover', None) if COVERX else getattr(files1, 'orig_thumb', None)
+                cover_url = getattr(files1, 'cover', None) if COVERX else None  # COVERX off = don't touch cover, keep file's original thumb as-is
                 msg = await client.send_cached_media(
                     chat_id=message.from_user.id,
                     file_id=f_id,
@@ -483,7 +483,7 @@ async def start(client, message):
             ]
     else:
         btn = [[InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]]
-    cover_url = getattr(files, 'cover', None) if COVERX else getattr(files, 'orig_thumb', None)
+    cover_url = getattr(files, 'cover', None) if COVERX else None  # COVERX off = don't touch cover, keep file's original thumb as-is
     msg = await client.send_cached_media(
         chat_id=message.from_user.id,
         file_id=file_id,
