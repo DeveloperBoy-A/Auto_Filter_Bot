@@ -360,7 +360,7 @@ async def start(client, message):
                 else:
                     btn = [[InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]]
 
-                cover_url = getattr(files1, 'cover', None) if COVERX else None  # COVERX off = don't touch cover, keep file's original thumb as-is
+                cover_url = getattr(files1, 'cover', None) if COVERX else None
                 msg = await client.send_cached_media(
                     chat_id=message.from_user.id,
                     file_id=f_id,
@@ -483,7 +483,7 @@ async def start(client, message):
             ]
     else:
         btn = [[InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]]
-    cover_url = getattr(files, 'cover', None) if COVERX else None  # COVERX off = don't touch cover, keep file's original thumb as-is
+    cover_url = getattr(files, 'cover', None) if COVERX else None
     msg = await client.send_cached_media(
         chat_id=message.from_user.id,
         file_id=file_id,
@@ -1470,7 +1470,6 @@ async def clean_db_command(client, message):
 
     except Exception as e:
         await message.reply_text(f"❌ <b>Error while cleaning DB:</b>\n<code>{e}</code>")
-
 
 
 @Client.on_message(filters.command("cleandb") & filters.user(ADMINS))
