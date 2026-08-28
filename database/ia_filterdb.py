@@ -1450,54 +1450,81 @@ def normalize_for_search(text):
     return re.sub(r"\s+", " ", text).strip()
 
 def expand_query(query):
-    query = query.lower()
+    query = query.lower().strip()
     patterns = [query]
 
-    # टाइटल अलग करें (बिना सीजन और एपिसोड के)
-    title = re.sub(r'\b(s\d+|e\d+|season[\s-]*\d+|episode[\s-]*\d+|ep[\s-]*\d+)\b', '', query)
+    if "'" in query or "’" in query:
+        query = re.sub(r"’", "'", query)
+
+        patterns = [
+            query,
+            query.replace("'", ""),
+            re.sub(r"'s\b", "", query),
+            re.sub(r"'s\b", " s", query),
+        ]
+
+        return list(dict.fromkeys(
+            v.strip() for v in patterns if v.strip()
+        ))[:4]
+
+    title = re.sub(
+        r'\b(s\d+|e\d+|season[\s-]*\d+|episode[\s-]*\d+|ep[\s-]*\d+)\b',
+        '',
+        query
+    )
     title = re.sub(r'[\s._-]+', ' ', title).strip()
 
-    s_match = re.search(r"\bs(\d{1,2})|season[\s-]*(\d{1,2})", query)
-    e_match = re.search(r"\be(\d{1,4})|episode[\s-]*(\d{1,4})|ep[\s-]*(\d{1,4})", query)
+    s_match = re.search(
+        r"\bs(\d{1,2})|season[\s-]*(\d{1,2})",
+        query
+    )
 
-    s_num = int(s_match.group(1) or s_match.group(2)) if s_match else None
-    e_num = int(e_match.group(1) or e_match.group(2) or e_match.group(3)) if e_match else None
+    e_match = re.search(
+        r"\be(\d{1,4})|episode[\s-]*(\d{1,4})|ep[\s-]*(\d{1,4})",
+        query
+    )
 
-    # CASE 1: जब यूजर सीजन और एपिसोड दोनों लिखे (जैसे: money heist s02 e03)
+    s_num = (
+        int(s_match.group(1) or s_match.group(2))
+        if s_match else None
+    )
+
+    e_num = (
+        int(e_match.group(1) or e_match.group(2) or e_match.group(3))
+        if e_match else None
+    )
+
     if s_num and e_num:
         variations = [
-            f"s{s_num:02d}e{e_num:02d}", 
-            f"s{s_num:02d} e{e_num:02d}", 
+            f"s{s_num:02d}e{e_num:02d}",
+            f"s{s_num:02d} e{e_num:02d}",
             f"s{s_num}e{e_num}"
         ]
+
         for v in variations:
             patterns.append(f"{title} {v}".strip())
 
-    # CASE 2: जब यूजर केवल सीजन लिखे (जैसे: money heist s01)
     elif s_num:
         variations = [
-            f"s{s_num:02d}", 
-            f"s{s_num}", 
+            f"s{s_num:02d}",
+            f"s{s_num}",
             f"season {s_num}"
         ]
+
         for v in variations:
             patterns.append(f"{title} {v}".strip())
 
-    # CASE 3: जब यूजर केवल एपिसोड लिखे (जैसे: money heist e02 या सिर्फ e02)
     elif e_num:
         variations = [
-            f"e{e_num:02d}", 
-            f"e{e_num}", 
+            f"e{e_num:02d}",
+            f"e{e_num}",
             f"episode {e_num}"
         ]
-        for v in variations:
-            # यदि टाइटल मौजूद है तो टाइटल के साथ जोड़ें, अन्यथा केवल एपिसोड पैटर्न रखें
-            if title:
-                patterns.append(f"{title} {v}".strip())
-            else:
-                patterns.append(v)
 
-    return list(set(patterns))
+        for v in variations:
+            patterns.append(f"{title} {v}".strip() if title else v)
+
+    return list(dict.fromkeys(patterns))
 
 
 # ----------------- 4. मुख्य सर्च और सॉर्टिंग फंक्शन -----------------
