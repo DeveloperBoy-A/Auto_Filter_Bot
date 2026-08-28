@@ -520,6 +520,82 @@ OTT_MAP = {
 # =========================================================
 # SMART DYNAMIC TITLE EXTRACTOR
 # =========================================================
+# ⚡ PERF FIX: all of the patterns below used to be rebuilt (list literal +
+# '|'.join + re.compile) from scratch on EVERY single call to
+# extract_pure_title(). During channel indexing that function runs once per
+# file, so a 5,000-file channel meant recompiling these ~40-80 alternation
+# regexes 5,000 times. They're now built once at import time and reused.
+_URL_CLEAN_RE = re.compile(r'(?:https?://)?(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*)', re.IGNORECASE)
+_TME_CLEAN_RE = re.compile(r't\.me/[a-zA-Z0-9_]+', re.IGNORECASE)
+_MOVIE_VIDEO_RE = re.compile(r'\b(full|hindi|tamil|english|telugu|malayalam|kannada|bengali|new|latest|hd|mp4)\s+(movie|video)\b', re.IGNORECASE)
+_SERIES_WORD_RE = re.compile(r'\b(web[\s\-]?series|tv[\s\-]?series)\b', re.IGNORECASE)
+
+_UPLOADER_TAGS = [r'(?:join\s+)?us\s*bobfiles']
+_UPLOADER_CLEANUP_RE = re.compile(r'^(?:(?:' + '|'.join(_UPLOADER_TAGS) + r')[\s]*)+', re.IGNORECASE)
+
+_PREFIX_TAGS = [
+    r's\d{1,2}(?:-\d{1,2})?', r'e\d{1,4}(?:-\d{1,4})?', 
+    r'\d{3,4}[pi]', r'4k', r'8k',                                 
+    r'(?:19|20)\d{2}',                                  
+    r'combined', r'complete',                           
+    r'dual[\s\-]?audio', r'multi[\s\-]?audio',          
+    r'hindi', r'english', r'tamil', r'telugu', r'malayalam', r'kannada', r'bengali', r'marathi', r'korean', r'japanese', r'chinese', r'spanish', r'russian', r'french',
+    r'web[\-\s]?dl', r'web[\-\s]?rip', r'hdrip', r'bluray', r'brrip', r'dvdrip', r'camrip', r'hdts', r'hdcam', 
+    r'av1', r'x264', r'x265', r'hevc', r'10bit', r'aac', r'eac3', r'ac3', r'ddp[\s\-]?7\.1', r'ddp[\s\-]?5\.1', r'dd[\s\-]?5\.1', r'dd[\s\-]?2\.0', r'ddp', r'5\.1', r'7\.1', r'2\.0', r'2ch', r'stereo',
+    r'download', r'watch', r'full[\s\-]?movie', r'web[\s\-]?series', r'new', r'latest', 
+    r'netflix', r'amazon', r'prime', r'hotstar', r'zee5', r'sonyliv', r'jio', r'jiocinema', r'voot', r'altbalaji' 
+]
+
+# Ensure language tags (e.g., 'Hindi', 'Korean') are only stripped if followed
+# by other quality/source tags to prevent stripping the actual title.
+_LANG_PREFIX_WORDS = {
+    'hindi', 'english', 'tamil', 'telugu', 'malayalam', 'kannada',
+    'bengali', 'marathi', 'korean', 'japanese', 'chinese', 'spanish',
+    'russian', 'french'
+}
+_PREFIX_TOKEN_RE = re.compile('(?:' + '|'.join(_PREFIX_TAGS) + ')', re.IGNORECASE)
+_SEP_RE = re.compile(r'[\s_\-]*')
+
+_STOP_ANCHORS = [
+    r'\bseason[\s\-_]*\d{1,2}\b',
+    r'\be\d{1,4}[\s\-_]*[tT][\s\-_]*e?\d{1,4}\b',
+    r'\bepisode[\s\-_]*\d{1,4}\b',
+    r'\bep[\s\-_]*\d{1,4}\b',
+    r'\b\d{1,2}x\d{1,4}\b',
+    r'\bs\d{1,2}\s?e\d{1,4}\b', 
+    r'\bs\d{1,2}\b', 
+    r'\be\d{1,4}\b', 
+    r'\b(?:vol|volume|chapter|part|pt)[\s\.\-_]*(?:\d{1,4}|[ivx]+)\b',
+    r'\b(19|20)\d{2}\b',                                      
+    r'\b\d{3,4}[pi]\b', 
+    r'\b4k\b', r'\b8k\b',
+    r'\bcombined\b', r'\bcomplete\b',
+    r'\bdual[\s\-]?audio\b', r'\bmulti[\s\-]?audio\b',
+    r'\bweb[\s\-]?dl\b', 
+    r'\bwebrip\b', 
+    r'\bbluray\b', r'\bbdrip\b', r'\bbrrip\b', r'\bbdremux\b', r'\bremux\b',
+    r'\bhdrip\b', r'\bdvdrip\b', r'\bdvdscr\b',
+    r'\bhdtc\b', r'\bhdts\b', r'\bhdcam\b', r'\bcamrip\b', r'\bpredvd\b',
+    r'\bx264\b', r'\bx265\b', r'\bh264\b', r'\bh265\b', r'\bhevc\b', r'\bavc\b', r'\bav1\b',
+    r'\b10bit\b', r'\b12bit\b',
+    r'\bnetflix\b', r'\bamazon\b', r'\bprime\b', r'\bhotstar\b', r'\bdisney\b',
+    r'\bzee5\b', r'\bsonyliv\b', r'\bjiocinema\b', r'\bjio\b', r'\bvoot\b', r'\baltbalaji\b',
+    r'\bhbomax\b', r'\bapple[\s\-]?tv\b', r'\bparamount\b', r'\bpeacock\b',
+    r'\bsunnxt\b', r'\bmx[\s\-]?player\b', r'\blionsgate\b',
+]
+# Precompiled once; extract_pure_title() used to call re.search(anchor, ...)
+# for each of the ~40 anchors above, on every file, every time.
+_STOP_ANCHOR_RES = [re.compile(a) for a in _STOP_ANCHORS]
+
+# Precompiled per-language "strip trailing language word" patterns, used at
+# the end of extract_pure_title() instead of building rf'...' on every call.
+_LANG_STRIP_RES = [
+    (lang, re.compile(rf'\b{re.escape(alias)}\b$', re.IGNORECASE))
+    for lang, aliases in LANGUAGE_ALIASES.items()
+    for alias in aliases
+]
+
+
 def extract_pure_title(original_name):
     """Cleans a raw file string to extract just the pure movie or series title."""
     clean_name = re.sub(r'^\[.*?\]', '', original_name).strip() 
@@ -528,40 +604,18 @@ def extract_pure_title(original_name):
     clean_name = re.sub(r"[._\-]+", " ", clean_name)
 
     # Remove URLs and Telegram links
-    clean_name = re.sub(r'(?:https?://)?(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*)', '', clean_name, flags=re.IGNORECASE)
-    clean_name = re.sub(r't\.me/[a-zA-Z0-9_]+', '', clean_name, flags=re.IGNORECASE)
+    clean_name = _URL_CLEAN_RE.sub('', clean_name)
+    clean_name = _TME_CLEAN_RE.sub('', clean_name)
 
     # Remove redundant keywords like "Movie", "Video", or Series identifiers
-    clean_name = re.sub(r'\b(full|hindi|tamil|english|telugu|malayalam|kannada|bengali|new|latest|hd|mp4)\s+(movie|video)\b', '', clean_name, flags=re.IGNORECASE).strip()
-    clean_name = re.sub(r'\b(web[\s\-]?series|tv[\s\-]?series)\b', '', clean_name, flags=re.IGNORECASE).strip()
+    clean_name = _MOVIE_VIDEO_RE.sub('', clean_name).strip()
+    clean_name = _SERIES_WORD_RE.sub('', clean_name).strip()
 
     # Remove uploader tags
-    uploader_tags = [r'(?:join\s+)?us\s*bobfiles']
-    uploader_cleanup = r'^(?:(?:' + '|'.join(uploader_tags) + r')[\s]*)+'
-    clean_name = re.sub(uploader_cleanup, '', clean_name, flags=re.IGNORECASE).strip()
+    clean_name = _UPLOADER_CLEANUP_RE.sub('', clean_name).strip()
 
-    prefix_tags = [
-        r's\d{1,2}(?:-\d{1,2})?', r'e\d{1,4}(?:-\d{1,4})?', 
-        r'\d{3,4}[pi]', r'4k', r'8k',                                 
-        r'(?:19|20)\d{2}',                                  
-        r'combined', r'complete',                           
-        r'dual[\s\-]?audio', r'multi[\s\-]?audio',          
-        r'hindi', r'english', r'tamil', r'telugu', r'malayalam', r'kannada', r'bengali', r'marathi', r'korean', r'japanese', r'chinese', r'spanish', r'russian', r'french',
-        r'web[\-\s]?dl', r'web[\-\s]?rip', r'hdrip', r'bluray', r'brrip', r'dvdrip', r'camrip', r'hdts', r'hdcam', 
-        r'av1', r'x264', r'x265', r'hevc', r'10bit', r'aac', r'eac3', r'ac3', r'ddp[\s\-]?7\.1', r'ddp[\s\-]?5\.1', r'dd[\s\-]?5\.1', r'dd[\s\-]?2\.0', r'ddp', r'5\.1', r'7\.1', r'2\.0', r'2ch', r'stereo',
-        r'download', r'watch', r'full[\s\-]?movie', r'web[\s\-]?series', r'new', r'latest', 
-        r'netflix', r'amazon', r'prime', r'hotstar', r'zee5', r'sonyliv', r'jio', r'jiocinema', r'voot', r'altbalaji' 
-    ]
-
-    # Ensure language tags (e.g., 'Hindi', 'Korean') are only stripped if followed 
-    # by other quality/source tags to prevent stripping the actual title.
-    LANG_PREFIX_WORDS = {
-        'hindi', 'english', 'tamil', 'telugu', 'malayalam', 'kannada',
-        'bengali', 'marathi', 'korean', 'japanese', 'chinese', 'spanish',
-        'russian', 'french'
-    }
-    _prefix_token_re = re.compile('(?:' + '|'.join(prefix_tags) + ')', re.IGNORECASE)
-    _sep_re = re.compile(r'[\s_\-]*')
+    _prefix_token_re = _PREFIX_TOKEN_RE
+    _sep_re = _SEP_RE
 
     def _splits_a_word(text, end_pos):
         """True if `end_pos` lands mid-word (next char is still alphanumeric) — meaning
@@ -591,39 +645,11 @@ def extract_pure_title(original_name):
     clean_name = clean_name[pos:].strip()
 
     # Stop anchors: The title ends where these tags begin.
-    stop_anchors = [
-        r'\bseason[\s\-_]*\d{1,2}\b',
-        r'\be\d{1,4}[\s\-_]*[tT][\s\-_]*e?\d{1,4}\b',
-        r'\bepisode[\s\-_]*\d{1,4}\b',
-        r'\bep[\s\-_]*\d{1,4}\b',
-        r'\b\d{1,2}x\d{1,4}\b',
-        r'\bs\d{1,2}\s?e\d{1,4}\b', 
-        r'\bs\d{1,2}\b', 
-        r'\be\d{1,4}\b', 
-        r'\b(?:vol|volume|chapter|part|pt)[\s\.\-_]*(?:\d{1,4}|[ivx]+)\b',
-        r'\b(19|20)\d{2}\b',                                      
-        r'\b\d{3,4}[pi]\b', 
-        r'\b4k\b', r'\b8k\b',
-        r'\bcombined\b', r'\bcomplete\b',
-        r'\bdual[\s\-]?audio\b', r'\bmulti[\s\-]?audio\b',
-        r'\bweb[\s\-]?dl\b', 
-        r'\bwebrip\b', 
-        r'\bbluray\b', r'\bbdrip\b', r'\bbrrip\b', r'\bbdremux\b', r'\bremux\b',
-        r'\bhdrip\b', r'\bdvdrip\b', r'\bdvdscr\b',
-        r'\bhdtc\b', r'\bhdts\b', r'\bhdcam\b', r'\bcamrip\b', r'\bpredvd\b',
-        r'\bx264\b', r'\bx265\b', r'\bh264\b', r'\bh265\b', r'\bhevc\b', r'\bavc\b', r'\bav1\b',
-        r'\b10bit\b', r'\b12bit\b',
-        r'\bnetflix\b', r'\bamazon\b', r'\bprime\b', r'\bhotstar\b', r'\bdisney\b',
-        r'\bzee5\b', r'\bsonyliv\b', r'\bjiocinema\b', r'\bjio\b', r'\bvoot\b', r'\baltbalaji\b',
-        r'\bhbomax\b', r'\bapple[\s\-]?tv\b', r'\bparamount\b', r'\bpeacock\b',
-        r'\bsunnxt\b', r'\bmx[\s\-]?player\b', r'\blionsgate\b',
-    ]
-
     lower_name = clean_name.lower()
     first_match_index = len(clean_name)
 
-    for anchor in stop_anchors:
-        match = re.search(anchor, lower_name)
+    for anchor_re in _STOP_ANCHOR_RES:
+        match = anchor_re.search(lower_name)
         if match and match.start() < first_match_index:
             if match.start() > 2: 
                 first_match_index = match.start()
@@ -633,9 +659,8 @@ def extract_pure_title(original_name):
     else:
         pure_title = clean_name.strip()
 
-    for lang, aliases in LANGUAGE_ALIASES.items():
-        for alias in aliases:
-            pure_title = re.sub(rf'\b{re.escape(alias)}\b$', '', pure_title, flags=re.IGNORECASE).strip()
+    for lang, lang_re in _LANG_STRIP_RES:
+        pure_title = lang_re.sub('', pure_title).strip()
 
     return re.sub(r'\s+', ' ', pure_title).strip()
 
@@ -792,6 +817,77 @@ def extract_episode_title(text):
 # =========================================================
 # DATA EXTRACTOR
 # =========================================================
+# ⚡ PERF FIX: SOURCES / TAGS_MAP / target_keywords / the OTT lookup regex
+# used to be rebuilt (dict + list literals, plus a fresh re.compile of a
+# 40-alternative pattern) on every single call to extract_languages_quality().
+# save_file() calls this once per indexed file, so during a big channel
+# index this was thousands of redundant allocations + regex compiles.
+# Built once here at import time instead.
+_SOURCES = {
+    "WEB-DL": ["web-dl", "webdl", "web dl"],
+    "WEBRip": ["webrip", "web rip"],
+    "HDRip": ["hdrip"],
+    "BluRay": ["bluray", "bdrip", "brrip", "bdremux"],
+    "DVDRip": ["dvdrip"],
+    "DVDScr": ["dvdscr", "scr", "dvd-scr"],
+    "REMUX": ["remux"],
+    "Digital": ["digital"],
+    "HDTC": ["hdtc", "hd-tc", "telecine"],
+    "HDTS": ["hdts", "hd-ts", "ts", "telesync"],
+    "HDCAM": ["hdcam", "hd-cam", "hd cam"],
+    "CAMRip": ["cam", "camrip", "cinema"],
+    "PreDVD": ["predvd", "pre dvd"]
+}
+
+_OTT_RES = {
+    platform: [(re.compile(r'\b' + re.escape(a) + r'\b'), a) for a in aliases]
+    for platform, aliases in OTT_MAP.items()
+}
+
+_TAGS_MAP = {
+    "AV1": ["av1"],
+    "HEVC X265": ["x265", "hevc", "h265"],
+    "AVC X264": ["x264", "avc", "h264"],
+    "10Bit": ["10bit"],
+    "12Bit": ["12bit"],
+    "SDR": ["sdr"],
+    "HDR": ["hdr", "hdr10", "hdr10+"],
+    "Dolby Vision": ["dolby vision", "dv", "dovi"],
+    "IMAX": ["imax"],
+    "60FPS": ["60fps"],
+    "Dolby Atmos": ["atmos", "dolby atmos"],
+    "Dolby TrueHD": ["truehd", "dolby truehd"],
+    "DDP 7.1": ["ddp7.1", "ddp 7.1", "eac3 7.1", "dd+ 7.1"],
+    "DDP 5.1": ["ddp5.1", "ddp 5.1", "eac3", "dd+", "ddp"],
+    "DD 5.1": ["dd5.1", "dd 5.1", "ac3 5.1", "ac3", "5.1", "6ch"],
+    "DD 2.0": ["dd2.0", "dd 2.0", "ac3 2.0", "2.0", "2ch", "stereo"],
+    "DTS-X": ["dts-x", "dtsx"],
+    "DTS-HD": ["dts-hd", "dtshd", "dts-hd ma"],
+    "DTS 5.1": ["dts 5.1", "dts5.1", "dts"],
+    "AAC 5.1": ["aac 5.1", "aac5.1"],
+    "AAC": ["aac", "aac 2.0"],
+    "ESubs": ["esub", "esubs"],
+    "HardSubs": ["hsub", "hsubs", "hc", "hcsub"],
+    "MSubs": ["msub", "msubs"]
+}
+
+_TARGET_KEYWORDS = [
+    r'\bunrated\b', r'\bopen[\s\-]?matte\b', r'\bultimate[\s\-]?edition\b', r'\bchronological\b', r'\bredux\b',
+    r'\bleak\b', r'\bstudio\b', r'\bdub\b', r'\bdubbed\b',
+    r'\bunofficial\b', r'\bre[\s\-]?dub(?:bed)?\b', r'\bfan[\s\-]?dub(?:bed)?\b', 
+    r'\bhq[\s\-]?dub(?:bed)?\b', r'\bstudio[\s\-]?dub(?:bed)?\b', r'\bclean[\s\-]?audio\b',
+    r'\boriginal[\s\-]?audio\b', r'\bline[\s\-]?audios?\b', r'\bline\b', r'\bmultiplex\b',
+    r'\bextended\b', r'\bextendded\b', r'\buncut\b', r'\bdirector\'s[\s\-]?cut\b', 
+    r'\bdc\b', r'\bremastered\b', r'\bremaster\b', r'\bproper\b', 
+    r'\bpre[\s\-]?release\b', r'\bprerelease\b', r'\bworkprint\b', r'\bwp\b', 
+    r'\bspecial[\s\-]?edition\b', r'\btheatrical\b', r'\banniversary\b',
+    r'\bhq\b', r'\bhybrid\b', r'\bpatched\b', r'\bcorrected\b', r'\bsoftsub\b',
+    r'\bv[1-4]\b',
+    r'\borgs?\b', r'\bds4k\b', r'\bmulti\b'
+]
+_CUSTOM_QUALIFIER_RE = re.compile('|'.join(_TARGET_KEYWORDS), re.IGNORECASE)
+
+
 def extract_languages_quality(text_to_scan):
     # Normalize underscores and dots to spaces for proper word boundary matching
     scan_text = re.sub(r'[._]+', ' ', text_to_scan)
@@ -835,22 +931,7 @@ def extract_languages_quality(text_to_scan):
         resolution = "2160P" if res.group(1) == "4k" else res.group(1).upper()
 
     source = None
-    SOURCES = {
-        "WEB-DL": ["web-dl", "webdl", "web dl"],
-        "WEBRip": ["webrip", "web rip"],
-        "HDRip": ["hdrip"],
-        "BluRay": ["bluray", "bdrip", "brrip", "bdremux"],
-        "DVDRip": ["dvdrip"],
-        "DVDScr": ["dvdscr", "scr", "dvd-scr"],
-        "REMUX": ["remux"],
-        "Digital": ["digital"],
-        "HDTC": ["hdtc", "hd-tc", "telecine"],       
-        "HDTS": ["hdts", "hd-ts", "ts", "telesync"], 
-        "HDCAM": ["hdcam", "hd-cam", "hd cam"],
-        "CAMRip": ["cam", "camrip", "cinema"],
-        "PreDVD": ["predvd", "pre dvd"]
-    }
-    for src, aliases in SOURCES.items():
+    for src, aliases in _SOURCES.items():
         for a in aliases:
             if a in scan_lower:
                 source = src  
@@ -859,67 +940,25 @@ def extract_languages_quality(text_to_scan):
             break
 
     ott_tag = None
-    for platform, aliases in OTT_MAP.items():
-        for a in aliases:
-            if re.search(r'\b' + re.escape(a) + r'\b', scan_lower) or a in scan_lower:
+    for platform, ott_res in _OTT_RES.items():
+        for ott_re, a in ott_res:
+            if ott_re.search(scan_lower) or a in scan_lower:
                 ott_tag = platform
                 break
         if ott_tag:
             break
 
     extra_tags = []
-    TAGS_MAP = {
-        "AV1": ["av1"], 
-        "HEVC X265": ["x265", "hevc", "h265"], 
-        "AVC X264": ["x264", "avc", "h264"], 
-        "10Bit": ["10bit"], 
-        "12Bit": ["12bit"],
-        "SDR": ["sdr"],
-        "HDR": ["hdr", "hdr10", "hdr10+"],
-        "Dolby Vision": ["dolby vision", "dv", "dovi"],
-        "IMAX": ["imax"],
-        "60FPS": ["60fps"],
-        "Dolby Atmos": ["atmos", "dolby atmos"],
-        "Dolby TrueHD": ["truehd", "dolby truehd"],
-        "DDP 7.1": ["ddp7.1", "ddp 7.1", "eac3 7.1", "dd+ 7.1"],
-        "DDP 5.1": ["ddp5.1", "ddp 5.1", "eac3", "dd+", "ddp"],
-        "DD 5.1": ["dd5.1", "dd 5.1", "ac3 5.1", "ac3", "5.1", "6ch"],
-        "DD 2.0": ["dd2.0", "dd 2.0", "ac3 2.0", "2.0", "2ch", "stereo"],
-        "DTS-X": ["dts-x", "dtsx"],
-        "DTS-HD": ["dts-hd", "dtshd", "dts-hd ma"],
-        "DTS 5.1": ["dts 5.1", "dts5.1", "dts"],
-        "AAC 5.1": ["aac 5.1", "aac5.1"],
-        "AAC": ["aac", "aac 2.0"],
-        "ESubs": ["esub", "esubs"], 
-        "HardSubs": ["hsub", "hsubs", "hc", "hcsub"],
-        "MSubs": ["msub", "msubs"]
-    }
-    for tag, aliases in TAGS_MAP.items():
+    for tag, aliases in _TAGS_MAP.items():
         for a in aliases:
             if a in scan_lower:
                 extra_tags.append(tag)
                 break
 
     custom_qualifiers = []
-    target_keywords = [
-        r'\bunrated\b', r'\bopen[\s\-]?matte\b', r'\bultimate[\s\-]?edition\b', r'\bchronological\b', r'\bredux\b',
-        r'\bleak\b', r'\bstudio\b', r'\bdub\b', r'\bdubbed\b',
-        r'\bunofficial\b', r'\bre[\s\-]?dub(?:bed)?\b', r'\bfan[\s\-]?dub(?:bed)?\b', 
-        r'\bhq[\s\-]?dub(?:bed)?\b', r'\bstudio[\s\-]?dub(?:bed)?\b', r'\bclean[\s\-]?audio\b',
-        r'\boriginal[\s\-]?audio\b', r'\bline[\s\-]?audios?\b', r'\bline\b', r'\bmultiplex\b',
-        r'\bextended\b', r'\bextendded\b', r'\buncut\b', r'\bdirector\'s[\s\-]?cut\b', 
-        r'\bdc\b', r'\bremastered\b', r'\bremaster\b', r'\bproper\b', 
-        r'\bpre[\s\-]?release\b', r'\bprerelease\b', r'\bworkprint\b', r'\bwp\b', 
-        r'\bspecial[\s\-]?edition\b', r'\btheatrical\b', r'\banniversary\b',
-        r'\bhq\b', r'\bhybrid\b', r'\bpatched\b', r'\bcorrected\b', r'\bsoftsub\b',
-        r'\bv[1-4]\b',
-        r'\borgs?\b', r'\bds4k\b', r'\bmulti\b'
-    ]
-
-    combined_pattern = re.compile('|'.join(target_keywords), re.IGNORECASE)
     found_matches = []
 
-    for match in combined_pattern.finditer(scan_lower):
+    for match in _CUSTOM_QUALIFIER_RE.finditer(scan_lower):
         start_pos = match.start()
         end_pos = match.end()
         original_string = text_to_scan[start_pos:end_pos].strip()
@@ -1450,81 +1489,54 @@ def normalize_for_search(text):
     return re.sub(r"\s+", " ", text).strip()
 
 def expand_query(query):
-    query = query.lower().strip()
+    query = query.lower()
     patterns = [query]
 
-    if "'" in query or "’" in query:
-        query = re.sub(r"’", "'", query)
-
-        patterns = [
-            query,
-            query.replace("'", ""),
-            re.sub(r"'s\b", "", query),
-            re.sub(r"'s\b", " s", query),
-        ]
-
-        return list(dict.fromkeys(
-            v.strip() for v in patterns if v.strip()
-        ))[:4]
-
-    title = re.sub(
-        r'\b(s\d+|e\d+|season[\s-]*\d+|episode[\s-]*\d+|ep[\s-]*\d+)\b',
-        '',
-        query
-    )
+    # टाइटल अलग करें (बिना सीजन और एपिसोड के)
+    title = re.sub(r'\b(s\d+|e\d+|season[\s-]*\d+|episode[\s-]*\d+|ep[\s-]*\d+)\b', '', query)
     title = re.sub(r'[\s._-]+', ' ', title).strip()
 
-    s_match = re.search(
-        r"\bs(\d{1,2})|season[\s-]*(\d{1,2})",
-        query
-    )
+    s_match = re.search(r"\bs(\d{1,2})|season[\s-]*(\d{1,2})", query)
+    e_match = re.search(r"\be(\d{1,4})|episode[\s-]*(\d{1,4})|ep[\s-]*(\d{1,4})", query)
 
-    e_match = re.search(
-        r"\be(\d{1,4})|episode[\s-]*(\d{1,4})|ep[\s-]*(\d{1,4})",
-        query
-    )
+    s_num = int(s_match.group(1) or s_match.group(2)) if s_match else None
+    e_num = int(e_match.group(1) or e_match.group(2) or e_match.group(3)) if e_match else None
 
-    s_num = (
-        int(s_match.group(1) or s_match.group(2))
-        if s_match else None
-    )
-
-    e_num = (
-        int(e_match.group(1) or e_match.group(2) or e_match.group(3))
-        if e_match else None
-    )
-
+    # CASE 1: जब यूजर सीजन और एपिसोड दोनों लिखे (जैसे: money heist s02 e03)
     if s_num and e_num:
         variations = [
-            f"s{s_num:02d}e{e_num:02d}",
-            f"s{s_num:02d} e{e_num:02d}",
+            f"s{s_num:02d}e{e_num:02d}", 
+            f"s{s_num:02d} e{e_num:02d}", 
             f"s{s_num}e{e_num}"
         ]
-
         for v in variations:
             patterns.append(f"{title} {v}".strip())
 
+    # CASE 2: जब यूजर केवल सीजन लिखे (जैसे: money heist s01)
     elif s_num:
         variations = [
-            f"s{s_num:02d}",
-            f"s{s_num}",
+            f"s{s_num:02d}", 
+            f"s{s_num}", 
             f"season {s_num}"
         ]
-
         for v in variations:
             patterns.append(f"{title} {v}".strip())
 
+    # CASE 3: जब यूजर केवल एपिसोड लिखे (जैसे: money heist e02 या सिर्फ e02)
     elif e_num:
         variations = [
-            f"e{e_num:02d}",
-            f"e{e_num}",
+            f"e{e_num:02d}", 
+            f"e{e_num}", 
             f"episode {e_num}"
         ]
-
         for v in variations:
-            patterns.append(f"{title} {v}".strip() if title else v)
+            # यदि टाइटल मौजूद है तो टाइटल के साथ जोड़ें, अन्यथा केवल एपिसोड पैटर्न रखें
+            if title:
+                patterns.append(f"{title} {v}".strip())
+            else:
+                patterns.append(v)
 
-    return list(dict.fromkeys(patterns))
+    return list(set(patterns))
 
 
 # ----------------- 4. मुख्य सर्च और सॉर्टिंग फंक्शन -----------------
