@@ -592,88 +592,93 @@ async def save_group_settings(group_id, key, value):
 #CLEAN_FILENAME____🅰️NKIT_Ⓜ️EENA______
 
 def clean_filename(file_name):
-
-    # 🔥 NAYA FIX: "Join Us BoBFiles" ya "Us BoBFiles" ko start se hatane ke liye
+    # Remove specific uploader tags from the beginning
     file_name = re.sub(r'^(?:join\s+)?us\s+bobfiles\s*', '', file_name, flags=re.IGNORECASE)
-
-    # Remove ~[Tokyo_Updates]
-    #file_name = re.sub(r'~\[[^\]]*\]', '', file_name)
-
-    # Remove # and $
+    
+    # Remove ~[Tokyo_Updates] (Currently commented out in original logic)
+    # file_name = re.sub(r'~\[[^\]]*\]', '', file_name)
+    
+    # Remove specific symbols (# and $)
     file_name = re.sub(r'[#$]', '', file_name)
 
-    # Standard prefixes to remove
-    prefixes = (
-        '[', '@', 'www.', 'ClipmateZone',
-        'NewMoviesOnTG', 'moviehub4uupdate',
-        'moviehub4u', 'update', 'New',
-        'Movies', 'OnTG', 'FILMSCLUB04',
-        'PremiumHub'
-    )
+    # Symbol-attached prefixes: tags attached directly to a word (e.g., "[Tag]Movie", "@channel")
+    symbol_prefixes = ('[', '@', 'www.')
 
+    # Plain-word garbage tags: exact word matches (case-insensitive) to avoid deleting valid title words
+    word_prefixes_lower = {
+        w.lower() for w in (
+            'ClipmateZone', 'NewMoviesOnTG', 'moviehub4uupdate', 'moviehub4u', 
+            'update', 'New', 'Movies', 'OnTG', 'FILMSCLUB04', 'PremiumHub'
+        )
+    }
     unwanted = {word.lower() for word in BAD_WORDS}
 
-    # Split and Clean
-    words = file_name.split()
+    def _bare(word):
+        # Strip surrounding punctuation/symbols for accurate comparison
+        return re.sub(r'^\W+|\W+$', '', word).lower()
 
+    # Split and clean words
+    words = file_name.split()
     cleaned_words = [
-        word for word in words
+        word for word in words 
         if not (
-            word.startswith(prefixes)
-            or word.lower() in unwanted
+            word.startswith(symbol_prefixes) or 
+            _bare(word) in word_prefixes_lower or 
+            _bare(word) in unwanted
         )
     ]
 
-    # Remove extra spaces
+    # Reassemble the filename and fix spaces before the extension
     file_name = ' '.join(cleaned_words).strip()
-
-    # Fix space before extension
     file_name = re.sub(r'\s+\.', '.', file_name)
-
+    
     return file_name
 
 
 def remove_prefix_garbage(file_name):
-
+    # Remove specific uploader tags from the beginning
     file_name = re.sub(r'^(?:join\s+)?us\s+bobfiles\s*', '', file_name, flags=re.IGNORECASE)
-
-    # Remove ~[Tokyo_Updates]
+    
+    # Remove branding tags
     file_name = re.sub(r'~\[[^\]]*\]', '', file_name)
-
-    # Remove # and $
+    
+    # Remove specific symbols (# and $)
     file_name = re.sub(r'[#$]', '', file_name)
 
-    prefixes = (
-        '[', '@', 'www.', 't.me/', 'telegram.me/',
-        '#', 'ClipmateZone', 'New', 'Movies',
-        'OnTG', 'moviehub4uupdate', 'moviehub4u',
-        'update', '@TGCinemaworld -',
-        'BackupByJaggii'
-    )
-
+    symbol_prefixes = ('[', '@', 'www.', 't.me/', 'telegram.me/', '#')
+    word_prefixes_lower = {
+        w.lower() for w in (
+            'ClipmateZone', 'New', 'Movies', 'OnTG', 'moviehub4uupdate', 
+            'moviehub4u', 'update', '@TGCinemaworld -', 'BackupByJaggii'
+        )
+    }
     unwanted = {word.lower() for word in BAD_WORDS}
+
+    def _bare(word):
+        return re.sub(r'^\W+|\W+$', '', word).lower()
 
     words = file_name.split()
     start = False
     cleaned = []
-
+    
     for word in words:
-
         if not start:
-            # Check if current word is a prefix or bad word
-            if any(word.startswith(p) for p in prefixes) or word.lower() in unwanted:
+            # Skip leading garbage words and prefixes
+            if (word.startswith(symbol_prefixes) or 
+                _bare(word) in word_prefixes_lower or 
+                _bare(word) in unwanted):
                 continue
-
-            start = True  # Pehla valid title word mil gaya
-
+            # First valid title word found; stop filtering
+            start = True
+        
         cleaned.append(word)
 
+    # Reassemble the filename and fix spaces before the extension
     file_name = ' '.join(cleaned).strip()
-
-    # Fix space before extension
     file_name = re.sub(r'\s+\.', '.', file_name)
-
+    
     return file_name
+
 
 
 
