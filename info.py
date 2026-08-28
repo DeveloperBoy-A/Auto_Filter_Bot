@@ -101,7 +101,7 @@ LINK_PREVIEW = bool(environ.get('LINK_PREVIEW', False)) # Shows link preview in 
 ABOVE_PREVIEW = bool(environ.get('ABOVE_PREVIEW', True)) # Shows link preview above the text in notification msg if True else below the msg
 TMDB_API_KEY = environ.get('TMDB_API_KEY', 'a02fd334c1aad2e413e6f57a0be2ef27') # preffer to use your own tmdb API Key get it from https://www.themoviedb.org/settings/api
 TMDB_POSTER = bool(environ.get('TMDB_POSTER', "True")) # Shows TMDB poster in notification msg
-LANDSCAPE_POSTER = bool(environ.get('LANDSCAPE_POSTER', True)) # Shows landscape poster in notification msg
+LANDSCAPE_POSTER = bool(environ.get('LANDSCAPE_POSTER', False)) # Shows landscape poster in notification msg
 
 MAX_LIST_ELM = environ.get("MAX_LIST_ELM", None)
 
