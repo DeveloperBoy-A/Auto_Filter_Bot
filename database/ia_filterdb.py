@@ -563,12 +563,22 @@ def extract_pure_title(original_name):
     _prefix_token_re = re.compile('(?:' + '|'.join(prefix_tags) + ')', re.IGNORECASE)
     _sep_re = re.compile(r'[\s_\-]*')
 
+    def _splits_a_word(text, end_pos):
+        """True if `end_pos` lands mid-word (next char is still alphanumeric) — meaning
+        the match only consumed a *prefix* of a longer real word (e.g. 'new' matching
+        just the first 3 letters of 'Newtons'), not the whole word/tag."""
+        return end_pos < len(text) and text[end_pos].isalnum()
+
     pos = 0
     while True:
         sep_m = _sep_re.match(clean_name, pos)
         p = sep_m.end() if sep_m else pos
         tok_m = _prefix_token_re.match(clean_name, p)
         if not tok_m:
+            break
+        if _splits_a_word(clean_name, tok_m.end()):
+            # This tag only matched part of a longer word (e.g. "new" inside "Newtons") —
+            # that's not a real noise tag, it's the start of the actual title. Stop here.
             break
         is_lang = tok_m.group(0).lower() in LANG_PREFIX_WORDS
         if is_lang:
