@@ -206,7 +206,7 @@ async def _fetch_cover_url(title: str, year: str | None = None) -> str | None:
         logger.warning(f"[COVER] No cover found from any source for '{title}' ({year})")
         return None
 
-    return details.get("backdrop_url") or details.get("poster_url")
+    return details.get("poster_url") or details.get("backdrop_url")
 
 
 def _render_watermark_sync(data: bytes) -> "io.BytesIO | None":
