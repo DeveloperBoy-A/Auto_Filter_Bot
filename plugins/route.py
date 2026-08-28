@@ -123,7 +123,6 @@ async def media_streamer(request: web.Request, id: int, secure_hash: str):
 
     mime_type = file_id.mime_type
     file_name = file_id.file_name
-    disposition = "attachment"
 
     if mime_type:
         if not file_name:
@@ -133,10 +132,20 @@ async def media_streamer(request: web.Request, id: int, secure_hash: str):
                 file_name = f"{secrets.token_hex(2)}.unknown"
     else:
         if file_name:
-            mime_type = mimetypes.guess_type(file_id.file_name)
+            # BUGFIX: guess_type() returns a (type, encoding) tuple, not a string.
+            # Passing the tuple straight into the Content-Type header broke playback
+            # for every file that didn't already carry an embedded mime_type.
+            guessed_type, _ = mimetypes.guess_type(file_name)
+            mime_type = guessed_type or "application/octet-stream"
         else:
             mime_type = "application/octet-stream"
             file_name = f"{secrets.token_hex(2)}.unknown"
+
+    # Play inline (in-browser <video>/<audio>, external players via URL) instead of
+    # forcing a "Save As" download dialog. Some browsers (notably Firefox) strictly
+    # honor Content-Disposition: attachment and refuse to stream the file at all,
+    # which is why playback worked in some apps/browsers but not others.
+    disposition = "inline" if mime_type.split("/")[0] in ("video", "audio", "image") else "attachment"
 
     return web.Response(
         status=206 if range_header else 200,
