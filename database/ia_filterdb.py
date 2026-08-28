@@ -42,69 +42,155 @@ WATERMARK_POSITIONS = ["bottom_right", "bottom_left", "top_right", "bottom_cente
 # =========================================================
 # COVER IMAGE FETCHER
 # =========================================================
-async def _fetch_cover_url(title: str) -> str | None:
+def _year_matches(candidate_date: str | None, expected_year: str | None) -> bool:
+    """True if candidate_date (YYYY-MM-DD / YYYY) matches expected_year, or if we can't check either side."""
+    if not expected_year:
+        return True  # no year to verify against, don't block on it
+    if not candidate_date:
+        return True  # API gave no date, can't disprove it — don't block
+    candidate_year = str(candidate_date).strip()[:4]
+    return candidate_year == str(expected_year).strip()
+
+
+async def _fetch_cover_url_official_tmdb(title: str, year: str | None) -> dict | None:
     """
-    Fetches the poster URL using the cleaned file title.
-    Attempts to fetch from the TMDB free public API first, falling back to IMDB.
+    Queries TMDB's official search API directly (requires TMDB_API_KEY).
+    Filters candidates by release year to correctly disambiguate common/reused titles
+    (e.g. multiple movies simply called "Toxic"), instead of blindly trusting the top result.
+    """
+    import aiohttp
+
+    if not TMDB_API_KEY:
+        return None
+
+    session = await _get_session()
+    try:
+        params = {"api_key": TMDB_API_KEY, "query": title.strip(), "include_adult": "false"}
+        if year:
+            params["year"] = year
+
+        async with session.get(
+            "https://api.themoviedb.org/3/search/movie",
+            params=params,
+            timeout=aiohttp.ClientTimeout(total=10),
+        ) as resp:
+            if resp.status != 200:
+                logger.warning(f"[COVER] Official TMDB status {resp.status} for '{title}' ({year})")
+                return None
+            data = await resp.json()
+            results = data.get("results") or []
+
+            if not results:
+                return None
+
+            # Prefer an exact year match among results; TMDB's own popularity ordering
+            # otherwise makes it easy to pick a same-named but wrong-year title.
+            chosen = None
+            if year:
+                for r in results:
+                    if _year_matches(r.get("release_date"), year):
+                        chosen = r
+                        break
+            if not chosen:
+                chosen = results[0]
+                if year and not _year_matches(chosen.get("release_date"), year):
+                    logger.warning(
+                        f"[COVER] Official TMDB: no {year} match for '{title}', "
+                        f"closest result is '{chosen.get('title')}' ({chosen.get('release_date')}) — skipping"
+                    )
+                    return None
+
+            poster_path = chosen.get("poster_path")
+            backdrop_path = chosen.get("backdrop_path")
+            if not poster_path and not backdrop_path:
+                return None
+
+            return {
+                "poster_url": f"https://image.tmdb.org/t/p/w1280{poster_path}" if poster_path else None,
+                "backdrop_url": f"https://image.tmdb.org/t/p/w1280{backdrop_path}" if backdrop_path else None,
+                "title": chosen.get("title"),
+            }
+    except Exception as e:
+        logger.warning(f"[COVER] Official TMDB error for '{title}' ({year}): {e}")
+        return None
+
+
+async def _fetch_cover_url(title: str, year: str | None = None) -> str | None:
+    """
+    Fetches the poster URL for the given title (and, when known, release year).
+    Order: official TMDB search (if TMDB_API_KEY is set, most accurate — filters by year)
+    -> shared TMDB proxy (fallback, no key needed) -> IMDB (last resort).
     """
     import aiohttp
 
     details = None
     session = await _get_session()
 
-    # --- Step 1: TMDB API ---
-    try:
-        logger.debug(f"[COVER] Trying TMDB for: '{title}'")
-        base_url = "https://tmdb.blazeposters.workers.dev/api/movie-posters"
-        params = {"query": title.strip()}
-        if TMDB_API_KEY:
-            params["api_key"] = TMDB_API_KEY
+    # --- Step 0: Official TMDB API (most reliable — year-filtered) ---
+    details = await _fetch_cover_url_official_tmdb(title, year)
+    if details:
+        logger.debug(f"[COVER] Official TMDB success | title='{details.get('title')}' | year={year}")
 
-        async with session.get(base_url, params=params, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-            if resp.status == 200:
-                data = await resp.json()
-                poster_url = data.get("poster_url")
-                backdrop_url = data.get("backdrop_url")
+    # --- Step 1: Shared TMDB proxy (no API key required) ---
+    if not details:
+        try:
+            search_title = f"{title} {year}" if year else title
+            logger.debug(f"[COVER] Trying TMDB proxy for: '{search_title}'")
+            base_url = "https://tmdb.blazeposters.workers.dev/api/movie-posters"
+            params = {"query": search_title.strip()}
 
-                if not poster_url:
-                    posters = data.get("images", {}).get("posters", {})
-                    for key in ("en", "xx"):
-                        if posters.get(key):
-                            poster_url = posters[key][0]
-                            break
-                if not backdrop_url:
-                    backdrops = data.get("images", {}).get("backdrops", {})
-                    for key in ("en", "xx"):
-                        if backdrops.get(key):
-                            backdrop_url = backdrops[key][0]
-                            break
+            async with session.get(base_url, params=params, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    poster_url = data.get("poster_url")
+                    backdrop_url = data.get("backdrop_url")
 
-                if poster_url or backdrop_url:
-                    # Validate title match to avoid false positives for short/ambiguous queries
-                    result_title = str(data.get("title", "")).lower().strip()
-                    search_words = [w for w in title.lower().split() if not w.isdigit()]
-                    main_words = [w for w in search_words if len(w) >= 2][:2]
+                    if not poster_url:
+                        posters = data.get("images", {}).get("posters", {})
+                        for key in ("en", "xx"):
+                            if posters.get(key):
+                                poster_url = posters[key][0]
+                                break
+                    if not backdrop_url:
+                        backdrops = data.get("images", {}).get("backdrops", {})
+                        for key in ("en", "xx"):
+                            if backdrops.get(key):
+                                backdrop_url = backdrops[key][0]
+                                break
 
-                    if main_words and not all(w in result_title for w in main_words):
-                        logger.warning(f"[COVER] TMDB title mismatch: searched='{title}' got='{result_title}' — skipping")
-                    else:
-                        if poster_url:
-                            poster_url = poster_url.replace("/original/", "/w1280/")
-                        if backdrop_url:
-                            backdrop_url = backdrop_url.replace("/original/", "/w1280/")
-                        details = {"poster_url": poster_url, "backdrop_url": backdrop_url}
-                        logger.debug(f"[COVER] TMDB success | poster={poster_url} | backdrop={backdrop_url}")
-            else:
-                logger.warning(f"[COVER] TMDB status {resp.status} for '{title}'")
-    except Exception as e:
-        logger.warning(f"[COVER] TMDB error for '{title}': {e}")
+                    if poster_url or backdrop_url:
+                        # Validate title AND year match to avoid false positives for
+                        # short/ambiguous or reused titles (e.g. "Toxic" (2026) vs an older "Toxic")
+                        result_title = str(data.get("title", "")).lower().strip()
+                        result_date = data.get("release_date") or data.get("first_air_date")
+                        search_words = [w for w in title.lower().split() if not w.isdigit()]
+                        main_words = [w for w in search_words if len(w) >= 2][:2]
+
+                        title_ok = not main_words or all(w in result_title for w in main_words)
+                        year_ok = _year_matches(result_date, year)
+
+                        if not title_ok:
+                            logger.warning(f"[COVER] TMDB proxy title mismatch: searched='{title}' got='{result_title}' — skipping")
+                        elif not year_ok:
+                            logger.warning(f"[COVER] TMDB proxy year mismatch: searched='{title}' ({year}) got='{result_title}' ({result_date}) — skipping")
+                        else:
+                            if poster_url:
+                                poster_url = poster_url.replace("/original/", "/w1280/")
+                            if backdrop_url:
+                                backdrop_url = backdrop_url.replace("/original/", "/w1280/")
+                            details = {"poster_url": poster_url, "backdrop_url": backdrop_url}
+                            logger.debug(f"[COVER] TMDB proxy success | poster={poster_url} | backdrop={backdrop_url}")
+                else:
+                    logger.warning(f"[COVER] TMDB proxy status {resp.status} for '{search_title}'")
+        except Exception as e:
+            logger.warning(f"[COVER] TMDB proxy error for '{title}': {e}")
 
     # --- Step 2: IMDB Fallback ---
     if not details:
         try:
             logger.debug(f"[COVER] Trying IMDB for: '{title}'")
             from plugins.Dreamxfutures.Imdbposter import get_movie_details
-            imdb_data = await get_movie_details(title)
+            imdb_data = await get_movie_details(f"{title} {year}" if year else title)
             if imdb_data and imdb_data.get("poster_url"):
                 details = {
                     "poster_url": imdb_data.get("poster_url"),
@@ -117,7 +203,7 @@ async def _fetch_cover_url(title: str) -> str | None:
             logger.warning(f"[COVER] IMDB error for '{title}': {e}")
 
     if not details:
-        logger.warning(f"[COVER] No cover found from any source for '{title}'")
+        logger.warning(f"[COVER] No cover found from any source for '{title}' ({year})")
         return None
 
     return details.get("backdrop_url") or details.get("poster_url")
@@ -944,8 +1030,7 @@ async def _fetch_and_save_cover(file_id: str, final_title: str, year: str | None
                     logger.debug(f"[COVER] Reused existing cover from DB for '{final_title}'")
                 else:
                     # 3. Fetch from API
-                    search_query = f"{final_title} {year}" if year else final_title
-                    raw_url = await _fetch_cover_url(search_query)
+                    raw_url = await _fetch_cover_url(final_title, year)
 
                     if not raw_url:
                         logger.debug(f"[COVER] No cover found for '{final_title}'")
@@ -1209,6 +1294,14 @@ def extract_source(name):
 
 def extract_season_episode(name):
     name = name.lower()
+
+    # Combined pattern first: catches attached "S01E01" style (no separator between
+    # the season digits and 'e', where a bare \be...\b episode regex can't match
+    # because there's no word boundary between the '1' and the 'e').
+    combined = re.search(r"\bs(?:eason)?[\s._-]*(\d{1,2})[\s._-]*e(?:p(?:isode)?)?[\s._-]*(\d{1,4})", name)
+    if combined:
+        return int(combined.group(1)), int(combined.group(2))
+
     s = re.search(r"\bs(?:eason)?[\s._-]*(\d{1,2})", name)
     e = re.search(r"\be(?:pisode|p)?[\s._-]*(\d{1,4})", name)
 
@@ -1576,35 +1669,40 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
     # `files` is now already true-recency sorted across ALL databases combined, so idx 0 really is the newest file.
     indexed_files = list(enumerate(files))
 
-    if is_series:
-        def _series_key(item):
-            idx, x = item  # idx 0, 1, 2... (0 is most recent)
-            name_lower = x.file_name.lower()
-            season, episode = extract_season_episode(x.file_name)
-            return (
-                not _is_exact(x),          # 🎯 exact match always first
-                not orig_re.match(name_lower),
-                not first_re.match(name_lower),
-                -season,
-                -episode,
-                idx  # 🚀 नई फाइल्स को प्राथमिकता (quality/source से पहले)
-            )
+    # 🚀 TITLE-GROUPED SORT: पहले हर file को उसके *stored title* (fallback: file_name) से
+    # ग्रुप करते हैं। एक broad/generic query (जैसे "toxic") कई अलग-अलग titles को match कर
+    # सकती है — एक असंबंधित पुरानी series ("Toxic Town") और एक नई movie ("Toxic 2026")।
+    # पहले पूरे result set पर एक ही `is_series` flag से season/episode sorting लगाने से
+    # movie की नई files गलती से पुरानी series episodes के नीचे चली जाती थीं।
+    # अब: अलग-अलग titles group_min_idx (उस title की सबसे नई file) के हिसाब से ordered
+    # होते हैं, लेकिन एक ही title/series के अंदर episodes अब भी E-highest → E-lowest
+    # (जैसे E04 → E01) क्रम में रहते हैं, और एक ही movie की अलग-अलग qualities अब भी
+    # recency → quality → source क्रम में रहती हैं।
+    group_min_idx = {}
+    for idx, x in indexed_files:
+        grp = (x.title or x.file_name).strip().lower()
+        if grp not in group_min_idx or idx < group_min_idx[grp]:
+            group_min_idx[grp] = idx
 
-        indexed_files = sorted(indexed_files, key=_series_key)
-    else:
-        def _movie_key(item):
-            idx, x = item  # idx 0, 1, 2... (0 is most recent)
-            name_lower = x.file_name.lower()
-            return (
-                not _is_exact(x),          # 🎯 exact match always first
-                not orig_re.match(name_lower),
-                not first_re.match(name_lower),
-                idx,  # 🚀 नई फाइल्स को प्राथमिकता मिलेगी
-                -extract_quality(x.file_name),
-                -extract_source(x.file_name)
-            )
+    def _unified_key(item):
+        idx, x = item  # idx 0, 1, 2... (0 is most recent)
+        name_lower = x.file_name.lower()
+        grp = (x.title or x.file_name).strip().lower()
+        file_is_series = is_series_file(x.file_name)
+        season, episode = extract_season_episode(x.file_name) if file_is_series else (0, 0)
+        return (
+            not _is_exact(x),              # 🎯 exact match always first
+            not orig_re.match(name_lower),
+            not first_re.match(name_lower),
+            group_min_idx[grp],            # 🚀 नए title/series का group पहले आएगा
+            -season,                       # उसी title के अंदर: बड़ा season/episode पहले
+            -episode,
+            idx,                           # आख़िरी tie-break, और non-series files के लिए recency
+            -extract_quality(x.file_name),
+            -extract_source(x.file_name),
+        )
 
-        indexed_files = sorted(indexed_files, key=_movie_key)
+    indexed_files = sorted(indexed_files, key=_unified_key)
 
     # वापस ओरिजिनल फाइल ऑब्जेक्ट्स निकालें
     sorted_files = [x for idx, x in indexed_files]
