@@ -1483,8 +1483,20 @@ async def backfill_media_type(
 def normalize_for_search(text):
     text = text.lower()
     text = re.sub(r'(\d+)[xX](\d+)', lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}", text)
-    text = re.sub(r'\b(?:season|s)[\s\-]*(\d+)', lambda m: f"s{int(m.group(1)):02d}", text)
-    text = re.sub(r'\b(?:episode|ep|e)[\s\-]*(\d+)', lambda m: f"e{int(m.group(1)):02d}", text)
+    # 🐛 BUGFIX: a bare "s"/"e" followed by a digit was always treated as a
+    # season/episode marker — even when it was really just a stray letter,
+    # e.g. "Newton's 3rd Law" (apostrophe-s) or "Newton s 3rd Law" (someone
+    # typed a space instead of an apostrophe). Both turned into the corrupted
+    # "newton s03rd law", which then never matched the real filename in the
+    # DB. Fix: the spelled-out "season"/"episode"/"ep" words may still have a
+    # space before the number, but the one-letter "s"/"e" shorthand now only
+    # counts as a marker when it's directly attached to the digits with no
+    # gap (e.g. "s02", "e05") — which is how it's actually used for real
+    # season/episode queries like "Money Heist S02E03".
+    text = re.sub(r'\bseason[\s\-]*(\d+)', lambda m: f"s{int(m.group(1)):02d}", text)
+    text = re.sub(r"(?<!['’])\bs(\d+)\b", lambda m: f"s{int(m.group(1)):02d}", text)
+    text = re.sub(r'\b(?:episode|ep)[\s\-]*(\d+)', lambda m: f"e{int(m.group(1)):02d}", text)
+    text = re.sub(r"(?<!['’])\be(\d+)\b", lambda m: f"e{int(m.group(1)):02d}", text)
     text = re.sub(r'\bs(\d+)e(\d+)', lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}", text)
     return re.sub(r"\s+", " ", text).strip()
 
@@ -1583,6 +1595,22 @@ def clear_search_cache():
     _SEARCH_CACHE.clear()
 
 
+def _word_to_regex(word):
+    """Build a per-word regex fragment that treats an apostrophe as optional.
+    Files for the same title sometimes get indexed as both "Newton's ..." and
+    "Newtons ..." (uploaders strip punctuation inconsistently). Without this,
+    a search for one spelling would never match a file saved with the other.
+    """
+    if "'" in word or "\u2019" in word:
+        parts = [p for p in re.split(r"['\u2019]", word) if p]
+        if len(parts) > 1:
+            return "['\u2019]?".join(re.escape(p) for p in parts)
+        return re.escape(word)
+    if len(word) > 2 and word.endswith("s"):
+        return re.escape(word[:-1]) + "['\u2019]?s"
+    return re.escape(word)
+
+
 async def get_search_results(chat_id, query, file_type=None, max_results=10, offset=0, filter=False, media_type=None):
     cache_key = _search_cache_key(chat_id, query, file_type, max_results, offset, filter, media_type)
     cached = _search_cache_get(cache_key)
@@ -1605,7 +1633,7 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
         if not q: continue
 
         words = q.split()
-        pattern = r'.*'.join(re.escape(w) for w in words)
+        pattern = r'.*'.join(_word_to_regex(w) for w in words)
         regex_list.append(pattern)
 
     # 🚀 SPEED FIX: combine every pattern variant into ONE alternation regex
