@@ -517,6 +517,7 @@ def extract_pure_title(original_name):
 def normalize_season_episode(text):
     """Converts complex S/E ranges (S01E01-E05, etc.) to standard formats."""
     text = text.lower()
+    text = re.sub(r'\bs(\d{1,2})[\s._\-]*e(\d{1,4})\b', r's\1 e\2', text)
     text = re.sub(r'\bs(\d{1,2})\.e(\d{1,4})\b', r's\1 e\2', text)
     text = re.sub(r'\bs(\d{1,2})[\s\-_]*e(\d{1,4})[\s\-_~]+(?:to|and|&)?[\s\-_~]*s\d{1,2}[\s\-_]*e(\d{1,4})\b', lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}-{int(m.group(3)):02d}", text)
     text = re.sub(r'\bs(\d{1,2})[\s\-_~]*e(\d{1,4})[\s\-_~]*e(\d{1,4})\b', lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}-{int(m.group(3)):02d}", text)
@@ -537,7 +538,6 @@ def normalize_season_episode(text):
     text = re.sub(r'\b(?:episode)[\s\-_]*(\d{1,4})\b', lambda m: f"e{int(m.group(1)):02d}", text)
     text = re.sub(r'\bep(?:isode)?[\s\-_]*(\d{1,4})\b', lambda m: f"e{int(m.group(1)):02d}", text)
     text = re.sub(r'\be[\s\-_]*(\d{1,4})\b', lambda m: f"e{int(m.group(1)):02d}", text)
-    text = re.sub(r'\bs(\d{2})e(\d{2,4})\b', r's\1 e\2', text)
     return re.sub(r'\s+', ' ', text).strip().upper()
 
 def apply_dual_multi_audio_tag(languages, scan_lower):
@@ -636,9 +636,11 @@ def extract_languages_quality(text_to_scan):
     season_episode = None
     episode_title = None
     
-    full_match = re.search(r'\b(S\d{2})[\s\-]*?(E\d{2,4}(?:[\s\-]*E?[-\s]*\d{2,4})?)\b', normalized_se)
+    full_match = re.search(r'\b(S\d{2})[\s\[\]\-_]*?(E\d{2,4}(?:-\d{2,4})?)\b', normalized_se)
+    
     if full_match:
-        season_episode = full_match.group(0)
+        # Group 1 aur Group 2 ko jod kar final string banayega, jisse faltu space ya bracket nahi aayega
+        season_episode = f"{full_match.group(1)} {full_match.group(2)}"
         if not re.search(r'E\d{1,4}\s*-\s*\d{1,4}', season_episode, flags=re.IGNORECASE):
             episode_title = extract_episode_title(text_to_scan)
     else:
