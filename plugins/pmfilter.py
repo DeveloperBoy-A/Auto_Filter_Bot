@@ -5,7 +5,7 @@ from rapidfuzz import process, fuzz
 from dreamxbotz.util.file_properties import get_name, get_hash
 from urllib.parse import quote_plus
 import logging
-from database.ia_filterdb import Media, Media2, MEDIA_DBS, delete_file_by_id, get_file_details, get_search_results, get_bad_files
+from database.ia_filterdb import Media, Media2, MEDIA_DBS, delete_file_by_id, get_file_details, get_search_results, get_bad_files,normalize_for_search
 
 from database.config_db import mdb
 from pyrogram.errors import FloodWait, UserIsBlocked, MessageNotModified, PeerIdInvalid, ChatAdminRequired, UserNotParticipant
@@ -1835,6 +1835,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
 #__________________________________
 
+
 def normalize_season(search):
     import re
 
@@ -1872,42 +1873,14 @@ def normalize_episode(search):
     return re.sub(r'\be\s*(\d+)', pad, search, flags=re.IGNORECASE)
 
 
-def normalize_for_search(text):
-    text = text.lower()
-
-    # 1x02 → s01 e02
-    text = re.sub(r'(\d+)[xX](\d+)',
-                  lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}",
-                  text)
-
-    # season → s01
-    text = re.sub(r'season[\s\-]*(\d+)',
-                  lambda m: f"s{int(m.group(1)):02d}", text)
-
-    # s1 / s 1
-    text = re.sub(r'\bs[\s\-]*(\d+)',
-                  lambda m: f"s{int(m.group(1)):02d}", text)
-
-    # episode → e01
-    text = re.sub(r'episode[\s\-]*(\d+)',
-                  lambda m: f"e{int(m.group(1)):02d}", text)
-
-    # ep → e01
-    text = re.sub(r'\bep[\s\-]*(\d+)',
-                  lambda m: f"e{int(m.group(1)):02d}", text)
-
-    # e1 → e01
-    text = re.sub(r'\be[\s\-]*(\d+)',
-                  lambda m: f"e{int(m.group(1)):02d}", text)
-
-    # S1E2 → s01 e02
-    text = re.sub(r's(\d+)e(\d+)',
-                  lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}",
-                  text)
-
-    text = re.sub(r"\s+", " ", text).strip()
-    return text
-    #______________________________________________________AUTO_FILTER____________________________________________________________
+# ⚠️ REMOVED: this file used to define its own copy of normalize_for_search()
+# with the same "'s 3rd" → "s03rd" corruption bug (bare "s" + space + digit
+# was misread as a season marker). It shadowed the fixed version in
+# database.ia_filterdb, so fixing that file alone never actually helped
+# real searches — every real search from a group/PM went through THIS
+# copy instead. Now imported from database.ia_filterdb (see top of file)
+# so there's exactly one implementation and both stay in sync.
+#______________________________________________________AUTO_FILTER____________________________________________________________
 
 async def auto_filter(client, msg, spoll=False):
     # PART 1: MESSAGE VALIDATION (Message ko check karna ki chalana hai ya nahi)
@@ -1952,7 +1925,7 @@ async def auto_filter(client, msg, spoll=False):
             find = search.split(" ")
             removes = ["in", "upload", "series", "full", "horror", "thriller", "mystery", 
                        "print", "file", "pls", "please", "send", "give", "movie", "movies", 
-                       "new movie", "latest", "'", "bruh", "link", "dubbed", "download", 
+                       "new", "latest", "'", "bruh", "link", "dubbed", "download", 
                        "subtitle", "subtitles", ",", "any", "()", "iruka", 
                        "pannunga", "anuppunga", "film", "undo", "kitti", "kitty", "tharu", "&"]
             
@@ -1960,12 +1933,16 @@ async def auto_filter(client, msg, spoll=False):
             search = " ".join([x for x in find if x not in removes])
             
             # Regex cleanup (Bache-kuche text variations aur please/bro ko saaf karna)
-            search = re.sub(r"\b(pl(i|e)*?(s|z+|ease|se|ese|(e+)s(e)?)|((send|snd|giv(e)?|gib)(\sme)?)|movie(s)?|latest|:|bruh|broh|helo|that|find|dubbed|link|;|iruka|pannunga|pannungga|anuppunga|anupunga|anuppungga|anupungga|film|undo|kitti|kitty|tharu|kittumo|kittum|movie|any(one)|download\ssubtitle(s)?)", "", search, flags=re.IGNORECASE)
+            # 🐛 BUGFIX: added trailing \b — without it "new" (and "link",
+            # "film", "kitty" etc.) matched as a mid-word substring, e.g.
+            # "Newton's" → "ton's" (stripped the "New" out of "Newton").
+            # That's what made "Newton's 3rd Law 2026" find zero results.
+            search = re.sub(r"\b(pl(i|e)*?(s|z+|ease|se|ese|(e+)s(e)?)|((send|snd|giv(e)?|gib)(\sme)?)|movie(s)?|new|latest|:|bruh|broh|helo|that|find|dubbed|link|;|iruka|pannunga|pannungga|anuppunga|anupunga|anuppungga|anupungga|film|undo|kitti|kitty|tharu|kittumo|kittum|movie|any(one)|download\ssubtitle(s)?)\b", "", search, flags=re.IGNORECASE)
             search = re.sub(r"\s+", " ", search).strip()
             search = normalize_for_search(search)
             
             # Formatting and punctuation stripping (Yahan ab ',' comma bhi replace ho jayega)
-            search = search.replace("-", " ").replace(":", "").replace(".", " ").replace("&", " ").replace(",", " ")
+            search = search.replace("-", " ").replace(":", "").replace(".", " ").replace("'", " ").replace("&", " ").replace(",", " ")
             
             # 🔥 REMOVE EXTRA SYMBOLS
             search = re.sub(r"[!@#$%^*()_+=\[\]{};\"<>?/\\|]", "", search)
@@ -2137,7 +2114,6 @@ async def auto_filter(client, msg, spoll=False):
         dxb = await message.reply_text(text=cap, reply_markup=InlineKeyboardMarkup(btn), disable_web_page_preview=True, parse_mode=enums.ParseMode.HTML)
         await m.delete()
         await handle_auto_delete(dxb)
-
 
 
 #________________________________________
