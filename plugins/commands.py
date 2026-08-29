@@ -370,7 +370,7 @@ async def start(client, message):
                     cover=cover_url
                 )
                 filesarr.append(msg)
-                await asyncio.sleep(1) # यहाँ लूप खत्म हो रहा है
+                await asyncio.sleep(0.6) # यहाँ लूप खत्म हो रहा है
 
             # --- अब ये लाइनें FOR LOOP के बाहर हैं (4 स्पेस पीछे) ---
             if filesarr:
@@ -389,7 +389,7 @@ async def start(client, message):
 
 
     user = message.from_user.id
-    files_ = await get_file_details(file_id)
+    files_ = await file_details_task
     settings = await get_settings(int(grp_id))
     if not files_:
         pre, file_id = ((base64.urlsafe_b64decode(data + "=" * (-len(data) % 4))).decode("utf-8")).split("_", 1)
