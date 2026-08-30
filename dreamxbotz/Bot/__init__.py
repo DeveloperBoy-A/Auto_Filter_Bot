@@ -31,12 +31,8 @@ class dreamcinezoneXBot(Client):
             api_id=API_ID,
             api_hash=API_HASH,
             bot_token=BOT_TOKEN,
-            # ⚡ PERF FIX: was hardcoded to 60, ignoring the WORKERS env var
-            # (info.py already defaults it to 4). 60 background worker
-            # coroutines is overkill for small/medium bots and adds constant
-            # idle CPU/memory overhead on low-resource hosts (Koyeb/Heroku
-            # free tier, small VPS). Now respects WORKERS from your env.
-            workers=WORKERS,
+            
+            workers=60,
             plugins={"root": "plugins"},
             sleep_threshold=5,
         )
