@@ -248,8 +248,7 @@ Nᴀᴍᴇ : {}
 
 Mᴇꜱꜱᴀɢᴇ : <code>{}</code>"""
 
-    CAPTION = """<b><a href="https://t.me/newmovieswebseries_group">
-🎬 𝑻𝒊𝒕𝒍𝒆 : {file_name}
+    CAPTION = """<b><a href="https://t.me/newmovieswebseries_group">🎬 𝑻𝒊𝒕𝒍𝒆 : {file_name}
 
 📦 𝑺𝒊𝒛𝒆 : {file_size}
 🎞 𝑺𝒆𝒂𝒔𝒐𝒏  : {season} 
@@ -257,7 +256,7 @@ Mᴇꜱꜱᴀɢᴇ : <code>{}</code>"""
 🔊 𝑨𝒖𝒅𝒊𝒐 : {audio}</a></b>
 ★━━━━━━━━━━━━━━━━━━━━━★
 <b>❣️ 𝑷𝒐𝒘𝒆𝒓𝒆𝒅 𝑩𝒚 𝖩𝗈𝗂𝗇✅➥:</b>
-<a href="https://t.me/+MINAQiQyVq8wMWRl">🫧『𓆩ꨄ︎𓆪𝐓ᴏᴋʏᴏ 𝐁ᴀᴄᴋᴜᴘ𓆩ꨄ︎𓆪』🫧</a>
+<a href="https://t.me/+MINAQiQyVq8wMWRl">🎞️『 𝑻𝒐𝒌𝒚𝒐_𝑼𝒑𝒅𝒂𝒕𝒆𝒔 』𓆩ꨄ︎𓆪</a>
 """
 
 
