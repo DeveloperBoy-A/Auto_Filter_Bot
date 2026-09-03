@@ -1,4 +1,4 @@
-#Thanks @dreamxbotz for helping in this journey 
+#Thanks [@Tokyo_Updates] for helping in this journey 
 import math
 import asyncio
 import logging
@@ -8,7 +8,7 @@ from dreamxbotz.Bot import work_loads
 from pyrogram import Client, utils, raw
 from .file_properties import get_file_ids
 from pyrogram.session import Session, Auth
-from pyrogram.errors import AuthBytesInvalid
+from pyrogram.errors import AuthBytesInvalid, Timeout as PyrogramTimeout, ServiceUnavailable
 from dreamxbotz.server.exceptions import FIleNotFound
 from pyrogram.file_id import FileId, FileType, ThumbnailSource
 
@@ -44,13 +44,13 @@ class ByteStreamer:
             await self.generate_file_properties(id)
             logging.debug(f"Cached file properties for message with ID {id}")
         return self.cached_file_ids[id]
-    
+
     async def generate_file_properties(self, id: int) -> FileId:
         """
         Generates the properties of a media file on a specific message.
         returns ths properties in a FIleId class.
         """
-        file_id = await get_file_ids(self.client, BIN_CHANNEL, id)
+        file_id = await get_file_ids(self.client, BIN_CHANNEL, id, prefer_db_name=True)
         logging.debug(f"Generated file ID and Unique ID for message with ID {id}")
         if not file_id:
             logging.debug(f"Message with ID {id} not found")
@@ -115,6 +115,19 @@ class ByteStreamer:
             logging.debug(f"Using cached media session for DC {file_id.dc_id}")
         return media_session
 
+    async def reset_media_session(self, client: Client, file_id: FileId) -> Session:
+        """
+        Drops the cached (possibly stale/dead) media session for this DC and
+        creates a fresh one. Used when Telegram keeps returning Timeout /
+        ServiceUnavailable on upload.GetFile for an otherwise-valid session.
+        """
+        old_session = client.media_sessions.pop(file_id.dc_id, None)
+        if old_session is not None:
+            try:
+                await old_session.stop()
+            except Exception:
+                logging.debug(f"Ignoring error while stopping stale session for DC {file_id.dc_id}")
+        return await self.generate_media_session(client, file_id)
 
     @staticmethod
     async def get_location(file_id: FileId) -> Union[raw.types.InputPhotoFileLocation,
@@ -182,12 +195,34 @@ class ByteStreamer:
         current_part = 1
         location = await self.get_location(file_id)
 
+        async def get_file_with_retry(current_offset: int, max_retries: int = 3):
+            """
+            Wraps upload.GetFile with retries. If Telegram keeps timing out,
+            the cached media session is dropped and rebuilt, since a repeated
+            -503 Timeout often means the session itself has gone stale.
+            """
+            nonlocal media_session
+            last_exc = None
+            for attempt in range(max_retries):
+                try:
+                    return await media_session.send(
+                        raw.functions.upload.GetFile(
+                            location=location, offset=current_offset, limit=chunk_size
+                        ),
+                    )
+                except (PyrogramTimeout, ServiceUnavailable) as e:
+                    last_exc = e
+                    logging.warning(
+                        f"GetFile timeout at offset {current_offset}, "
+                        f"attempt {attempt + 1}/{max_retries}: {e}"
+                    )
+                    if attempt < max_retries - 1:
+                        media_session = await self.reset_media_session(client, file_id)
+                        await asyncio.sleep(0)
+            raise last_exc
+
         try:
-            r = await media_session.send(
-                raw.functions.upload.GetFile(
-                    location=location, offset=offset, limit=chunk_size
-                ),
-            )
+            r = await get_file_with_retry(offset)
             if isinstance(r, raw.types.upload.File):
                 while True:
                     chunk = r.bytes
@@ -208,18 +243,20 @@ class ByteStreamer:
                     if current_part > part_count:
                         break
 
-                    r = await media_session.send(
-                        raw.functions.upload.GetFile(
-                            location=location, offset=offset, limit=chunk_size
-                        ),
-                    )
-        except (TimeoutError, AttributeError):
-            pass
+                    r = await get_file_with_retry(offset)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            # Never silently return a partial file: the HTTP layer already sent
+            # Content-Length, so swallowing Telegram errors makes the browser
+            # wait/fail as if the stream is frozen.
+            logging.exception("Telegram GetFile failed at offset %s", offset)
+            raise
         finally:
-            logging.debug("Finished yielding file with {current_part} parts.")
-            work_loads[index] -= 1
+            logging.debug("Finished yielding file with %s parts.", current_part - 1)
+            work_loads[index] = max(0, work_loads[index] - 1)
 
-    
+
     async def clean_cache(self) -> None:
         """
         function to clean the cache to reduce memory usage
