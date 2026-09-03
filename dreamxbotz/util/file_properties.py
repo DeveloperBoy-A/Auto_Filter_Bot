@@ -1,4 +1,4 @@
-#Thanks @dreamxBotz for helping in this journey 
+#Thanks [@Tokyo_Updates] for helping in this journey
 from pyrogram import Client
 from typing import Any, Optional
 from pyrogram.types import Message
@@ -17,7 +17,7 @@ async def parse_file_unique_id(message: "Messages") -> Optional[str]:
     if media:
         return media.file_unique_id
 
-async def get_file_ids(client: Client, chat_id: int, id: int) -> Optional[FileId]:
+async def get_file_ids(client: Client, chat_id: int, id: int, prefer_db_name: bool = False) -> Optional[FileId]:
     message = await client.get_messages(chat_id, id)
     if message.empty:
         raise FIleNotFound
@@ -26,7 +26,22 @@ async def get_file_ids(client: Client, chat_id: int, id: int) -> Optional[FileId
     file_id = await parse_file_id(message)
     setattr(file_id, "file_size", getattr(media, "file_size", 0))
     setattr(file_id, "mime_type", getattr(media, "mime_type", ""))
-    setattr(file_id, "file_name", getattr(media, "file_name", ""))
+    # Telegram keeps the original uploaded media filename.  The bot's database
+    # may contain a cleaned/custom filename; when requested, prefer that name
+    # without changing the underlying Telegram media or adding DB fields.
+    telegram_name = getattr(media, "file_name", "")
+    setattr(file_id, "file_name", telegram_name)
+    if prefer_db_name:
+        try:
+            from database.ia_filterdb import get_file_details, unpack_new_file_id
+            db_file_id, _ = unpack_new_file_id(media.file_id)
+            if db_file_id:
+                details = await get_file_details(db_file_id)
+                if details and getattr(details[0], "file_name", None):
+                    setattr(file_id, "file_name", details[0].file_name)
+        except Exception:
+            # Never break streaming just because the optional DB-name lookup failed.
+            pass
     setattr(file_id, "unique_id", file_unique_id)
     return file_id
 
