@@ -755,41 +755,62 @@ _COVER_LOCKS = {}
 _COVER_CACHE = {}
 
 async def _fetch_and_save_cover(file_id: str, final_title: str, year: str | None, bot=None):
-    """Background task for Cover generation using lock to prevent duplicate API hits."""
+    """Background cover resolver with bounded concurrency and cache."""
+    
+    # 1. STRICT INFO.PY CONTROL: Handles both boolean False and string "False"
+    if str(COVERX).strip().lower() in ['false', '0', 'no']:
+        return
+
     lock_key = f"{final_title.lower().strip()}::{(year or '').strip()}"
     if lock_key not in _COVER_LOCKS:
         _COVER_LOCKS[lock_key] = asyncio.Lock()
-        
-    async with _COVER_LOCKS[lock_key]:
-        try:
-            if lock_key in _COVER_CACHE:
-                cover_url = _COVER_CACHE[lock_key]
-            else:
-                query = {"title": {"$regex": rf"^{re.escape(final_title)}$", "$options": "i"}, "cover": {"$ne": None}}
-                if year:
-                    query["year"] = year
-                    
-                existing = None
-                for media_cls in MEDIA_DBS:
-                    existing = await media_cls.find_one(query)
-                    if existing: break
-                    
-                if existing and existing.cover:
-                    cover_url = existing.cover
-                    _COVER_CACHE[lock_key] = cover_url
+
+    async with _COVER_SEMAPHORE:
+        async with _COVER_LOCKS[lock_key]:
+            try:
+                # 1. Check fast memory cache
+                if lock_key in _COVER_CACHE:
+                    cover_url = _COVER_CACHE[lock_key]
+                    logger.debug(f"[COVER] Reused cover from memory cache for '{final_title}' ({year})")
                 else:
-                    raw_url = await _fetch_cover_url(final_title, year)
-                    if not raw_url: return
-                    cover_url = await _upload_cover(bot, raw_url) if bot else raw_url
-                    if cover_url:
-                        _COVER_CACHE[lock_key] = cover_url
+                    # 2. STRICT DATABASE MATCH: Must match BOTH Title and Year exactly.
+                    query = {
+                        "title": {"$regex": rf"^{re.escape(final_title)}$", "$options": "i"},
+                        "cover": {"$ne": None},
+                        "year": year # This guarantees year must match (if year is None, it only matches DB entries with no year)
+                    }
+
+                    existing = None
+                    for media_cls in MEDIA_DBS:
+                        existing = await media_cls.find_one(query)
+                        if existing:
+                            break
+
+                    if existing and existing.cover:
+                        cover_url = existing.cover
+                        _cover_cache_set(lock_key, cover_url)
+                        logger.debug(f"[COVER] Reused existing cover from DB for '{final_title}'")
                     else:
-                        return
-                        
-            for media_cls in MEDIA_DBS:
-                await media_cls.collection.update_one({"_id": file_id}, {"$set": {"cover": cover_url}})
-        except Exception as e:
-            logger.warning(f"[COVER] Background task error for '{final_title}': {e}")
+                        # 3. Fetch from API (If no exact match found in DB)
+                        raw_url = await _fetch_cover_url(final_title, year)
+
+                        if not raw_url:
+                            logger.debug(f"[COVER] No cover found for '{final_title}' - Skipping cover.")
+                            return
+
+                        cover_url = await _upload_cover(bot, raw_url) if bot else raw_url
+                        if cover_url:
+                            _cover_cache_set(lock_key, cover_url)
+                            logger.debug(f"[COVER] Fetched new cover for '{final_title}'")
+                        else:
+                            return
+
+                # Update the specific file_id with the resolved cover
+                for media_cls in MEDIA_DBS:
+                    await media_cls.collection.update_one({"_id": file_id}, {"$set": {"cover": cover_url}})
+                logger.debug(f"[COVER] DB updated | file_id={file_id}")
+            except Exception as e:
+                logger.warning(f"[COVER] Background task error for '{final_title}': {e}")
 
 async def save_file(media, bot=None, extracted_info=None):
     """The heart of the indexer: formats names and stores media properly."""
