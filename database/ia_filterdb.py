@@ -30,11 +30,11 @@ def get_cloud_watermark_url(original_tmdb_url: str) -> str:
     if not original_tmdb_url:
         return None
         
-    cloud_name = "ci2woc0d"  # <-- यहाँ अपना Cloud Name 👍रखें
+    # 👇 यहाँ अपना असली Cloud Name ज़रूर चेक कर लें
+    cloud_name = "ci2woc0d"  
     
     watermark_text = "%5B%40Tokyo_Updates%5D" 
     
-    # ⬆️ y_50: ताकि वॉटरमार्क टेलीग्राम UI के नीचे ना छुपे
     positions = {
         "bottom_right": "g_south_east,x_30,y_50",
         "bottom_left": "g_south_west,x_30,y_50",
@@ -53,13 +53,10 @@ def get_cloud_watermark_url(original_tmdb_url: str) -> str:
     gravity = positions[pos_key]
     text_color, box_color = random.choice(styles)
     
-    # 🖼️ 1. पोस्टर को बिना स्ट्रेच किए 1280x720 में फिट करें और पीछे ब्लर बैकग्राउंड लगा दें (Premium Look)
-    resize_layer = "w_1280,h_720,c_pad,b_blurred:400"
+    # 🖼️ बिल्कुल पुराने कोड की तरह सिंपल और सेफ रिसाइज़ (c_scale से इमेज चौड़ी हो जाएगी और टाइटल/पोस्टर दिखेगा)
+    resize_layer = "w_1280,h_720,c_scale"
     
-    # (नोट: अगर आपको बिल्कुल पुराने कोड की तरह ज़बरदस्ती खींचा हुआ (Stretched) पोस्टर चाहिए, 
-    # तो आप ऊपर वाली लाइन को हटाकर ये लगा सकते हैं: resize_layer = "w_1280,h_720,c_scale" )
-    
-    # 🖌️ 2. वॉटरमार्क लगाएं
+    # 🖌️ वॉटरमार्क लेयर
     wm_layer = f"l_text:Arial_40_bold:{watermark_text},co_rgb:{text_color},b_rgb:{box_color},{gravity}"
     
     return f"https://res.cloudinary.com/{cloud_name}/image/fetch/{resize_layer}/{wm_layer}/{original_tmdb_url}"
