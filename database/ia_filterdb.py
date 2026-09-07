@@ -21,16 +21,16 @@ from datetime import datetime, timedelta
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
+
 # ==========================================
-# 🖌️ CLOUDINARY WATERMARK RENDERING (0% RAM/CPU/BANDWIDTH)
-# ==========================================  
-    
+# 🖌️ CLOUDINARY WATERMARK RENDERING (0% RAM/CPU)
+# ==========================================
 def get_cloud_watermark_url(original_tmdb_url: str) -> str:
     """बिना इमेज डाउनलोड किए डायनामिक रूप से Cloudinary के ज़रिए रैंडम वॉटरमार्क लगाता है।"""
     if not original_tmdb_url:
         return None
         
-    # 👇 यहाँ अपना असली Cloud Name ज़रूर चेक कर लें
+    # 👇 यहाँ "your_cloud_name" को हटाकर अपना असली Cloud Name डालें
     cloud_name = "ci2woc0d"  
     
     watermark_text = "%5B%40Tokyo_Updates%5D" 
@@ -53,14 +53,10 @@ def get_cloud_watermark_url(original_tmdb_url: str) -> str:
     gravity = positions[pos_key]
     text_color, box_color = random.choice(styles)
     
-    # 🖼️ बिल्कुल पुराने कोड की तरह सिंपल और सेफ रिसाइज़ (c_scale से इमेज चौड़ी हो जाएगी और टाइटल/पोस्टर दिखेगा)
     resize_layer = "w_1280,h_720,c_scale"
-    
-    # 🖌️ वॉटरमार्क लेयर
     wm_layer = f"l_text:Arial_40_bold:{watermark_text},co_rgb:{text_color},b_rgb:{box_color},{gravity}"
     
     return f"https://res.cloudinary.com/{cloud_name}/image/fetch/{resize_layer}/{wm_layer}/{original_tmdb_url}"
-
 
 
 # ==========================================
@@ -119,7 +115,6 @@ async def _fetch_cover_url(title: str, year: str | None = None) -> str | None:
 
     details = await _fetch_cover_url_official_tmdb(title, year)
 
-    # TMDB Proxy Fallback
     if not details:
         try:
             search_title = f"{title} {year}" if year else title
@@ -161,7 +156,6 @@ async def _fetch_cover_url(title: str, year: str | None = None) -> str | None:
         except Exception:
             pass
 
-    # IMDB Fallback
     if not details:
         try:
             from plugins.Dreamxfutures.Imdbposter import get_movie_details
@@ -179,11 +173,7 @@ async def _fetch_cover_url(title: str, year: str | None = None) -> str | None:
 # =========================================================
 # 🗄️ MULTI-DATABASE SETUP & ROUTING
 # =========================================================
-# Global DB cache (per-database, keyed by db object id)
 _db_stats_cache: Dict[int, dict] = {}
-
-# Safe threshold (MB) before hitting the free-tier ~512MB cap. 
-# Once a database crosses this, new files route to the next configured database.
 DB_SIZE_LIMIT_MB = 400
 
 client = AsyncIOMotorClient(DATABASE_URI)
@@ -211,7 +201,6 @@ instance5 = Instance.from_db(db5)
 # MEDIA MODELS
 # =========================================================
 def create_media_model(instance_obj):
-    """Helper to dynamically generate Document schemas for multiple databases."""
     @instance_obj.register
     class DynamicMedia(Document):
         file_id = fields.StrField(attribute="_id")
@@ -223,9 +212,9 @@ def create_media_model(instance_obj):
         caption = fields.StrField(allow_none=True)
         cover = fields.StrField(allow_none=True)
         media_type = fields.StrField(allow_none=True)
-        file_date = fields.DateTimeField(allow_none=True) # Upload timestamp for sorting
-        title = fields.StrField(allow_none=True)          # Extracted title for cover reuse
-        year = fields.StrField(allow_none=True)           # Release year for cover reuse
+        file_date = fields.DateTimeField(allow_none=True)
+        title = fields.StrField(allow_none=True)
+        year = fields.StrField(allow_none=True)
 
         class Meta:
             indexes = ("$file_name", "media_type", "-file_date", "title", "year")
@@ -239,7 +228,6 @@ Media3 = create_media_model(instance3)
 Media4 = create_media_model(instance4)
 Media5 = create_media_model(instance5)
 
-# Slice lists down to the actual number of configured databases (TOTAL_DATABASES)
 _ALL_MEDIA_CLASSES = [Media, Media2, Media3, Media4, Media5]
 _ALL_DB_CLIENTS = [client, client2, client3, client4, client5]
 
@@ -249,7 +237,6 @@ _DB_LABELS = ["Primary DB", "Secondary DB", "Tertiary DB", "Quaternary DB", "Qui
 
 
 async def check_db_size(db_instance):
-    """Returns the current logical + index size (MB) for the given motor Database object."""
     try:
         key = id(db_instance)
         now = datetime.utcnow()
@@ -274,7 +261,6 @@ async def check_db_size(db_instance):
 
 
 async def get_active_media_db():
-    """Returns the first configured database that has space under DB_SIZE_LIMIT_MB."""
     for media_cls in MEDIA_DBS:
         size_mb = await check_db_size(media_cls.collection.database)
         if size_mb < DB_SIZE_LIMIT_MB:
@@ -283,7 +269,6 @@ async def get_active_media_db():
 
 
 async def delete_file_by_id(file_id: str) -> int:
-    """Deletes a file by its ID from the configured DBs."""
     for media_cls in MEDIA_DBS:
         result = await media_cls.collection.delete_one({"_id": file_id})
         if result.deleted_count:
@@ -292,12 +277,12 @@ async def delete_file_by_id(file_id: str) -> int:
 
 
 async def delete_files_by_query(query: dict) -> int:
-    """Deletes files matching the query across all configured DBs."""
     total = 0
     for media_cls in MEDIA_DBS:
         result = await media_cls.collection.delete_many(query)
         total += result.deleted_count
     return total
+
 
 # =========================================================
 # FILE ID HELPERS
@@ -343,7 +328,7 @@ def unpack_new_file_id(new_file_id):
 RELEASE_TAG = "~[Tokyo_Updates]"
 
 LANGUAGE_ALIASES = {
-    "Hindi": [r'\bhindi\b', r'\bhin\b'],
+    "Hindi": [r'\bhindi\b', r'\bhin\b', r'\bbhin\b'],
     "English": [r'\benglish\b', r'\beng\b'],
     "Tamil": [r'\btamil\b', r'\btam\b'],
     "Telugu": [r'\btelugu\b', r'\btel\b'],
@@ -385,24 +370,23 @@ OTT_MAP = {
 
 
 # =========================================================
-# SMART DYNAMIC TITLE EXTRACTOR
+# SMART DYNAMIC TITLE & SYMBOL EXTRACTOR
 # =========================================================
 def extract_pure_title(original_name):
-    """Cleans a raw file string to extract just the pure movie or series title."""
-    clean_name = re.sub(r'^\[.*?\]', '', original_name).strip() 
+    """सारे अजीब सिम्बल्स और गारबेज को हटाकर शुद्ध टाइटल निकालता है।"""
+    # 1. अजीब सिम्बल्स और इमोजी को स्पेस से रिप्लेस करें ताकि शब्द चिपके नहीं
+    clean_name = re.sub(r'[!@#$%^&*()_+={}\[\]:;<>,.?/\\|~`–—―•✓™®©🎬🗃️✨🔥]+', ' ', original_name)
+    clean_name = re.sub(r'^\[.*?\]', '', clean_name).strip() 
     clean_name = re.sub(r'^@\w+[\s_\-–]*', '', clean_name).strip()
-    clean_name = re.sub(r'[@\[\]\(\)_]+', ' ', clean_name)
     clean_name = re.sub(r"[._\-]+", " ", clean_name)
 
     # Remove URLs and Telegram links
     clean_name = re.sub(r'(?:https?://)?(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*)', '', clean_name, flags=re.IGNORECASE)
     clean_name = re.sub(r't\.me/[a-zA-Z0-9_]+', '', clean_name, flags=re.IGNORECASE)
 
-    # Remove redundant keywords like "Movie", "Video", or Series identifiers
     clean_name = re.sub(r'\b(full|hindi|tamil|english|telugu|malayalam|kannada|bengali|new|latest|hd|mp4)\s+(movie|video)\b', '', clean_name, flags=re.IGNORECASE).strip()
     clean_name = re.sub(r'\b(web[\s\-]?series|tv[\s\-]?series)\b', '', clean_name, flags=re.IGNORECASE).strip()
 
-    # Remove uploader tags
     uploader_tags = [r'(?:join\s+)?us\s*bobfiles']
     uploader_cleanup = r'^(?:(?:' + '|'.join(uploader_tags) + r')[\s]*)+'
     clean_name = re.sub(uploader_cleanup, '', clean_name, flags=re.IGNORECASE).strip()
@@ -420,12 +404,10 @@ def extract_pure_title(original_name):
         r'netflix', r'amazon', r'prime', r'hotstar', r'zee5', r'sonyliv', r'jio', r'jiocinema', r'voot', r'altbalaji' 
     ]
 
-    # Ensure language tags (e.g., 'Hindi', 'Korean') are only stripped if followed 
-    # by other quality/source tags to prevent stripping the actual title.
     LANG_PREFIX_WORDS = {
         'hindi', 'english', 'tamil', 'telugu', 'malayalam', 'kannada',
         'bengali', 'marathi', 'korean', 'japanese', 'chinese', 'spanish',
-        'russian', 'french'
+        'russian', 'french', 'bhin'
     }
     _prefix_token_re = re.compile('(?:' + '|'.join(prefix_tags) + ')', re.IGNORECASE)
     _sep_re = re.compile(r'[\s_\-]*')
@@ -452,7 +434,6 @@ def extract_pure_title(original_name):
 
     clean_name = clean_name[pos:].strip()
 
-    # Stop anchors: The title ends where these tags begin.
     stop_anchors = [
         r'\bseason[\s\-_]*\d{1,2}\b',
         r'\be\d{1,4}[\s\-_]*[tT][\s\-_]*e?\d{1,4}\b',
@@ -570,30 +551,45 @@ def apply_dual_multi_audio_tag(languages, scan_lower):
     return languages
 
 
+# =========================================================
+# 🎯 ROBUST EPISODE TITLE EXTRACTOR (NEW & ADVANCED)
+# =========================================================
 def extract_episode_title(text):
+    """Bigg Boss या रियलिटी शो जैसे टाइटल्स (Day 01, Housemates Bane आदि) को सुरक्षित निकालता है।"""
     text = re.sub(r'\.[a-z0-9]{2,4}$', '', text, flags=re.IGNORECASE)
 
     stop_keywords = [
-        r'19\d{2}', r'20\d{2}', r'2160p', r'1080p', r'720p', r'480p',
+        r'19\d{2}', r'20\d{2}', r'2160p', r'1080p', r'720p', r'480p', r'360p',
         r'web[- ]?dl', r'webrip', r'bluray', r'hdrip', r'x264', r'x265', r'hevc', r'avc',
         r'aac', r'ac3', r'ddp', r'hindi', r'english', r'tamil', r'telugu',
-        r'dual', r'multi', r'combined', r'complete', r'jhs', r'netflix', r'amazon', r'🗃️'
+        r'dual', r'multi', r'combined', r'complete', r'netflix', r'amazon', r'mp4', r'mkv'
     ]
     stop_pattern = '|'.join(stop_keywords)
-    lookahead = rf'(?=\b(?:{stop_pattern})\b|$|\[|\(|@|🗃️)'
+    lookahead = rf'(?=\b(?:{stop_pattern})\b|$|\[|\(|@)'
 
     patterns = [
-        r'(?:S\d{1,2}[\s._\-]*E\d{1,4}[-\d]*)[\s._\-]+(.*?)' + lookahead,
-        r'(?:Episode|Ep)[\s._\-]*\d+[\s._\-]+(.*?)' + lookahead
+        r'(?:S\d{1,2}[\s._\-]*E\d{1,4}[-\d]*)[\s._\-]+(.*?)(?=' + stop_pattern + r'|$)',
+        r'(?:Episode|Ep)[\s._\-]*\d+[\s._\-]+(.*?)(?=' + stop_pattern + r'|$)',
+        r'S\d{1,2}\s*E\d{1,4}\s+[A-Za-z0-9\s\-]+(?:\d{4})?\s+(.*?)(?=' + stop_pattern + r'|$)'
     ]
+
+    # स्क्रीनशॉट वाली फाइल नेम के लिए विशेष पैटर्न (जैसे Bigg Boss S20 E02 [Title] 480P)
+    specific_match = re.search(r'S\d{1,2}\s*E\d{1,4}\s+(.*?)(?=\s+(?:\d{3,4}[pi]|\d{4}|WEB|BluRay|Mp4|Mkv))\b', text, re.IGNORECASE)
+    if specific_match:
+        title = specific_match.group(1)
+        title = re.sub(r'[!@#$%^&*()_+={}\[\]:;<>,.?/\\|~`–—―•]+', ' ', title)
+        title = re.sub(r'\s+', ' ', title).strip()
+        if len(title) > 1 and not re.fullmatch(r'[\d\s\-]+', title):
+            return title.title()
 
     for pattern in patterns:
         match = re.search(pattern, text, re.IGNORECASE)
         if match:
             title = match.group(1)
-            title = re.sub(r'[\s._\-()\[\]]+', ' ', title).strip()
+            title = re.sub(r'[!@#$%^&*()_+={}\[\]:;<>,.?/\\|~`–—―•]+', ' ', title)
+            title = re.sub(r'\s+', ' ', title).strip()
 
-            if len(title) > 2 and not re.fullmatch(r'[\d\s\-🗃️]+', title):
+            if len(title) > 2 and not re.fullmatch(r'[\d\s\-]+', title):
                 if re.fullmatch(r'\s*\d{1,4}\s*(?:to|and|&|-)?\s*\d{0,4}\s*', title, flags=re.IGNORECASE):
                     continue
                 return title.title()
@@ -809,6 +805,7 @@ async def _get_session() -> "aiohttp.ClientSession":
 _COVER_LOCKS = {}
 _COVER_CACHE = {}
 _COVER_CACHE_MAX_ENTRIES = 1000
+_COVER_LOCKS_MAX_ENTRIES = 1000   
 _COVER_SEMAPHORE = asyncio.Semaphore(3)
 
 
@@ -819,16 +816,16 @@ def _cover_cache_set(key, value):
         _COVER_CACHE.pop(next(iter(_COVER_CACHE)), None)
     _COVER_CACHE[key] = value
 
-
 async def _fetch_and_save_cover(file_id: str, final_title: str, year: str | None, bot=None):
-    """Background cover resolver with Cloudinary Integration (0% RAM, 0% Bandwidth)."""
-    
-    # 1. STRICT INFO.PY CONTROL
     if str(COVERX).strip().lower() in ['false', '0', 'no']:
         return
 
     lock_key = f"{final_title.lower().strip()}::{(year or '').strip()}"
     if lock_key not in _COVER_LOCKS:
+        if len(_COVER_LOCKS) >= _COVER_LOCKS_MAX_ENTRIES:
+            oldest_key = next(iter(_COVER_LOCKS))
+            if not _COVER_LOCKS[oldest_key].locked():
+                _COVER_LOCKS.pop(oldest_key, None)
         _COVER_LOCKS[lock_key] = asyncio.Lock()
 
     async with _COVER_SEMAPHORE:
@@ -836,9 +833,7 @@ async def _fetch_and_save_cover(file_id: str, final_title: str, year: str | None
             try:
                 if lock_key in _COVER_CACHE:
                     cover_url = _COVER_CACHE[lock_key]
-                    logger.debug(f"[COVER] Reused cover from memory cache for '{final_title}' ({year})")
                 else:
-                    # EXACT MATCH Check in DB
                     query = {
                         "title": {"$regex": rf"^{re.escape(final_title)}$", "$options": "i"},
                         "cover": {"$ne": None},
@@ -854,32 +849,20 @@ async def _fetch_and_save_cover(file_id: str, final_title: str, year: str | None
                     if existing and existing.cover:
                         cover_url = existing.cover
                         _cover_cache_set(lock_key, cover_url)
-                        logger.debug(f"[COVER] Reused existing cover from DB for '{final_title}'")
                     else:
-                        # Fetch Original URL from TMDB
                         raw_url = await _fetch_cover_url(final_title, year)
-
                         if not raw_url:
-                            logger.debug(f"[COVER] No cover found for '{final_title}' - Skipping cover.")
                             return
-
-                        # 🚀 MAGIC: सीधा Cloudinary लिंक बनाएं (No Download/Upload)
                         cover_url = get_cloud_watermark_url(raw_url)
-                        
                         if cover_url:
                             _cover_cache_set(lock_key, cover_url)
-                            logger.debug(f"[COVER] Fetched new Cloudinary cover for '{final_title}'")
                         else:
                             return
 
-                # Update the database with the generated Cloudinary link
                 for media_cls in MEDIA_DBS:
                     await media_cls.collection.update_one({"_id": file_id}, {"$set": {"cover": cover_url}})
-                logger.debug(f"[COVER] DB updated | file_id={file_id}")
-                    
             except Exception as e:
                 logger.warning(f"[COVER] Background task error for '{final_title}': {e}")
-
 
 async def save_file(media, bot=None, extracted_info=None):
     try:
@@ -893,7 +876,6 @@ async def save_file(media, bot=None, extracted_info=None):
 
         if extracted_info and extracted_info.get("language") and extracted_info.get("language") != "N/A":
             extracted["languages"] = [lang.strip() for lang in extracted_info["language"].split(",")]
-            logger.debug(f"[LANGUAGE] Using pre-extracted languages: {extracted['languages']}")
             extracted["languages"] = apply_dual_multi_audio_tag(
                 extracted["languages"], text_to_scan.lower()
             )
@@ -919,6 +901,15 @@ async def save_file(media, bot=None, extracted_info=None):
 
         cleaned_title = await asyncio.to_thread(extract_pure_title, base_name)
 
+        if not cleaned_title.strip():
+            raw_caption = getattr(media, "caption", None)
+            caption_text = getattr(raw_caption, "html", None) or str(raw_caption or "")
+            if caption_text:
+                caption_plain = re.sub(r'<[^>]+>', ' ', caption_text)   
+                caption_plain = re.sub(r'[\U0001F000-\U0001FFFF\u2600-\u27BF]+', ' ', caption_plain)  
+                caption_plain = caption_plain.splitlines()[0] if caption_plain.strip() else caption_plain
+                cleaned_title = await asyncio.to_thread(extract_pure_title, caption_plain)
+
         formatted_words = []
         for word in cleaned_title.split():
             if len(word) > 1:
@@ -932,11 +923,15 @@ async def save_file(media, bot=None, extracted_info=None):
             if value and str(value).lower() not in " ".join(map(str, parts)).lower():
                 parts.append(value)
 
+        # === STRICT SEQUENCE ASSEMBLER (एपिसोड टाइटल और सीजन आर्डर फिक्स किया गया है) ===
         if final_title: add_unique(final_title)
         if extracted.get("title_part"): add_unique(extracted["title_part"])
         if extracted.get("season_episode"): add_unique(extracted["season_episode"])
-        if extracted.get("season_episode") and extracted.get("episode_title"):
+        
+        # 🎯 एपिसोड टाइटल अब यहाँ सुरक्षित रूप से जोड़ा जाएगा (डेटा डुप्लीकेशन रोकेगा)
+        if extracted.get("episode_title"): 
             add_unique(extracted["episode_title"])
+
         if extracted.get("series_status"): add_unique(extracted["series_status"])
         if extracted.get("year"): add_unique(extracted["year"])
         if extracted.get("resolution"): add_unique(extracted["resolution"])
@@ -989,16 +984,6 @@ async def save_file(media, bot=None, extracted_info=None):
             })
 
             if existing_file:
-                db_label = _DB_LABELS[db_index] if db_index < len(_DB_LABELS) else f"DB {db_index + 1}"
-                existing_name = existing_file.file_name or "Unknown"
-
-                logger.warning(
-                    f"⚠️ [DUPLICATE SKIPPED] "
-                    f"📄 {original_name} | "
-                    f"🗄️ {db_label} | "
-                    f"♻️ Existing: {existing_name}"
-                )
-
                 return False, 0, None
 
         target_media = await get_active_media_db()
@@ -1019,15 +1004,6 @@ async def save_file(media, bot=None, extracted_info=None):
         )
         await record.commit()
 
-        db_index = MEDIA_DBS.index(target_media)
-        db_label = _DB_LABELS[db_index] if db_index < len(_DB_LABELS) else f"DB {db_index + 1}"
-
-        logger.info(
-            f"✅ [FILE SAVED] "
-            f"📄 {file_name} | "
-            f"🗄️ {db_label}"
-        )
-
         clear_search_cache() 
         return True, 1, file_name
 
@@ -1042,8 +1018,6 @@ async def save_file(media, bot=None, extracted_info=None):
 # FOR GET SEARCH RESULT THIS CODE UPDATE BY 🅰️NKIT MEENA 
 #__________________________________
 
-# ----------------- 1. कॉन्फ़िगरेशन और रैंकिंग डिक्शनरी -----------------
-
 SOURCE_ORDER = {
     "bluray": 15, "blu-ray": 15, "bdrip": 14, "brrip": 14, "bdremux": 14, "remux": 14,
     "web-dl": 13, "webdl": 13, "web dl": 13, "webrip": 12, "web rip": 12, "digital": 11, "web": 11,
@@ -1056,8 +1030,6 @@ SOURCE_ORDER = {
 QUALITY_ORDER = {
     "4320p": 8, "8k": 8, "2160p": 7, "4k": 7, "1440p": 6, "1080p": 5, "1080i": 5, "720p": 4, "720i": 4, "480p": 3, "360p": 2, "240p": 1, "144p": 0
 }
-
-# ----------------- 2. एक्सट्रैक्शन फंक्शंस -----------------
 
 def extract_quality(name):
     name = name.lower()
@@ -1107,7 +1079,6 @@ SERIES_REGEX = re.compile("|".join(f"(?:{p})" for p in SERIES_PATTERNS), re.IGNO
 def is_series_file(name) -> bool:
     return bool(SERIES_REGEX.search(str(name).lower()))
 
-
 async def backfill_media_type(
     batch_size: int = 500,
     media_dbs=None,
@@ -1115,7 +1086,6 @@ async def backfill_media_type(
     sleep_between_batches: float = 0.25,
 ) -> dict:
     from pymongo import UpdateOne
-
     dbs = media_dbs if media_dbs is not None else MEDIA_DBS
     report = {}
 
@@ -1164,8 +1134,6 @@ async def backfill_media_type(
 
     return report
 
-# ----------------- 3. क्वेरी नॉर्मलाइजेशन और स्मार्ट एक्सपेंशन -----------------
-
 def normalize_for_search(text):
     text = text.lower()
     text = re.sub(r'(\d+)xX', lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}", text)
@@ -1199,9 +1167,6 @@ def expand_query(query):
             else: patterns.append(v)
     return list(set(patterns))
 
-
-# ----------------- 4. मुख्य सर्च और सॉर्टिंग फंक्शन -----------------
-
 _SEARCH_CACHE: dict = {}
 _SEARCH_CACHE_TTL = 90          
 _SEARCH_CACHE_MAX_ENTRIES = 300  
@@ -1209,11 +1174,9 @@ _SEARCH_POOL_CACHE: dict = {}
 _SEARCH_POOL_TTL = 90
 _SEARCH_POOL_MAX_ENTRIES = 150
 
-
 def _search_cache_key(chat_id, query, file_type, max_results, offset, filter, media_type):
     q = tuple(query) if isinstance(query, list) else query
     return (chat_id, q, file_type, max_results, offset, filter, media_type)
-
 
 def _search_cache_get(key):
     entry = _SEARCH_CACHE.get(key)
@@ -1225,18 +1188,15 @@ def _search_cache_get(key):
         return None
     return value
 
-
 def _search_cache_set(key, value):
     if len(_SEARCH_CACHE) >= _SEARCH_CACHE_MAX_ENTRIES:
         oldest_key = min(_SEARCH_CACHE, key=lambda k: _SEARCH_CACHE[k][0])
         _SEARCH_CACHE.pop(oldest_key, None)
     _SEARCH_CACHE[key] = (datetime.utcnow(), value)
 
-
 def clear_search_cache():
     _SEARCH_CACHE.clear()
     _SEARCH_POOL_CACHE.clear()
-
 
 def _word_to_regex(word):
     if "'" in word or "\u2019" in word:
@@ -1367,6 +1327,7 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
     files = files[:fetch_limit]
 
     is_series = any(re.search(r"s\d{1,2}.*e\d{1,4}", str(file.file_name).lower()) for file in files)
+
     first_word = original_query.split()[0] if original_query.split() else original_query
     orig_re = re.compile(rf"^[\s._\-\[\(]*{re.escape(original_query)}")
     first_re = re.compile(rf"^[\s._\-\[\(]*{re.escape(first_word)}")
@@ -1426,8 +1387,6 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
     _search_cache_set(cache_key, result)
     return result
 
-#_________________________________
-
 async def get_bad_files(query, file_type=None):
     query = query.strip()
     if not query:
@@ -1453,7 +1412,6 @@ async def get_bad_files(query, file_type=None):
     total_results = len(files)
     return files, total_results
 
-
 async def update_cover_url(file_id: str, cover_url: str) -> bool:
     try:
         for media_cls in MEDIA_DBS:
@@ -1468,7 +1426,6 @@ async def update_cover_url(file_id: str, cover_url: str) -> bool:
         logger.error(f"[COVER] update_cover_url error: {e}")
         return False
 
-
 async def get_cover_url(file_id: str) -> str | None:
     try:
         details = await get_file_details(file_id)
@@ -1479,7 +1436,6 @@ async def get_cover_url(file_id: str) -> str | None:
         logger.error(f"[COVER] get_cover_url error: {e}")
         return None
 
-
 async def get_file_details(query):
     filter = {"file_id": query}
     filedetails = []
@@ -1489,7 +1445,6 @@ async def get_file_details(query):
         if filedetails:
             break
     return filedetails
-
 
 async def dreamxbotz_fetch_media(limit: int) -> list:
     try:
@@ -1507,7 +1462,6 @@ async def dreamxbotz_fetch_media(limit: int) -> list:
     except Exception as e:
         logger.error(f"Error in dreamxbotz_fetch_media: {e}")
         return []
-
 
 async def dreamxbotz_clean_title(filename: str, is_series: bool = False) -> str:
     try:
@@ -1567,7 +1521,6 @@ async def dreamxbotz_clean_title(filename: str, is_series: bool = False) -> str:
         logger.error(f"Error in dreamxbotz_clean_title: {e}")
         return filename
 
-
 async def dreamxbotz_get_movies(limit: int = 20) -> List[str]:
     try:
         cursor = await dreamxbotz_fetch_media(limit * 2)
@@ -1599,7 +1552,6 @@ async def dreamxbotz_get_movies(limit: int = 20) -> List[str]:
     except Exception as e:
         logger.error(f"Error in dreamxbotz_get_movies: {e}")
         return []
-
 
 async def dreamxbotz_get_series(limit: int = 30) -> Dict[str, List[int]]:
     try:
