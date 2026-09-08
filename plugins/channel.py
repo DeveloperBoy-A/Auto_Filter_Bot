@@ -78,7 +78,7 @@ def extract_media_info(filename: str, caption: str):
         elif s_match and not e_match:
             episode = "All"
 
-    # 🚀 DYNAMIC TITLE ASSEMBLER
+    # 🚀 DYNAMIC TITLE ASSEMBLER (Original Order Scanner)
     title_parts = [pure_title_clean]
     
     year_str = str(extracted.get("year")) if extracted.get("year") else ""
@@ -97,6 +97,7 @@ def extract_media_info(filename: str, caption: str):
         if s_match:
             season_idx = s_match.start()
 
+    # Append Season and Year in exactly the same order they appeared in the filename
     if year_str and season_tag:
         if year_idx < season_idx:
             if year_str not in pure_title_clean: title_parts.append(year_str)
@@ -142,66 +143,6 @@ def schedule_update(bot, base_name, delay=5):
     )
 
 # ==========================================
-# 🔥 LIVE DATABASE SCANNER (Fetches all old variations)
-# ==========================================
-async def fetch_db_variations(pure_search_title, current_season):
-    """
-    यह फंक्शन आपके असली डेटाबेस में जाकर उस फिल्म/सीरीज का पूरा इतिहास (पुरानी फाइल्स) निकालता है।
-    """
-    all_resolutions = set()
-    all_sources = set()
-    all_languages = set()
-    all_ott_platforms = set()
-    episodes_by_season = defaultdict(set)
-    series_statuses = set()
-    
-    query = {"file_name": {"$regex": rf"^{re.escape(pure_search_title)}", "$options": "i"}}
-    
-    for media_cls in MEDIA_DBS:
-        cursor = media_cls.collection.find(query).sort([("_id", -1)]).limit(300)
-        async for file in cursor:
-            fname = file.get("file_name", "")
-            cap = file.get("caption", "")
-            
-            parsed_pure = extract_pure_title(fname)
-            if parsed_pure.lower() != pure_search_title.lower():
-                continue 
-            
-            ext = extract_languages_quality(f"{fname} {cap}")
-            
-            s = None
-            e = None
-            se_str = ext.get("season_episode")
-            if se_str:
-                s_match = re.search(r'S(\d+)', se_str, re.IGNORECASE)
-                e_match = re.search(r'E([\d\-]+)', se_str, re.IGNORECASE)
-                if s_match: s = int(s_match.group(1))
-                if e_match: e = e_match.group(1)
-            
-            # अगर किसी और सीज़न की फाइल है तो उसे इस पोस्ट में ऐड न करें
-            if current_season is not None and s is not None and s != current_season:
-                continue
-                
-            if ext.get("resolution") and ext["resolution"] != "N/A":
-                all_resolutions.update(r.strip() for r in ext["resolution"].split(","))
-            if ext.get("source") and ext["source"] != "N/A":
-                all_sources.update(r.strip() for r in ext["source"].split(","))
-            if ext.get("languages"):
-                all_languages.update(ext["languages"])
-            if ext.get("ott") and ext["ott"] != "N/A":
-                all_ott_platforms.update(r.strip() for r in ext["ott"].split("|"))
-            if ext.get("series_status"):
-                series_statuses.add(ext["series_status"].title())
-                
-            if s is not None:
-                episodes_by_season[s].add(str(e) if e else "All")
-            elif e:
-                episodes_by_season[1].add(str(e))
-                
-    return all_resolutions, all_sources, all_languages, all_ott_platforms, episodes_by_season, series_statuses
-
-
-# ==========================================
 # FILE INTERCEPTION HANDLER
 # ==========================================
 @Client.on_message(filters.chat(CHANNELS) & MEDIA_FILTER)
@@ -227,10 +168,12 @@ async def media_handler(bot, message):
 
     try:
         quality_info = extract_quality_info(real_file_name, media.caption)
+
         if is_high_quality(quality_info):
             asyncio.create_task(
                 run_quality_cleanup_background(MEDIA_DBS, real_file_name, media.caption)
             )
+
     except Exception as e:
         logger.error(f"[QUALITY] Error in quality management: {e}", exc_info=True)
 
@@ -306,8 +249,6 @@ async def _process_with_lock(bot, filename, caption, media_info, base_name, proc
 
         movie_doc = {
             "_id": base_name,
-            "pure_search_title": media_info["pure_search_title"],
-            "season": media_info["season"],
             "files": [file_data],
             "poster_url": selected_poster,
             "genres": genres,
@@ -346,6 +287,58 @@ async def _process_with_lock(bot, filename, caption, media_info, base_name, proc
         movie_doc["files"].append(file_data)
         schedule_update(bot, base_name)
 
+# ==========================================
+# 🔥 NEW: LIVE DB SCANNER FOR OLD VARIATIONS
+# ==========================================
+async def fetch_db_variations(search_title, current_season):
+    """Fetches variations from the main DB safely using existing extract_media_info logic."""
+    all_resolutions = set()
+    all_sources = set()
+    all_languages = set()
+    all_ott_platforms = set()
+    episodes_by_season = defaultdict(set)
+    series_statuses = set()
+    
+    try:
+        query = {"file_name": {"$regex": rf"^{re.escape(search_title)}", "$options": "i"}}
+        for media_cls in MEDIA_DBS:
+            cursor = media_cls.collection.find(query).sort([("_id", -1)]).limit(300)
+            async for file in cursor:
+                fname = file.get("file_name", "")
+                cap = file.get("caption", "")
+                
+                info = extract_media_info(fname, cap)
+                
+                if info["pure_search_title"].lower() != search_title.lower():
+                    continue
+                    
+                s = info.get("season")
+                e = info.get("episode")
+                
+                if current_season is not None and s is not None and s != current_season:
+                    continue
+                    
+                if info.get("resolution") and info["resolution"] != "N/A":
+                    all_resolutions.update(r.strip() for r in info["resolution"].split(","))
+                if info.get("source") and info["source"] != "N/A":
+                    all_sources.update(x.strip() for x in info["source"].split(","))
+                if info.get("language") and info["language"] != "N/A":
+                    all_languages.update(l.strip() for l in info["language"].split(","))
+                if info.get("ott_platform") and info["ott_platform"] != "N/A":
+                    all_ott_platforms.update(p.strip() for p in info["ott_platform"].split("|"))
+                if info.get("series_status"):
+                    series_statuses.add(info["series_status"].title())
+                    
+                if s is not None:
+                    episodes_by_season[s].add(str(e) if e else "All")
+                elif e:
+                    episodes_by_season[1].add(str(e))
+    except Exception as e:
+        logger.error(f"Error fetching DB variations: {e}")
+        
+    return all_resolutions, all_sources, all_languages, all_ott_platforms, episodes_by_season, series_statuses
+
+
 async def send_movie_update(bot, base_name):
     max_retries = 3
     for attempt in range(max_retries):
@@ -354,10 +347,12 @@ async def send_movie_update(bot, base_name):
             if not movie_doc:
                 return None
 
-            # 🚀 SCAN DATABASE FOR OLD VARIATIONS BEFORE POSTING
-            pure_title = movie_doc.get("pure_search_title") or base_name
-            season = movie_doc.get("season")
-            variations = await fetch_db_variations(pure_title, season)
+            # 🚀 Add variations from DB
+            search_title = extract_pure_title(base_name)
+            current_season = None
+            if movie_doc.get("files"):
+                current_season = movie_doc["files"][-1].get("season")
+            variations = await fetch_db_variations(search_title, current_season)
 
             text = generate_movie_message(movie_doc, base_name, variations)
 
@@ -415,10 +410,12 @@ async def update_movie_message(bot, base_name):
         if not movie_doc:
             return
 
-        # 🚀 SCAN DATABASE FOR OLD VARIATIONS BEFORE UPDATING
-        pure_title = movie_doc.get("pure_search_title") or base_name
-        season = movie_doc.get("season")
-        variations = await fetch_db_variations(pure_title, season)
+        # 🚀 Add variations from DB
+        search_title = extract_pure_title(base_name)
+        current_season = None
+        if movie_doc.get("files"):
+            current_season = movie_doc["files"][-1].get("season")
+        variations = await fetch_db_variations(search_title, current_season)
 
         text = generate_movie_message(movie_doc, base_name, variations)
 
@@ -498,7 +495,7 @@ def get_styled_text(text: str, style_type="bold_serif") -> str:
         'I': 'ɪ', 'J': 'ᴊ', 'K': 'ᴋ', 'L': 'ʟ', 'M': 'ᴍ', 'N': 'ɴ', 'O': 'ᴏ', 'P': 'ᴘ',
         'Q': 'ǫ', 'R': 'ʀ', 'S': 's', 'T': 'ᴛ', 'U': 'ᴜ', 'V': 'ᴠ', 'W': 'ᴡ', 'X': 'x',
         'Y': 'ʏ', 'Z': 'ᴢ',
-        '0': '𝟶', '1': '𝟷', '2': '𝟸', '3': '𝟹', '4': '𝟺', '5': '𝟻', '6': '𝟼', '7': '𝟽', '8': '𝟾', '9': '𝟿'
+        '0': '𝟶', '1': '𝟷', '2': '𝟸', '3': '𝟹', '4': '𝟺', '5': '𝟻', '6': '𝟼', '7': '𝟽', '8': '𝟽', '9': '𝟿'
     }
 
     target_map = bold_serif if style_type == "bold_serif" else small_caps
@@ -518,43 +515,41 @@ def generate_movie_message(movie_doc, base_name, variations=None):
     all_tags = set()
     episodes_by_season = defaultdict(set)
     series_statuses = set()
-    
-    # 🚀 If variations were successfully fetched from DB, use them!
+
+    # 🚀 Update with existing DB variations if available
     if variations and any(variations):
         all_resolutions, all_sources, all_languages, all_ott_platforms, episodes_by_season, series_statuses = variations
-        for file in movie_doc["files"]:
-            if file.get("tag"): all_tags.add(file["tag"])
-    else:
-        # Fallback to local movie_doc if DB scan failed
-        for file in movie_doc["files"]:
-            if file.get("resolution") and file["resolution"] != "N/A":
-                all_resolutions.update(r.strip() for r in file["resolution"].split(",") if r.strip())
-            elif file.get("quality") and file["quality"] != "N/A":
-                all_resolutions.update(q.strip() for q in file.get("quality", "").split(",") if q.strip())
-                
-            if file.get("source") and file["source"] != "N/A":
-                all_sources.update(s.strip() for s in file["source"].split(",") if s.strip())
 
-            if file.get("language") and file["language"] != "N/A":
-                all_languages.update(l.strip() for l in file["language"].split(",") if l.strip())
+    # Make sure we also include the files in the current update doc just in case
+    for file in movie_doc["files"]:
+        if file.get("resolution") and file["resolution"] != "N/A":
+            all_resolutions.update(r.strip() for r in file["resolution"].split(",") if r.strip())
+        elif file.get("quality") and file["quality"] != "N/A":
+            all_resolutions.update(q.strip() for q in file.get("quality", "").split(",") if q.strip())
             
-            if file.get("ott_platform") and file["ott_platform"] != "N/A":
-                platforms = [p.strip() for p in file["ott_platform"].split("|") if p.strip()]
-                all_ott_platforms.update(platforms)
-                
-            if file.get("tag"):
-                all_tags.add(file["tag"])
-                
-            season = file.get("season")
-            episode = file.get("episode")
+        if file.get("source") and file["source"] != "N/A":
+            all_sources.update(s.strip() for s in file["source"].split(",") if s.strip())
+
+        if file.get("language") and file["language"] != "N/A":
+            all_languages.update(l.strip() for l in file["language"].split(",") if l.strip())
+        
+        if file.get("ott_platform") and file["ott_platform"] != "N/A":
+            platforms = [p.strip() for p in file["ott_platform"].split("|") if p.strip()]
+            all_ott_platforms.update(platforms)
             
-            if season is not None:
-                episodes_by_season[season].add(str(episode) if episode else "All")
-            elif episode:
-                episodes_by_season[1].add(str(episode))
-                
-            if file.get("series_status"):
-                series_statuses.add(file["series_status"].title())
+        if file.get("tag"):
+            all_tags.add(file["tag"])
+            
+        season = file.get("season")
+        episode = file.get("episode")
+        
+        if season is not None:
+            episodes_by_season[season].add(str(episode) if episode else "All")
+        elif episode:
+            episodes_by_season[1].add(str(episode))
+            
+        if file.get("series_status"):
+            series_statuses.add(file["series_status"].title())
 
     primary_tag = "#SERIES" if "#SERIES" in all_tags else "#MOVIE"
 
