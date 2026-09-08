@@ -16,7 +16,6 @@ from database.users_chats_db import db
 from plugins.quality_manager import extract_quality_info, is_high_quality, run_quality_cleanup_background
 from plugins.Dreamxfutures.Imdbposter import get_movie_detailsx, fetch_image, get_movie_details
 
-# 🎯 100% SYNCHRONIZED WITH ia_filterdb.py
 from database.ia_filterdb import save_file, extract_pure_title, extract_languages_quality, is_series_file, MEDIA_DBS
 
 logger = logging.getLogger(__name__)
@@ -60,11 +59,11 @@ def extract_media_info(filename: str, caption: str):
         else:
             formatted_words.append(word.upper())
             
-    final_title = " ".join(formatted_words) if pure_title else "Unnamed"
+    pure_title_clean = " ".join(formatted_words) if pure_title else "Unnamed"
 
-    tag = "#SERIES" if is_series_file(filename) else "#MOVIE"
+    file_is_series = is_series_file(filename)
+    tag = "#SERIES" if file_is_series else "#MOVIE"
 
-    # 🚀 FIX: Season and Episode Logic
     season = None
     episode = None
     se_str = extracted.get("season_episode")
@@ -77,21 +76,57 @@ def extract_media_info(filename: str, caption: str):
         if e_match: 
             episode = e_match.group(1)
         elif s_match and not e_match:
-            episode = "All" # Pack / Complete Season
+            episode = "All"
+
+    # 🚀 DYNAMIC TITLE ASSEMBLER (Original Order Scanner)
+    title_parts = [pure_title_clean]
+    
+    year_str = str(extracted.get("year")) if extracted.get("year") else ""
+    year_idx = float('inf')
+    if year_str:
+        y_match = re.search(rf'\b{year_str}\b', text_to_scan)
+        if y_match:
+            year_idx = y_match.start()
+
+    season_idx = float('inf')
+    season_tag = ""
+    if file_is_series and season is not None:
+        season_tag = f"S{season:02d}"
+        s_pattern = re.compile(rf'\b(?:s|season)[\s\-_]*0*{season}\b', re.IGNORECASE)
+        s_match = s_pattern.search(text_to_scan)
+        if s_match:
+            season_idx = s_match.start()
+
+    # Append Season and Year in exactly the same order they appeared in the filename
+    if year_str and season_tag:
+        if year_idx < season_idx:
+            if year_str not in pure_title_clean: title_parts.append(year_str)
+            if season_tag not in pure_title_clean.upper(): title_parts.append(season_tag)
+        else:
+            if season_tag not in pure_title_clean.upper(): title_parts.append(season_tag)
+            if year_str not in pure_title_clean: title_parts.append(year_str)
+    else:
+        if season_tag and season_tag not in pure_title_clean.upper():
+            title_parts.append(season_tag)
+        if year_str and year_str not in pure_title_clean:
+            title_parts.append(year_str)
+
+    final_title = " ".join(title_parts).strip()
 
     languages = ", ".join(extracted.get("languages", [])) if extracted.get("languages") else "N/A"
     ott_platform = extracted.get("ott") or "N/A"
 
     return {
         "processed": final_title,
-        "base_name": final_title,  
+        "base_name": final_title,
+        "pure_search_title": pure_title_clean,
         "tag": tag,
         "season": season,
         "episode": episode,
         "series_status": extracted.get("series_status"), 
         "year": extracted.get("year"),
-        "resolution": extracted.get("resolution") or "N/A", # Pixels
-        "source": extracted.get("source") or "N/A",         # Quality
+        "resolution": extracted.get("resolution") or "N/A",
+        "source": extracted.get("source") or "N/A",
         "ott_platform": ott_platform,
         "language": languages
     }
@@ -134,14 +169,6 @@ async def media_handler(bot, message):
     try:
         quality_info = extract_quality_info(real_file_name, media.caption)
 
-        logger.debug(
-            f"[QUALITY] {real_file_name[:70]} | "
-            f"source={quality_info.get('source')} | "
-            f"resolution={quality_info.get('resolution')} | "
-            f"score={quality_info.get('quality_score', 0):.1f} | "
-            f"lang={extracted_info.get('language', 'N/A')}"
-        )
-
         if is_high_quality(quality_info):
             asyncio.create_task(
                 run_quality_cleanup_background(MEDIA_DBS, real_file_name, media.caption)
@@ -181,13 +208,12 @@ async def _process_with_lock(bot, filename, caption, media_info, base_name, proc
     movie_doc = await db.movie_updates.find_one({"_id": base_name})
     error_tmdb = False
 
-    # 🚀 FIX: Saving both resolution and source
     file_data = {
         "filename": filename,
         "processed": processed,
         "resolution": media_info["resolution"],
         "source": media_info["source"],
-        "quality": media_info["resolution"], # Backwards Compatibility
+        "quality": media_info["resolution"],
         "language": media_info["language"],
         "ott_platform": media_info["ott_platform"],
         "timestamp": datetime.now(),
@@ -198,14 +224,14 @@ async def _process_with_lock(bot, filename, caption, media_info, base_name, proc
     }
 
     if not movie_doc:
+        search_query = media_info.get("pure_search_title") or base_name
         if TMDB_POSTER:
-            details = await get_movie_detailsx(base_name)
+            details = await get_movie_detailsx(search_query)
             if not details or details.get("error") or (not details.get("poster_url") and not details.get("backdrop_url")):
                 error_tmdb = True
-                logger.info("TMDB error switching to IMDB")
-                details = await get_movie_details(base_name) or {}
+                details = await get_movie_details(search_query) or {}
         else:
-            details = await get_movie_details(base_name) or {}
+            details = await get_movie_details(search_query) or {}
 
         raw_genres = details.get("genres", "N/A")
         if isinstance(raw_genres, str):
@@ -228,7 +254,7 @@ async def _process_with_lock(bot, filename, caption, media_info, base_name, proc
             "genres": genres,
             "rating": details.get("rating", "N/A"),
             "imdb_url": details.get("tmdb_url") if (TMDB_POSTER and not error_tmdb) else details.get("url", ""),
-            "year": media_info["year"] or details.get("year"),
+            "year": media_info["year"],
             "tag": media_info["tag"],
             "ott_platform": media_info["ott_platform"],
             "message_id": None,
@@ -263,7 +289,6 @@ async def _process_with_lock(bot, filename, caption, media_info, base_name, proc
 
 async def send_movie_update(bot, base_name):
     max_retries = 3
-    base_delay = 5
     for attempt in range(max_retries):
         try:
             movie_doc = await db.movie_updates.find_one({"_id": base_name})
@@ -369,20 +394,12 @@ async def update_movie_message(bot, base_name):
                 )
             return
         except (MessageIdInvalid, MessageNotModified) as e:
-            logger.warning(f"Message update skipped due to error: {e}")
             pass
         except Exception:
             try:
-                await bot.delete_messages(
-                    chat_id=MOVIE_UPDATE_CHANNEL,
-                    message_ids=message_id
-                )
-                await db.movie_updates.update_one(
-                    {"_id": base_name},
-                    {"$set": {"message_id": None, "is_photo": False}}
-                )
-            except Exception as e:
-                logger.error(f"Error during message deletion/update in recovery: {e}")
+                await bot.delete_messages(chat_id=MOVIE_UPDATE_CHANNEL, message_ids=message_id)
+                await db.movie_updates.update_one({"_id": base_name}, {"$set": {"message_id": None, "is_photo": False}})
+            except Exception:
                 pass
             await send_movie_update(bot, base_name)
     except Exception as e:
@@ -434,10 +451,9 @@ def generate_movie_message(movie_doc, base_name):
     series_statuses = set()
 
     for file in movie_doc["files"]:
-        # 🚀 FIX: Fetching both Resolution & Source separately
         if file.get("resolution") and file["resolution"] != "N/A":
             all_resolutions.update(r.strip() for r in file["resolution"].split(",") if r.strip())
-        elif file.get("quality") and file["quality"] != "N/A": # Backwards compatibility
+        elif file.get("quality") and file["quality"] != "N/A":
             all_resolutions.update(q.strip() for q in file.get("quality", "").split(",") if q.strip())
             
         if file.get("source") and file["source"] != "N/A":
@@ -471,7 +487,6 @@ def generate_movie_message(movie_doc, base_name):
     if episodes_by_season or series_statuses:
         episode_lines = []
         for season in sorted(episodes_by_season.keys(), key=lambda x: int(x)):
-            # Advanced sorting logic for "All", "01", "01-05"
             def ep_sort_key(x):
                 if x == "All": return -1
                 num_part = x.split('-')[0]
@@ -494,20 +509,18 @@ def generate_movie_message(movie_doc, base_name):
             epi_str = "\n".join(episode_lines)
             epi_block = f"\n<b>━━━━━━━━━━━━━━━━━</b>\n{epi_str}\n<b>━━━━━━━━━━━━━━━━━</b>"
 
-
     # ===== QUALITY COMBINATION (Pixels + Source) =====
     res_str = ", ".join(sorted(all_resolutions))
     src_str = ", ".join(sorted(all_sources))
     
     if res_str and src_str:
-        raw_quality = f"{res_str} | {src_str}"  # Output: 1080p, 720p | WEB-DL, HDRip
+        raw_quality = f"{res_str} | {src_str}" 
     elif res_str:
         raw_quality = res_str
     elif src_str:
         raw_quality = src_str
     else:
         raw_quality = "N/A"
-
 
     # ===== STYLING =====
     styled_title = get_styled_text(base_name, style_type="bold_serif")
@@ -529,7 +542,7 @@ def generate_movie_message(movie_doc, base_name):
         tag=primary_tag,
         genres=styled_genres,
         ott=styled_ott,
-        quality=styled_quality, # 🚀 Now it contains both Pixels and Source
+        quality=styled_quality,
         language=styled_languages,
         episodes=epi_block,
         rating=movie_doc.get("rating", "N/A"),
