@@ -37,7 +37,7 @@ pending_updates = {}
 
 
 # ==========================================
-# 🎯 SMART MEDIA INFO EXTRACTOR (Powered by ia_filterdb)
+# 🎯 SMART MEDIA INFO EXTRACTOR
 # ==========================================
 def extract_media_info(filename: str, caption: str):
     text_to_scan = f"{filename} {caption}"
@@ -64,19 +64,22 @@ def extract_media_info(filename: str, caption: str):
 
     tag = "#SERIES" if is_series_file(filename) else "#MOVIE"
 
+    # 🚀 FIX: Season and Episode Logic
     season = None
     episode = None
     se_str = extracted.get("season_episode")
     if se_str:
         s_match = re.search(r'S(\d+)', se_str, re.IGNORECASE)
         e_match = re.search(r'E([\d\-]+)', se_str, re.IGNORECASE)
+        
         if s_match: 
             season = int(s_match.group(1))
         if e_match: 
             episode = e_match.group(1)
+        elif s_match and not e_match:
+            episode = "All" # Pack / Complete Season
 
     languages = ", ".join(extracted.get("languages", [])) if extracted.get("languages") else "N/A"
-    quality = extracted.get("resolution") or "N/A"
     ott_platform = extracted.get("ott") or "N/A"
 
     return {
@@ -85,9 +88,10 @@ def extract_media_info(filename: str, caption: str):
         "tag": tag,
         "season": season,
         "episode": episode,
-        "series_status": extracted.get("series_status"), # 🚀 Added Complete/Combined Status
+        "series_status": extracted.get("series_status"), 
         "year": extracted.get("year"),
-        "quality": quality,
+        "resolution": extracted.get("resolution") or "N/A", # Pixels
+        "source": extracted.get("source") or "N/A",         # Quality
         "ott_platform": ott_platform,
         "language": languages
     }
@@ -177,17 +181,20 @@ async def _process_with_lock(bot, filename, caption, media_info, base_name, proc
     movie_doc = await db.movie_updates.find_one({"_id": base_name})
     error_tmdb = False
 
+    # 🚀 FIX: Saving both resolution and source
     file_data = {
         "filename": filename,
         "processed": processed,
-        "quality": media_info["quality"],
+        "resolution": media_info["resolution"],
+        "source": media_info["source"],
+        "quality": media_info["resolution"], # Backwards Compatibility
         "language": media_info["language"],
         "ott_platform": media_info["ott_platform"],
         "timestamp": datetime.now(),
         "tag": media_info["tag"],
         "season": media_info["season"],
         "episode": media_info["episode"],
-        "series_status": media_info.get("series_status") # 🚀 Included Status here
+        "series_status": media_info.get("series_status")
     }
 
     if not movie_doc:
@@ -418,31 +425,44 @@ def get_styled_text(text: str, style_type="bold_serif") -> str:
     return styled
 
 def generate_movie_message(movie_doc, base_name):
-    all_qualities = set()
+    all_resolutions = set()
+    all_sources = set()
     all_languages = set()
     all_ott_platforms = set()
     all_tags = set()
     episodes_by_season = defaultdict(set)
-    series_statuses = set() # 🚀 Status Set
+    series_statuses = set()
 
     for file in movie_doc["files"]:
-        if file["quality"] != "N/A":
-            all_qualities.update(q.strip() for q in file["quality"].split(",") if q.strip())
-        if file["language"] != "N/A":
+        # 🚀 FIX: Fetching both Resolution & Source separately
+        if file.get("resolution") and file["resolution"] != "N/A":
+            all_resolutions.update(r.strip() for r in file["resolution"].split(",") if r.strip())
+        elif file.get("quality") and file["quality"] != "N/A": # Backwards compatibility
+            all_resolutions.update(q.strip() for q in file.get("quality", "").split(",") if q.strip())
+            
+        if file.get("source") and file["source"] != "N/A":
+            all_sources.update(s.strip() for s in file["source"].split(",") if s.strip())
+
+        if file.get("language") and file["language"] != "N/A":
             all_languages.update(l.strip() for l in file["language"].split(",") if l.strip())
-        if file["ott_platform"] != "N/A":
+        
+        if file.get("ott_platform") and file["ott_platform"] != "N/A":
             platforms = [p.strip() for p in file["ott_platform"].split("|") if p.strip()]
             all_ott_platforms.update(platforms)
-        if file["tag"]:
+            
+        if file.get("tag"):
             all_tags.add(file["tag"])
             
+        season = file.get("season")
         episode = file.get("episode")
-        if episode:
-            season = file.get("season") or 1
-            episodes_by_season[season].add(str(episode))
+        
+        if season is not None:
+            episodes_by_season[season].add(str(episode) if episode else "All")
+        elif episode:
+            episodes_by_season[1].add(str(episode))
             
         if file.get("series_status"):
-            series_statuses.add(file["series_status"].title()) # Adds 'Complete' or 'Combined'
+            series_statuses.add(file["series_status"].title())
 
     primary_tag = "#SERIES" if "#SERIES" in all_tags else "#MOVIE"
 
@@ -451,8 +471,13 @@ def generate_movie_message(movie_doc, base_name):
     if episodes_by_season or series_statuses:
         episode_lines = []
         for season in sorted(episodes_by_season.keys(), key=lambda x: int(x)):
-            episodes = sorted(list(episodes_by_season[season]), 
-                            key=lambda x: int(x.split('-')[0]) if '-' in x else int(x))
+            # Advanced sorting logic for "All", "01", "01-05"
+            def ep_sort_key(x):
+                if x == "All": return -1
+                num_part = x.split('-')[0]
+                return int(num_part) if num_part.isdigit() else 999
+
+            episodes = sorted(list(episodes_by_season[season]), key=ep_sort_key)
             ep_list = ", ".join(episodes)
 
             line = (
@@ -461,7 +486,6 @@ def generate_movie_message(movie_doc, base_name):
             )
             episode_lines.append(line)
             
-        # 🚀 ADDING STATUS (Complete / Combined) TO THE POST
         if series_statuses:
             status_str = ", ".join(series_statuses)
             episode_lines.append(f"<b>┇ </b>sᴛᴀᴛᴜs: <code>{status_str}</code>")
@@ -469,6 +493,21 @@ def generate_movie_message(movie_doc, base_name):
         if episode_lines:
             epi_str = "\n".join(episode_lines)
             epi_block = f"\n<b>━━━━━━━━━━━━━━━━━</b>\n{epi_str}\n<b>━━━━━━━━━━━━━━━━━</b>"
+
+
+    # ===== QUALITY COMBINATION (Pixels + Source) =====
+    res_str = ", ".join(sorted(all_resolutions))
+    src_str = ", ".join(sorted(all_sources))
+    
+    if res_str and src_str:
+        raw_quality = f"{res_str} | {src_str}"  # Output: 1080p, 720p | WEB-DL, HDRip
+    elif res_str:
+        raw_quality = res_str
+    elif src_str:
+        raw_quality = src_str
+    else:
+        raw_quality = "N/A"
+
 
     # ===== STYLING =====
     styled_title = get_styled_text(base_name, style_type="bold_serif")
@@ -478,7 +517,6 @@ def generate_movie_message(movie_doc, base_name):
     raw_languages = ", ".join(sorted(all_languages)) if all_languages else "N/A"
     styled_languages = get_styled_text(raw_languages, style_type="small_caps")
 
-    raw_quality = ", ".join(sorted(all_qualities)) if all_qualities else "N/A"
     styled_quality = get_styled_text(raw_quality, style_type="small_caps")
 
     raw_ott = ", ".join(sorted(all_ott_platforms)) if all_ott_platforms else "N/A"
@@ -491,7 +529,7 @@ def generate_movie_message(movie_doc, base_name):
         tag=primary_tag,
         genres=styled_genres,
         ott=styled_ott,
-        quality=styled_quality,
+        quality=styled_quality, # 🚀 Now it contains both Pixels and Source
         language=styled_languages,
         episodes=epi_block,
         rating=movie_doc.get("rating", "N/A"),
