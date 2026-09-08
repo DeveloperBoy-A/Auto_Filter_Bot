@@ -3,6 +3,7 @@ import os
 import re
 import io
 import asyncio
+import aiohttp
 import base64
 from struct import pack
 from pyrogram.file_id import FileId
@@ -32,109 +33,283 @@ def _year_matches(candidate_date: str | None, expected_year: str | None) -> bool
         return True
     return str(candidate_date).strip()[:4] == str(expected_year).strip()
 
-async def _fetch_cover_url_official_tmdb(title: str, year: str | None) -> dict | None:
-    if not TMDB_API_KEY: 
+
+async def _fetch_cover_url_official_tmdb(
+    title: str,
+    year: str | None,
+    media_type: str = "movie"
+) -> dict | None:
+    if not TMDB_API_KEY:
         return None
+
     session = await _get_session()
+
     try:
-        params = {"api_key": TMDB_API_KEY, "query": title.strip(), "include_adult": "false"}
+        is_series = str(media_type).lower() == "series"
+
+        endpoint = (
+            "https://api.themoviedb.org/3/search/tv"
+            if is_series
+            else "https://api.themoviedb.org/3/search/movie"
+        )
+
+        params = {
+            "api_key": TMDB_API_KEY,
+            "query": title.strip(),
+            "include_adult": "false"
+        }
+
         if year:
-            params["year"] = year
+            if is_series:
+                params["first_air_date_year"] = year
+            else:
+                params["year"] = year
+
         async with session.get(
-            "https://api.themoviedb.org/3/search/movie", params=params, timeout=aiohttp.ClientTimeout(total=10)
+            endpoint,
+            params=params,
+            timeout=aiohttp.ClientTimeout(total=10)
         ) as resp:
+
             if resp.status != 200:
                 return None
+
             data = await resp.json()
             results = data.get("results") or []
+
             if not results:
                 return None
 
+            date_key = "first_air_date" if is_series else "release_date"
+
             chosen = None
+
+            # Exact year match
             if year:
-                for r in results:
-                    if _year_matches(r.get("release_date"), year):
-                        chosen = r
+                for result in results:
+                    if _year_matches(
+                        result.get(date_key),
+                        year
+                    ):
+                        chosen = result
                         break
+
+            # Fallback to first result
             if not chosen:
                 chosen = results[0]
 
-            if year and not _year_matches(chosen.get("release_date"), year):
+            # Never accept wrong year
+            if year and not _year_matches(
+                chosen.get(date_key),
+                year
+            ):
                 return None
 
             poster_path = chosen.get("poster_path")
             backdrop_path = chosen.get("backdrop_path")
+
             if not poster_path and not backdrop_path:
                 return None
+
             return {
-                "poster_url": f"https://image.tmdb.org/t/p/w1280{poster_path}" if poster_path else None,
-                "backdrop_url": f"https://image.tmdb.org/t/p/w1280{backdrop_path}" if backdrop_path else None,
-                "title": chosen.get("title"),
+                "poster_url": (
+                    f"https://image.tmdb.org/t/p/w1280{poster_path}"
+                    if poster_path else None
+                ),
+                "backdrop_url": (
+                    f"https://image.tmdb.org/t/p/w1280{backdrop_path}"
+                    if backdrop_path else None
+                ),
+                "title": (
+                    chosen.get("name")
+                    if is_series
+                    else chosen.get("title")
+                )
             }
-    except Exception:
+
+    except Exception as e:
+        logger.debug(
+            f"[TMDB] Cover fetch failed | "
+            f"title={title} | year={year} | "
+            f"type={media_type} | error={e}"
+        )
         return None
 
-async def _fetch_cover_url(title: str, year: str | None = None) -> str | None:
+
+async def _fetch_cover_url(
+    title: str,
+    year: str | None = None,
+    media_type: str = "movie"
+) -> str | None:
+
     details = None
     session = await _get_session()
 
-    details = await _fetch_cover_url_official_tmdb(title, year)
+    # ============================================================
+    # 1️⃣ OFFICIAL TMDB
+    # Movie  -> /search/movie
+    # Series -> /search/tv
+    # ============================================================
+    details = await _fetch_cover_url_official_tmdb(
+        title,
+        year,
+        media_type
+    )
 
-    # TMDB Proxy Fallback
-    if not details:
+    # ============================================================
+    # 2️⃣ TMDB PROXY FALLBACK
+    # Existing endpoint is movie based.
+    # So don't use it for series.
+    # ============================================================
+    if (
+        not details
+        and str(media_type).lower() != "series"
+    ):
         try:
-            search_title = f"{title} {year}" if year else title
-            base_url = "https://tmdb.blazeposters.workers.dev/api/movie-posters"
-            async with session.get(base_url, params={"query": search_title.strip()}, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+            search_title = (
+                f"{title} {year}"
+                if year else title
+            )
+
+            base_url = (
+                "https://tmdb.blazeposters.workers.dev/"
+                "api/movie-posters"
+            )
+
+            async with session.get(
+                base_url,
+                params={
+                    "query": search_title.strip()
+                },
+                timeout=aiohttp.ClientTimeout(total=10)
+            ) as resp:
+
                 if resp.status == 200:
                     data = await resp.json()
+
                     poster_url = data.get("poster_url")
                     backdrop_url = data.get("backdrop_url")
 
                     if not poster_url:
-                        posters = data.get("images", {}).get("posters", {})
+                        posters = (
+                            data.get("images", {})
+                            .get("posters", {})
+                        )
+
                         for key in ("en", "xx"):
                             if posters.get(key):
                                 poster_url = posters[key][0]
                                 break
+
                     if not backdrop_url:
-                        backdrops = data.get("images", {}).get("backdrops", {})
+                        backdrops = (
+                            data.get("images", {})
+                            .get("backdrops", {})
+                        )
+
                         for key in ("en", "xx"):
                             if backdrops.get(key):
                                 backdrop_url = backdrops[key][0]
                                 break
 
                     if poster_url or backdrop_url:
-                        result_title = str(data.get("title", "")).lower().strip()
-                        result_date = data.get("release_date") or data.get("first_air_date")
-                        search_words = [w for w in title.lower().split() if not w.isdigit()]
-                        main_words = [w for w in search_words if len(w) >= 2][:2]
 
-                        title_ok = not main_words or all(w in result_title for w in main_words)
-                        year_ok = _year_matches(result_date, year)
+                        result_title = str(
+                            data.get("title", "")
+                        ).lower().strip()
+
+                        result_date = (
+                            data.get("release_date")
+                            or data.get("first_air_date")
+                        )
+
+                        search_words = [
+                            word
+                            for word in title.lower().split()
+                            if not word.isdigit()
+                        ]
+
+                        main_words = [
+                            word
+                            for word in search_words
+                            if len(word) >= 2
+                        ][:2]
+
+                        title_ok = (
+                            not main_words
+                            or all(
+                                word in result_title
+                                for word in main_words
+                            )
+                        )
+
+                        year_ok = _year_matches(
+                            result_date,
+                            year
+                        )
 
                         if title_ok and year_ok:
-                            if poster_url:
-                                poster_url = poster_url.replace("/original/", "/w1280/")
-                            if backdrop_url:
-                                backdrop_url = backdrop_url.replace("/original/", "/w1280/")
-                            details = {"poster_url": poster_url, "backdrop_url": backdrop_url}
-        except Exception:
-            pass
 
-    # IMDB Fallback
+                            if poster_url:
+                                poster_url = poster_url.replace(
+                                    "/original/",
+                                    "/w1280/"
+                                )
+
+                            if backdrop_url:
+                                backdrop_url = backdrop_url.replace(
+                                    "/original/",
+                                    "/w1280/"
+                                )
+
+                            details = {
+                                "poster_url": poster_url,
+                                "backdrop_url": backdrop_url
+                            }
+
+        except Exception as e:
+            logger.debug(
+                f"[TMDB Proxy] Cover fetch failed | "
+                f"title={title} | year={year} | error={e}"
+            )
+
+    # ============================================================
+    # 3️⃣ IMDB FALLBACK
+    # Works for both movie and series.
+    # ============================================================
     if not details:
         try:
             from plugins.Dreamxfutures.Imdbposter import get_movie_details
-            imdb_data = await get_movie_details(f"{title} {year}" if year else title)
+
+            imdb_query = (
+                f"{title} {year}"
+                if year else title
+            )
+
+            imdb_data = await get_movie_details(
+                imdb_query
+            )
+
             if imdb_data and imdb_data.get("poster_url"):
-                details = {"poster_url": imdb_data.get("poster_url"), "backdrop_url": None}
-        except Exception:
-            pass
+                details = {
+                    "poster_url": imdb_data.get("poster_url"),
+                    "backdrop_url": None
+                }
+
+        except Exception as e:
+            logger.debug(
+                f"[IMDB] Cover fetch failed | "
+                f"title={title} | year={year} | error={e}"
+            )
 
     if not details:
         return None
-    return details.get("poster_url") or details.get("backdrop_url")
+
+    return (
+        details.get("poster_url")
+        or details.get("backdrop_url")
+    )
+
 
 # ==========================================
 # 🖌️ CLOUDINARY WATERMARK RENDERING (0% RAM/CPU)
@@ -932,72 +1107,155 @@ def _cover_cache_set(key, value):
 
 
 
-async def _fetch_and_save_cover(file_id: str, final_title: str, year: str | None, bot=None):
+async def _fetch_and_save_cover(
+    file_id: str,
+    final_title: str,
+    year: str | None,
+    media_type: str = "movie",
+    bot=None
+):
     """Background cover resolver with bounded concurrency and cache."""
-    
-    # 1. STRICT INFO.PY CONTROL: Handles both boolean False and string "False"
+
+    # 1. STRICT INFO.PY CONTROL
     if str(COVERX).strip().lower() in ['false', '0', 'no']:
         return
 
-    lock_key = f"{final_title.lower().strip()}::{(year or '').strip()}"
+    lock_key = (
+        f"{str(media_type).lower()}::"
+        f"{final_title.lower().strip()}::"
+        f"{(year or '').strip()}"
+    )
+
     if lock_key not in _COVER_LOCKS:
-        # Evict the oldest lock if we're at capacity, so this dict (and the Lock
-        # objects it holds) can't grow unbounded across a long indexing run.
+        # Evict oldest lock if capacity reached
         if len(_COVER_LOCKS) >= _COVER_LOCKS_MAX_ENTRIES:
             oldest_key = next(iter(_COVER_LOCKS))
+
             if not _COVER_LOCKS[oldest_key].locked():
                 _COVER_LOCKS.pop(oldest_key, None)
+
         _COVER_LOCKS[lock_key] = asyncio.Lock()
 
     async with _COVER_SEMAPHORE:
         async with _COVER_LOCKS[lock_key]:
             try:
-                # 1. Check fast memory cache
+
+                # ====================================================
+                # 1️⃣ MEMORY CACHE
+                # ====================================================
                 if lock_key in _COVER_CACHE:
+
                     cover_url = _COVER_CACHE[lock_key]
-                    logger.debug(f"[COVER] Reused cover from memory cache for '{final_title}' ({year})")
+
+                    logger.debug(
+                        f"[COVER] Reused memory cover | "
+                        f"{final_title} | {year} | {media_type}"
+                    )
+
                 else:
-                    # 2. STRICT DATABASE MATCH: Must match BOTH Title and Year exactly.
+
+                    # ====================================================
+                    # 2️⃣ DATABASE COVER REUSE
+                    # Match TITLE + YEAR + MEDIA TYPE
+                    # ====================================================
                     query = {
-                        "title": {"$regex": rf"^{re.escape(final_title)}$", "$options": "i"},
+                        "title": {
+                            "$regex": rf"^{re.escape(final_title)}$",
+                            "$options": "i"
+                        },
                         "cover": {"$ne": None},
-                        "year": year # This guarantees year must match (if year is None, it only matches DB entries with no year)
+                        "year": year,
+                        "media_type": media_type
                     }
 
                     existing = None
+
                     for media_cls in MEDIA_DBS:
                         existing = await media_cls.find_one(query)
+
                         if existing:
                             break
 
                     if existing and existing.cover:
+
                         cover_url = existing.cover
-                        _cover_cache_set(lock_key, cover_url)
-                        logger.debug(f"[COVER] Reused existing cover from DB for '{final_title}'")
+
+                        _cover_cache_set(
+                            lock_key,
+                            cover_url
+                        )
+
+                        logger.debug(
+                            f"[COVER] Reused DB cover | "
+                            f"{final_title} | {year} | {media_type}"
+                        )
+
                     else:
-                        # 3. Fetch from API (If no exact match found in DB)
-                        raw_url = await _fetch_cover_url(final_title, year)
+
+                        # ====================================================
+                        # 3️⃣ FETCH NEW COVER
+                        # ====================================================
+                        raw_url = await _fetch_cover_url(
+                            final_title,
+                            year,
+                            media_type
+                        )
 
                         if not raw_url:
-                            logger.debug(f"[COVER] No cover found for '{final_title}' - Skipping cover.")
+                            logger.debug(
+                                f"[COVER] No cover found | "
+                                f"{final_title} | {year} | {media_type}"
+                            )
                             return
 
-                        # 🚀 CLOUDINARY WATERMARK URL GEN (0% CPU LOAD)
-                        cover_url = get_cloud_watermark_url(raw_url)
-                        
+                        # ====================================================
+                        # 4️⃣ CLOUDINARY WATERMARK
+                        # ====================================================
+                        cover_url = get_cloud_watermark_url(
+                            raw_url
+                        )
+
                         if cover_url:
-                            _cover_cache_set(lock_key, cover_url)
-                            logger.debug(f"[COVER] Fetched new cover for '{final_title}'")
+
+                            _cover_cache_set(
+                                lock_key,
+                                cover_url
+                            )
+
+                            logger.debug(
+                                f"[COVER] New cover fetched | "
+                                f"{final_title} | {year} | {media_type}"
+                            )
+
                         else:
                             return
 
-                # Update the specific file_id with the resolved cover
+                # ====================================================
+                # 5️⃣ UPDATE FILE COVER
+                # ====================================================
                 for media_cls in MEDIA_DBS:
-                    await media_cls.collection.update_one({"_id": file_id}, {"$set": {"cover": cover_url}})
-                logger.debug(f"[COVER] DB updated | file_id={file_id}")
-            except Exception as e:
-                logger.warning(f"[COVER] Background task error for '{final_title}': {e}")
+                    await media_cls.collection.update_one(
+                        {"_id": file_id},
+                        {
+                            "$set": {
+                                "cover": cover_url
+                            }
+                        }
+                    )
 
+                logger.debug(
+                    f"[COVER] DB updated | "
+                    f"file_id={file_id} | "
+                    f"type={media_type}"
+                )
+
+            except Exception as e:
+                logger.warning(
+                    f"[COVER] Background task error | "
+                    f"title={final_title} | "
+                    f"type={media_type} | "
+                    f"error={e}"
+                )
 
 
 async def save_file(media, bot=None, extracted_info=None):
@@ -1153,14 +1411,6 @@ async def save_file(media, bot=None, extracted_info=None):
         file_name = file_name + ext.lower()
         file_name = re.sub(r'\s+\.', '.', file_name)
 
-        # Run cover fetch in the background
-        if COVERX:
-            asyncio.ensure_future(_fetch_and_save_cover(
-                file_id=file_id,
-                final_title=final_title,
-                year=extracted.get("year"),
-                bot=bot
-            ))
 
         # Check for duplicates across all active databases
         for db_index, media_cls in enumerate(MEDIA_DBS):
@@ -1186,6 +1436,7 @@ async def save_file(media, bot=None, extracted_info=None):
 
         # Determine target database based on storage capacity
         target_media = await get_active_media_db()
+        media_type = "series" if is_series_file(file_name) else "movie"
 
         record = target_media(
             file_id=file_id,
@@ -1196,13 +1447,26 @@ async def save_file(media, bot=None, extracted_info=None):
             mime_type=media.mime_type,
             caption=getattr(media.caption, "html", None) if media.caption else None,
             cover=None,
-            media_type=("series" if is_series_file(file_name) else "movie"),
+            media_type=media_type,
             file_date=datetime.utcnow(), 
             title=final_title,
             year=extracted.get("year")
         )
         await record.commit()
 
+        # ============================================================
+        # 🖼️ COVER FETCH — AFTER FILE IS SUCCESSFULLY SAVED
+        # ============================================================
+        if str(COVERX).strip().lower() not in {"false", "0", "no"}:
+            asyncio.ensure_future(
+                _fetch_and_save_cover(
+                    file_id=file_id,
+                    final_title=final_title,
+                    year=extracted.get("year"),
+                    media_type=media_type,
+                    bot=bot
+               )
+           )
         db_index = MEDIA_DBS.index(target_media)
         db_label = _DB_LABELS[db_index] if db_index < len(_DB_LABELS) else f"DB {db_index + 1}"
 
