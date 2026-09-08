@@ -22,24 +22,6 @@ logger.setLevel(logging.INFO)
 
 
 # ==========================================
-# ⚙️ WATERMARK CONFIGURATION
-# ==========================================
-# Styling, placement, and color palettes for the Tokyo Updates watermark.
-
-WATERMARK_TEXT = "[@Tokyo_Updates]"
-WATERMARK_STYLES = [
-    {"text": (255, 255, 255), "box": (101, 67, 33, 210)},  # Dark brown
-    {"text": (255, 255, 255), "box": (20, 20, 20, 200)},   # Near black
-    {"text": (255, 255, 255), "box": (139, 0, 0, 210)},    # Dark red
-    {"text": (255, 255, 255), "box": (0, 70, 127, 210)},   # Dark blue
-    {"text": (255, 255, 255), "box": (34, 100, 34, 210)},  # Dark green
-    {"text": (255, 255, 255), "box": (80, 0, 120, 210)},   # Dark purple
-    {"text": (255, 255, 255), "box": (180, 90, 0, 210)},   # Dark orange
-    {"text": (0, 0, 0), "box": (255, 215, 0, 210)},        # Gold box, black text
-]
-WATERMARK_POSITIONS = ["bottom_right", "bottom_left", "top_right", "bottom_center"]
-
-# ==========================================
 # 🖼️ COVER IMAGE FETCHER (TMDB / IMDB)
 # ==========================================
 # Fetches movie/series posters from TMDB (official & proxy) with fallback to IMDB.
@@ -164,7 +146,7 @@ def get_cloud_watermark_url(original_tmdb_url: str) -> str:
         return None
         
     # 👇 यहाँ "your_cloud_name" को हटाकर अपना असली Cloud Name डालें
-    cloud_name = "your_cloud_name"  
+    cloud_name = "ci2woc0d"  
     
     watermark_text = "%5B%40Tokyo_Updates%5D" 
     
