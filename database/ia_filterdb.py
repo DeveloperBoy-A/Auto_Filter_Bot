@@ -414,7 +414,7 @@ def extract_pure_title(original_name):
         r'hdtc', r'@', r'tamil', r'telugu', r'malayalam', r'kannada', r'bengali', r'marathi', r'korean', r'japanese', r'chinese', r'spanish', r'russian', r'french',
         r'web[\-\s]?dl', r'web[\-\s]?rip', r'hdrip', r'bluray', r'brrip', r'dvdrip', r'camrip', r'hdts', r'hdcam', 
         r'av1', r'x264', r'x265', r'hevc', r'10bit', r'aac', r'eac3', r'ac3', r'ddp[\s\-]?7\.1', r'ddp[\s\-]?5\.1', r'dd[\s\-]?5\.1', r'dd[\s\-]?2\.0', r'ddp', r'5\.1', r'7\.1', r'2\.0', r'2ch', r'stereo',
-        r'download', r'watch', r'full[\s\-]?movie', r'web[\s\-]?series', 
+         r'full[\s\-]?movie', r'web[\s\-]?series', 
         r'netflix', r'hotstar', r'zee5', r'sonyliv', r'jio', r'jiocinema', r'voot', r'altbalaji' 
     ]
 
@@ -478,7 +478,7 @@ def extract_pure_title(original_name):
         r'\bhdtc\b', r'\bhdts\b', r'\bhdcam\b', r'\bcamrip\b', r'\bpredvd\b',
         r'\bx264\b', r'\bx265\b', r'\bh264\b', r'\bh265\b', r'\bhevc\b', r'\bavc\b', r'\bav1\b',
         r'\b10bit\b', r'\b12bit\b',
-        r'\bnetflix\b', r'\bamazon\b', r'\bprime\b', r'\bhotstar\b', r'\bdisney\b',
+        r'\bnetflix\b',  r'\bhotstar\b', r'\bdisney\b',
         r'\bzee5\b', r'\bsonyliv\b', r'\bjiocinema\b', r'\bjio\b', r'\bvoot\b', r'\baltbalaji\b',
         r'\bhbomax\b', r'\bapple[\s\-]?tv\b', r'\bparamount\b', r'\bpeacock\b',
         r'\bsunnxt\b', r'\bmx[\s\-]?player\b', r'\blionsgate\b',
@@ -500,7 +500,7 @@ def extract_pure_title(original_name):
 
     for lang, aliases in LANGUAGE_ALIASES.items():
         for alias in aliases:
-            pure_title = re.sub(rf'\b{re.escape(alias)}\b$', '', pure_title, flags=re.IGNORECASE).strip()
+            pure_title = re.sub(rf'{alias}$', '', pure_title, flags=re.IGNORECASE).strip()
 
     return re.sub(r'\s+', ' ', pure_title).strip()
 
