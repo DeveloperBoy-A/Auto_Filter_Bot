@@ -619,37 +619,81 @@ def apply_dual_multi_audio_tag(languages, scan_lower):
 
 
 def extract_episode_title(text):
+    # 1. Extension hatao (.mkv, .mp4, etc.)
     text = re.sub(r'\.[a-z0-9]{2,4}$', '', text, flags=re.IGNORECASE)
 
-    # Stop keywords to prevent capturing quality tags as episode titles
-    stop_keywords = [
-        r'19\d{2}', r'20\d{2}', r'2160p', r'1080p', r'720p', r'480p',
-        r'web[- ]?dl', r'webrip', r'bluray', r'hdrip', r'x264', r'x265', r'hevc', r'avc',
-        r'aac', r'ac3', r'ddp', r'hindi', r'english', r'tamil', r'telugu',
-        r'dual', r'multi', r'combined', r'complete', r'jhs', r'netflix', r'amazon', r'🗃️'
+    # 2. Episode ke har tarah ke Start Patterns dhoondho
+    start_patterns = [
+        # S01E01, S01 E01, S01-E01, S01E01-02, S01E01-E02
+        r'\bS\d{1,2}[\s._\-]*E\d{1,4}(?:[\s._\-]*(?:-|E|EP)?\d{1,4})*\b',
+        
+        # 1x01, 1x01-02, 12x10
+        r'\b\d{1,2}x\d{1,4}(?:-\d{1,4})?\b',
+        
+        # Episode 1, Ep 05, E01, E01-05, Chapter 1, Part 5, Ch 01
+        r'\b(?:Episode|Ep|E|Chapter|Ch|Part|Pt)[\s._\-]*\d{1,4}(?:[\s._\-]*(?:-|To|And|&)?[\s._]*\d{1,4})?\b'
     ]
-    stop_pattern = '|'.join(stop_keywords)
-    lookahead = rf'(?=\b(?:{stop_pattern})\b|$|\[|\(|@|🗃️)'
-
-    patterns = [
-        r'(?:S\d{1,2}[\s._\-]*E\d{1,4}[-\d]*)[\s._\-]+(.*?)' + lookahead,
-        r'(?:Episode|Ep)[\s._\-]*\d+[\s._\-]+(.*?)' + lookahead
-    ]
-
-    for pattern in patterns:
-        match = re.search(pattern, text, re.IGNORECASE)
+    
+    start_idx = -1
+    for p in start_patterns:
+        match = re.search(p, text, re.IGNORECASE)
         if match:
-            title = match.group(1)
-            title = re.sub(r'[\s._\-()\[\]]+', ' ', title).strip()
-
-            # Ignore pure numeric/symbol sequences 
-            if len(title) > 2 and not re.fullmatch(r'[\d\s\-🗃️]+', title):
-                # Reject range artifacts like "21 To 25"
-                if re.fullmatch(r'\s*\d{1,4}\s*(?:to|and|&|-)?\s*\d{0,4}\s*', title, flags=re.IGNORECASE):
-                    continue
-                return title.title()
-
+            start_idx = match.end()
+            break
+            
+    if start_idx == -1:
+        return None # Koi valid episode number nahi mila
+        
+    remainder = text[start_idx:]
+    
+    # 3. Stop keywords (Sabhi Quality, Source, Language, Resolution)
+    stop_keywords = [
+        # Years
+        r'19\d{2}', r'20[0-2]\d', 
+        # Resolutions
+        r'4320[pi]', r'2160[pi]', r'1440[pi]', r'1080[pi]', r'720[pi]', r'576[pi]', r'540[pi]', r'480[pi]', r'360[pi]', r'4k', r'8k', r'2k',
+        # Sources
+        r'web[\-\s]?dl', r'webrip', r'bluray', r'bdrip', r'brrip', r'remux', r'hdrip', r'hdtv', r'tvrip', r'webcap', r'dvdrip', r'dvdscr', r'camrip', r'hdcam', r'hdts', r'predvd',
+        # Video / Color
+        r'x264', r'x265', r'h264', r'h265', r'hevc', r'avc', r'av1', r'10bit', r'12bit', r'hdr', r'hdr10', r'hdr10\+', r'sdr', r'dv', r'dolby vision', r'imax', r'60fps', r'50fps', r'48fps',
+        # Audio Codecs
+        r'aac', r'ac3', r'dd5\.1', r'dd2\.0', r'ddp', r'ddp5\.1', r'ddp7\.1', r'eac3', r'flac', r'dts', r'dts[\-\s]?hd', r'truehd', r'atmos', r'mp3', r'opus', r'stereo', r'6ch', r'2ch',
+        # Languages & Subs
+        r'hindi', r'english', r'tamil', r'telugu', r'malayalam', r'kannada', r'punjabi', r'bengali', r'gujarati', r'marathi', r'korean', r'japanese', r'chinese', r'spanish', r'russian', r'french', r'urdu', r'bhojpuri', 
+        r'dual', r'multi', r'dubbed', r'dub', r'sub', r'subbed', r'esub', r'esubs', r'hcsub', r'msubs',
+        # Version & Status Tags
+        r'combined', r'complete', r'season', r'pack', r'repack', r'proper', r'internal', r'uncut', r'extended', r'unrated',
+        # OTT Platforms
+        r'netflix', r'amazon', r'prime', r'hotstar', r'disney', r'zee5', r'sonyliv', r'jio', r'jiocinema', r'hbomax', r'hulu', r'apple', r'paramount', r'peacock', r'aha', r'sunnxt', r'mx', r'mxplayer', r'altbalaji', r'voot', r'lionsgate', r'nf', r'amzn', r'dsnp'
+    ]
+    
+    # Boundary ke sath stop words
+    stop_pattern = r'\b(?:' + '|'.join(stop_keywords) + r')\b'
+    # Symbols jahan par aage ka title automatically kat jayega
+    stop_symbols = r'[\[\(@~🗃️]' 
+    
+    combined_stop = rf'({stop_pattern}|{stop_symbols})'
+    
+    # Pehla stop point dhoondho jahan episode title khatam hota hai
+    stop_match = re.search(combined_stop, remainder, re.IGNORECASE)
+    
+    if stop_match:
+        title_raw = remainder[:stop_match.start()]
+    else:
+        title_raw = remainder
+        
+    # 4. Clean up the extracted title (Faltu dots, dashes aur spaces hatana)
+    title = re.sub(r'[\s._\-]+', ' ', title_raw).strip()
+    
+    # 5. Validation (Sirf numbers ya kachre ko reject karna)
+    if len(title) > 2 and not re.fullmatch(r'[\d\s\-]+', title):
+        # Reject range artifacts like "21 To 25" ya "To 05"
+        if re.fullmatch(r'\s*\d{0,4}\s*(?:to|and|&|-)?\s*\d{1,4}\s*', title, flags=re.IGNORECASE):
+            return None
+        return title.title()
+        
     return None
+
 
 
 # =========================================================
@@ -693,17 +737,17 @@ def extract_languages_quality(text_to_scan):
         series_status = "COMBINED" if status_match.group(1) == "combined" else "COMPLETE"
 
     resolution = None
-    res = re.search(r'(4320[pi]|2160[pi]|1440[pi]|1080[pi]|720[pi]|480[pi]|360[pi]|240[pi]|4k|8k)', scan_lower)
+    res = re.search(r'\b(4320[pi]|2160[pi]|1440[pi]|1080[pi]|720[pi]|480[pi]|360[pi]|240[pi]|4k|8k)\b', scan_lower)
     if res:
         resolution = "2160P" if res.group(1) == "4k" else res.group(1).upper()
 
     source = None
     SOURCES = {
         "WEB-DL": ["web-dl", "webdl", "web dl"],
-        "WEBRip": ["webrip", "web rip"],
-        "HDRip": ["hdrip"],
-        "BluRay": ["bluray", "bdrip", "brrip", "bdremux"],
-        "DVDRip": ["dvdrip"],
+        "WEBRip": ["webrip", "web rip", "web-rip"],
+        "HDRip": ["hdrip", "hd rip", "hd-rip"],
+        "BluRay": ["bluray", "bdrip", "blu-ray", "brrip", "bdremux"],
+        "DVDRip": ["dvdrip", "dvd rip"],
         "DVDScr": ["dvdscr", "scr", "dvd-scr"],
         "REMUX": ["remux"],
         "Digital": ["digital"],
@@ -711,11 +755,13 @@ def extract_languages_quality(text_to_scan):
         "HDTS": ["hdts", "hd-ts", "ts", "telesync"], 
         "HDCAM": ["hdcam", "hd-cam", "hd cam"],
         "CAMRip": ["cam", "camrip", "cinema"],
-        "PreDVD": ["predvd", "pre dvd"]
+        "PreDVD": ["predvd", "pre dvd"],
+        "TSRip": ["tsrip", "ts rip"]
     }
     for src, aliases in SOURCES.items():
         for a in aliases:
-            if a in scan_lower:
+            # Word boundary check applied to sources
+            if re.search(r'\b' + re.escape(a) + r'\b', scan_lower):
                 source = src  
                 break
         if source:
@@ -724,7 +770,8 @@ def extract_languages_quality(text_to_scan):
     ott_tag = None
     for platform, aliases in OTT_MAP.items():
         for a in aliases:
-            if re.search(r'\b' + re.escape(a) + r'\b', scan_lower) or a in scan_lower:
+            # Word boundary check applied to OTT tags
+            if re.search(r'\b' + re.escape(a) + r'\b', scan_lower):
                 ott_tag = platform
                 break
         if ott_tag:
@@ -757,14 +804,18 @@ def extract_languages_quality(text_to_scan):
         "HardSubs": ["hsub", "hsubs", "hc", "hcsub"],
         "MSubs": ["msub", "msubs"]
     }
+    
+    # Clean up codec names for display if needed
     for tag, aliases in TAGS_MAP.items():
         for a in aliases:
-            if a in scan_lower:
+            # Word boundary check applied to extra tags (Audio/Video codecs, Subs)
+            if re.search(r'\b' + re.escape(a) + r'\b', scan_lower):
                 extra_tags.append(tag)
                 break
 
     custom_qualifiers = []
     target_keywords = [
+        r'\bweb[\s\.\-_]?series\b',
         r'\bunrated\b', r'\bopen[\s\-]?matte\b', r'\bultimate[\s\-]?edition\b', r'\bchronological\b', r'\bredux\b',
         r'\bleak\b', r'\bstudio\b', r'\bdub\b', r'\bdubbed\b',
         r'\bunofficial\b', r'\bre[\s\-]?dub(?:bed)?\b', r'\bfan[\s\-]?dub(?:bed)?\b', 
@@ -805,7 +856,7 @@ def extract_languages_quality(text_to_scan):
             custom_qualifiers.append(word)
             seen_lower.add(word.lower())
 
-    # Language Scan
+    # Language Scan (LANGUAGE_ALIASES regexes already have \b in your info.py)
     languages = []
     for lang, aliases in LANGUAGE_ALIASES.items():
         for a in aliases:
@@ -817,7 +868,8 @@ def extract_languages_quality(text_to_scan):
         languages = apply_dual_multi_audio_tag(languages, scan_lower)
 
     kbps_tag = None
-    kbps = re.search(r'(\d{2,4}\s?kbps)', scan_lower)
+    # Word boundary added for kbps
+    kbps = re.search(r'\b(\d{2,4}\s?kbps)\b', scan_lower)
     if kbps:
         kbps_tag = kbps.group(1).upper().replace(" ", "")
 
@@ -853,6 +905,7 @@ def extract_languages_quality(text_to_scan):
     }
 
 
+
 # =========================================================
 # MAIN ASYNC SAVE PIPELINE
 # =========================================================
@@ -876,6 +929,8 @@ def _cover_cache_set(key, value):
     if len(_COVER_CACHE) >= _COVER_CACHE_MAX_ENTRIES and key not in _COVER_CACHE:
         _COVER_CACHE.pop(next(iter(_COVER_CACHE)), None)
     _COVER_CACHE[key] = value
+
+
 
 async def _fetch_and_save_cover(file_id: str, final_title: str, year: str | None, bot=None):
     """Background cover resolver with bounded concurrency and cache."""
@@ -942,6 +997,8 @@ async def _fetch_and_save_cover(file_id: str, final_title: str, year: str | None
                 logger.debug(f"[COVER] DB updated | file_id={file_id}")
             except Exception as e:
                 logger.warning(f"[COVER] Background task error for '{final_title}': {e}")
+
+
 
 async def save_file(media, bot=None, extracted_info=None):
     """
@@ -1026,47 +1083,47 @@ async def save_file(media, bot=None, extracted_info=None):
         # [1] Title
         if final_title: add_unique(final_title)
 
-        # [1.5] Title Part / Volume / Chapter
+        # [2] Release Year (Title ke turant baad, brackets ke saath)
+        if extracted.get("year"): add_unique(extracted["year"])
+
+        # [3] Title Part / Volume / Chapter
         if extracted.get("title_part"): add_unique(extracted["title_part"])
 
-        # [2] Season & Episode
+        # [4] Season & Episode
         if extracted.get("season_episode"): add_unique(extracted["season_episode"])
 
-        # [2.1] Episode Title
+        # [5] Episode Title
         if extracted.get("season_episode") and extracted.get("episode_title"):
             add_unique(extracted["episode_title"])
 
-        # [2.5] Series Status
+        # [6] Series Status
         if extracted.get("series_status"): add_unique(extracted["series_status"])
 
-        # [3] Release Year
-        if extracted.get("year"): add_unique(extracted["year"])
-
-        # [4] Video Resolution
+        # [7] Video Resolution
         if extracted.get("resolution"): add_unique(extracted["resolution"])
 
-        # [5] Audio Languages
+        # [8] Audio Languages
         for lang in extracted.get("languages", []): add_unique(lang)
 
-        # [6] Custom Qualifiers
+        # [9] Custom Qualifiers
         for qual in extracted.get("custom_qualifiers", []): add_unique(qual)
 
-        # [7] Color Depth / HDR
+        # [10] Color Depth / HDR
         for tag in ["10Bit", "12Bit", "SDR", "HDR", "Dolby Vision", "IMAX", "60FPS"]:
             if tag in extracted.get("extra_tags", []): add_unique(tag)
 
-        # [8] OTT Platform Tag
+        # [11] OTT Platform Tag
         if extracted.get("ott") and extracted["ott"] not in parts:
             parts.append(extracted["ott"])
 
-        # [9] Source Type
+        # [12] Source Type
         if extracted.get("source"): add_unique(extracted["source"])
 
-        # [10] Video Codec
+        # [13] Video Codec
         for vcodec in ["AV1", "HEVC X265", "AVC X264"]:
             if vcodec in extracted.get("extra_tags", []): add_unique(vcodec)
 
-        # [11] Audio Codec & Channels (Smart Overlap Handler)
+        # [14] Audio Codec & Channels (Smart Overlap Handler)
         audio_tags = extracted.get("extra_tags", [])
         if "DDP 5.1" in audio_tags and "DD 5.1" in audio_tags: audio_tags.remove("DD 5.1")
         if "DDP 7.1" in audio_tags and "DD 5.1" in audio_tags: audio_tags.remove("DD 5.1")
@@ -1076,17 +1133,17 @@ async def save_file(media, bot=None, extracted_info=None):
             if acodec in audio_tags: 
                 add_unique(acodec)
 
-        # [12] Subtitles
+        # [15] Subtitles
         for sub in ["ESubs", "HardSubs", "MSubs"]:
             if sub in extracted.get("extra_tags", []): add_unique(sub)
 
-        # [13] Audio Bitrate
+        # [16] Audio Bitrate
         if extracted.get("kbps"): add_unique(extracted["kbps"])
 
-        # [13.5] File Split Part (e.g. part001)
+        # [17] File Split Part (e.g. part001)
         if extracted.get("split_part"): add_unique(extracted["split_part"])
 
-        # [14] Branding Signature
+        # [18] Branding Signature
         parts = [p for p in parts if p and "Tokyo_Updates" not in str(p)]
         parts.append(RELEASE_TAG)
 
@@ -1163,6 +1220,7 @@ async def save_file(media, bot=None, extracted_info=None):
     except Exception as e:
         logger.error(f"Error saving file: {e}", exc_info=True)
         return False, 0, None
+
 
 
 
@@ -1342,13 +1400,18 @@ async def backfill_media_type(
 
 def normalize_for_search(text):
     text = text.lower()
-    text = re.sub(r'(\d+)xX', lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}", text)
+    text = re.sub(
+        r'(\d+)\s*x\s*(\d+)',
+        lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}",
+        text
+    )
     text = re.sub(r'\bseason[\s-](\d+)', lambda m: f"s{int(m.group(1)):02d}", text)
     text = re.sub(r"(?<!['’])\bs(\d+)\b", lambda m: f"s{int(m.group(1)):02d}", text)
     text = re.sub(r'\b(?:episode|ep)[\s-](\d+)', lambda m: f"e{int(m.group(1)):02d}", text)
     text = re.sub(r"(?<!['’])\be(\d+)\b", lambda m: f"e{int(m.group(1)):02d}", text)
     text = re.sub(r'\bs(\d+)e(\d+)', lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}", text)
     return re.sub(r"\s+", " ", text).strip()
+
 
 def expand_query(query):
     query = query.lower()
