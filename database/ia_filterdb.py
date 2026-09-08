@@ -390,19 +390,12 @@ def extract_pure_title(original_name):
     """Cleans a raw file string to extract just the pure movie or series title."""
     clean_name = re.sub(r'^\[.*?\]', '', original_name).strip() 
     clean_name = re.sub(r'^@\w+[\s_\-–]*', '', clean_name).strip()
-    
-    # 🚀 SYMBOL SANITIZER
-    clean_name = re.sub(r'[!@#$%^&*()_+={}\[\]:;<>,.?/\\|~`–—―•✓™®©🎬🗃️✨🔥]+', ' ', clean_name)
-    clean_name = re.sub(r'[@\[\]\(\)_]+', ' ', clean_name)
-    clean_name = re.sub(r"[._\-]+", " ", clean_name)
 
     # Remove URLs and Telegram links
     clean_name = re.sub(r'(?:https?://)?(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*)', '', clean_name, flags=re.IGNORECASE)
     clean_name = re.sub(r't\.me/[a-zA-Z0-9_]+', '', clean_name, flags=re.IGNORECASE)
 
-    clean_name = re.sub(r'\b(full|hindi|tamil|english|telugu|malayalam|kannada|bengali|new|latest|hd|mp4)\s+(movie|video)\b', '', clean_name, flags=re.IGNORECASE).strip()
-    clean_name = re.sub(r'\b(web[\s\-]?series|tv[\s\-]?series)\b', '', clean_name, flags=re.IGNORECASE).strip()
-
+    # uploader tags cleanup
     uploader_tags = [r'(?:join\s+)?us\s*bobfiles']
     uploader_cleanup = r'^(?:(?:' + '|'.join(uploader_tags) + r')[\s]*)+'
     clean_name = re.sub(uploader_cleanup, '', clean_name, flags=re.IGNORECASE).strip()
@@ -426,7 +419,8 @@ def extract_pure_title(original_name):
         'russian', 'french', 'bhin'
     }
     _prefix_token_re = re.compile('(?:' + '|'.join(prefix_tags) + ')', re.IGNORECASE)
-    _sep_re = re.compile(r'[\s_\-]*')
+    # 🚀 FIX: Added dot (.) so prefix stripping doesn't break if tags are dot-separated
+    _sep_re = re.compile(r'[\s_\-\.]*')
 
     def _splits_a_word(text, end_pos):
         return end_pos < len(text) and text[end_pos].isalnum()
@@ -449,6 +443,11 @@ def extract_pure_title(original_name):
         pos = tok_m.end()
 
     clean_name = clean_name[pos:].strip()
+
+    # 🚀 MASTER FIX: यहाँ हम ओरिजिनल नाम को बिल्कुल नहीं छेड़ेंगे। 
+    # हम सिर्फ ढूंढने के लिए एक नकली स्ट्रिंग (search_string) बना रहे हैं, जहाँ सारे सिंबल 'Space' बन जाएंगे।
+    # इससे Year (2024) और Pixels (1080p) कभी मिक्स नहीं होंगे और बॉट एग्जैक्ट लोकेशन ढूँढ लेगा!
+    search_string = re.sub(r'[._\[\]\(\)\-!@#$%^&*+=;:<>?/\\|~`–—―•✓™®©🎬🗃️✨🔥]', ' ', clean_name).lower()
 
     stop_anchors = [
         r'\bseason[\s\-_]*\d{1,2}\b',
@@ -478,19 +477,28 @@ def extract_pure_title(original_name):
         r'\bsunnxt\b', r'\bmx[\s\-]?player\b', r'\blionsgate\b',
     ]
 
-    lower_name = clean_name.lower()
     first_match_index = len(clean_name)
-
     for anchor in stop_anchors:
-        match = re.search(anchor, lower_name)
+        # असली नाम की जगह, स्पेस वाली नकली स्ट्रिंग में क्वालिटी और साल ढूँढो
+        match = re.search(anchor, search_string)
         if match and match.start() < first_match_index:
             if match.start() > 2: 
                 first_match_index = match.start()
 
+    # 🚀 अब ओरिजिनल सुरक्षित नाम (clean_name) को सही जगह से काट लो
     if first_match_index < len(clean_name):
         pure_title = clean_name[:first_match_index].strip()
     else:
         pure_title = clean_name.strip()
+
+    # 🚀 नाम सुरक्षित तरीके से कटने के बाद, अब इसमें से कचरा (symbols) हटाओ
+    pure_title = re.sub(r'[!@#$%^&*()_+={}\[\]:;<>,.?/\\|~`–—―•✓™®©🎬🗃️✨🔥]+', ' ', pure_title)
+    pure_title = re.sub(r'[@\[\]\(\)_]+', ' ', pure_title)
+    pure_title = re.sub(r"[._\-]+", " ", pure_title)
+
+    # Final cleanup
+    pure_title = re.sub(r'\b(full|hindi|tamil|english|telugu|malayalam|kannada|bengali|new|latest|hd|mp4)\s+(movie|video)\b', '', pure_title, flags=re.IGNORECASE).strip()
+    pure_title = re.sub(r'\b(web[\s\-]?series|tv[\s\-]?series)\b', '', pure_title, flags=re.IGNORECASE).strip()
 
     for lang, aliases in LANGUAGE_ALIASES.items():
         for alias in aliases:
@@ -661,12 +669,17 @@ def extract_episode_title(text):
 # DATA EXTRACTOR
 # =========================================================
 def extract_languages_quality(text_to_scan):
-    scan_text = re.sub(r'[._]+', ' ', text_to_scan)
+    # 🚀 MASTER FIX: दुनिया का कोई भी अजीब सिंबल हो (डॉट, अंडरस्कोर, ब्रैकेट, टिल्ड आदि),
+    # बॉट उसे सेफली "स्पेस" मान लेगा ताकि साल, पिक्सल्स और क्वालिटी कभी आपस में मिक्स न हों।
+    scan_text = re.sub(r'[._\[\]\(\){}\~;:|/\\,!?@#$%^&*=`<>\'\"]', ' ', text_to_scan)
+    scan_text = re.sub(r'\s+', ' ', scan_text).strip()
     scan_lower = scan_text.lower()
 
-    year_match = re.search(r'\b(19\d{2}|20[0-2]\d)\b', text_to_scan)
+    # 1. Year Extraction (अब यह साफ़ scan_text में ढूंढेगा, मिस नहीं होगा)
+    year_match = re.search(r'\b(19\d{2}|20[0-2]\d)\b', scan_text)
     year = year_match.group(1) if year_match else None
 
+    # Parse Season and Episode
     normalized_se = normalize_season_episode(scan_text)
     season_episode = None
     episode_title = None
@@ -694,11 +707,13 @@ def extract_languages_quality(text_to_scan):
     if status_match:
         series_status = "COMBINED" if status_match.group(1) == "combined" else "COMPLETE"
 
+    # 2. Resolution (Pixels)
     resolution = None
-    res = re.search(r'(4320[pi]|2160[pi]|1440[pi]|1080[pi]|720[pi]|480[pi]|360[pi]|240[pi]|4k|8k)', scan_lower)
+    res = re.search(r'\b(4320[pi]|2160[pi]|1440[pi]|1080[pi]|720[pi]|480[pi]|360[pi]|240[pi]|4k|8k)\b', scan_lower)
     if res:
         resolution = "2160P" if res.group(1) == "4k" else res.group(1).upper()
 
+    # 3. Source (Quality)
     source = None
     SOURCES = {
         "WEB-DL": ["web-dl", "webdl", "web dl"],
@@ -706,34 +721,34 @@ def extract_languages_quality(text_to_scan):
         "HDRip": ["hdrip", "hd rip", "hd-rip"],
         "BluRay": ["bluray", "bdrip", "brrip", "bdremux"],
         "DVDRip": ["dvdrip", "dvd rip"],
-        "DVDScr": ["dvdscr", "scr", "dvd-scr"],
+        "DVDScr": ["dvdscr", "scr", "dvd-scr", "dvd scr"],
         "REMUX": ["remux"],
         "Digital": ["digital"],
-        "HDTC": ["hdtc", "hd-tc", "telecine", "tcrip", "tc rip"],       
-        "HDTS": ["hdts", "hd-ts", "tsrip", "ts rip", "telesync", "ts"], 
+        "HDTC": ["hdtc", "hd-tc", "hd tc", "telecine"],       
+        "HDTS": ["hdts", "hd-ts", "hd ts", "tsrip", "ts rip", "telesync", "ts"], 
         "HDCAM": ["hdcam", "hd-cam", "hd cam"],
         "CAMRip": ["camrip", "cam rip", "cinema", "cam"],
-        "PreDVD": ["predvd", "pre dvd"]
+        "PreDVD": ["predvd", "pre dvd", "pre-dvd"]
     }
     for src, aliases in SOURCES.items():
         for a in aliases:
-            # 🚀 FIX: Ensures alias strictly matches the word (stops "ts" from matching inside "sports" or "tsrip")
-            if re.search(rf'(?<![a-z0-9]){re.escape(a)}(?![a-z0-9])', scan_lower):
+            if re.search(rf'\b{re.escape(a)}\b', scan_lower):
                 source = src  
                 break
         if source:
             break
 
+    # 4. OTT Platform
     ott_tag = None
     for platform, aliases in OTT_MAP.items():
         for a in aliases:
-            # 🚀 FIX: Strict word boundary for OTT tags
-            if re.search(rf'(?<![a-z0-9]){re.escape(a)}(?![a-z0-9])', scan_lower):
+            if re.search(rf'\b{re.escape(a)}\b', scan_lower):
                 ott_tag = platform
                 break
         if ott_tag:
             break
 
+    # 5. Extra Tags (Codecs, HDR, Audio, Subtitles)
     extra_tags = []
     TAGS_MAP = {
         "AV1": ["av1"], 
@@ -763,11 +778,11 @@ def extract_languages_quality(text_to_scan):
     }
     for tag, aliases in TAGS_MAP.items():
         for a in aliases:
-            # 🚀 FIX: Prevents "dv" from falsely matching inside "dvdrip"
-            if re.search(rf'(?<![a-z0-9]){re.escape(a)}(?![a-z0-9])', scan_lower):
+            if re.search(rf'\b{re.escape(a)}\b', scan_lower):
                 extra_tags.append(tag)
                 break
 
+    # 6. Custom Qualifiers
     custom_qualifiers = []
     target_keywords = [
         r'\bunrated\b', r'\bopen[\s\-]?matte\b', r'\bultimate[\s\-]?edition\b', r'\bchronological\b', r'\bredux\b',
@@ -810,7 +825,7 @@ def extract_languages_quality(text_to_scan):
             custom_qualifiers.append(word)
             seen_lower.add(word.lower())
 
-    # Language Scan
+    # 7. Language Scan
     languages = []
     for lang, aliases in LANGUAGE_ALIASES.items():
         for a in aliases:
@@ -822,13 +837,13 @@ def extract_languages_quality(text_to_scan):
         languages = apply_dual_multi_audio_tag(languages, scan_lower)
 
     kbps_tag = None
-    kbps = re.search(r'(\d{2,4}\s?kbps)', scan_lower)
+    kbps = re.search(r'\b(\d{2,4}\s?kbps)\b', scan_lower)
     if kbps:
         kbps_tag = kbps.group(1).upper().replace(" ", "")
 
     # Title Part / Volume / Chapter
     title_part = None
-    tp_match = re.search(r'\b(vol|volume|chapter|part|pt)[\s\.\-_]*(\d{1,2}|[IVX]+)\b(?!\d)', scan_lower)
+    tp_match = re.search(r'\b(vol|volume|chapter|part|pt)[\s]*(\d{1,2}|[IVX]+)\b(?!\d)', scan_lower)
     if tp_match:
         tag_name = tp_match.group(1).capitalize()
         if tag_name == "Pt": tag_name = "Part"
@@ -837,7 +852,7 @@ def extract_languages_quality(text_to_scan):
 
     # File Split Part
     split_part = None
-    sp_match = re.search(r'\b(?:part|pt)[\s\.\-_]*(\d{3,4})\b', scan_lower)
+    sp_match = re.search(r'\b(?:part|pt)[\s]*(\d{3,4})\b', scan_lower)
     if sp_match:
         split_part = f"Part {sp_match.group(1)}"
 
@@ -856,6 +871,7 @@ def extract_languages_quality(text_to_scan):
         "title_part": title_part,
         "split_part": split_part
     }
+
 
 # =========================================================
 # MAIN ASYNC SAVE PIPELINE
