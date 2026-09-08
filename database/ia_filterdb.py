@@ -174,7 +174,6 @@ def get_cloud_watermark_url(original_tmdb_url: str) -> str:
     
     return f"https://res.cloudinary.com/{cloud_name}/image/fetch/{resize_layer}/{wm_layer}/{original_tmdb_url}"
 
-
 # =========================================================
 # 🗄️ MULTI-DATABASE SETUP & ROUTING
 # =========================================================
@@ -342,7 +341,7 @@ def unpack_new_file_id(new_file_id):
 RELEASE_TAG = "~[Tokyo_Updates]"
 
 LANGUAGE_ALIASES = {
-    "Hindi": [r'\bhindi\b', r'\bhin\b', r'\bbhin\b'],
+    "Hindi": [r'\bhindi\b', r'\bhin\b'],
     "English": [r'\benglish\b', r'\beng\b'],
     "Tamil": [r'\btamil\b', r'\btam\b'],
     "Telugu": [r'\btelugu\b', r'\btel\b'],
@@ -390,12 +389,18 @@ def extract_pure_title(original_name):
     """Cleans a raw file string to extract just the pure movie or series title."""
     clean_name = re.sub(r'^\[.*?\]', '', original_name).strip() 
     clean_name = re.sub(r'^@\w+[\s_\-–]*', '', clean_name).strip()
+    clean_name = re.sub(r'[@\[\]\(\)_]+', ' ', clean_name)
+    clean_name = re.sub(r"[._\-]+", " ", clean_name)
 
     # Remove URLs and Telegram links
     clean_name = re.sub(r'(?:https?://)?(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*)', '', clean_name, flags=re.IGNORECASE)
     clean_name = re.sub(r't\.me/[a-zA-Z0-9_]+', '', clean_name, flags=re.IGNORECASE)
 
-    # uploader tags cleanup
+    # Remove redundant keywords like "Movie", "Video", or Series identifiers
+    clean_name = re.sub(r'\b(full|hindi|tamil|english|telugu|malayalam|kannada|bengali|new|latest|hd|mp4)\s+(movie|video)\b', '', clean_name, flags=re.IGNORECASE).strip()
+    clean_name = re.sub(r'\b(web[\s\-]?series|tv[\s\-]?series)\b', '', clean_name, flags=re.IGNORECASE).strip()
+
+    # Remove uploader tags
     uploader_tags = [r'(?:join\s+)?us\s*bobfiles']
     uploader_cleanup = r'^(?:(?:' + '|'.join(uploader_tags) + r')[\s]*)+'
     clean_name = re.sub(uploader_cleanup, '', clean_name, flags=re.IGNORECASE).strip()
@@ -407,22 +412,26 @@ def extract_pure_title(original_name):
         r'combined', r'complete',                           
         r'dual[\s\-]?audio', r'multi[\s\-]?audio',          
         r'hindi', r'english', r'tamil', r'telugu', r'malayalam', r'kannada', r'bengali', r'marathi', r'korean', r'japanese', r'chinese', r'spanish', r'russian', r'french',
-        r'web[\-\s]?dl', r'web[\-\s]?rip', r'hd[\-\s]?rip', r'bluray', r'brrip', r'dvd[\-\s]?rip', r'cam[\-\s]?rip', r'ts[\-\s]?rip', r'hdts', r'hdcam', 
+        r'web[\-\s]?dl', r'web[\-\s]?rip', r'hdrip', r'bluray', r'brrip', r'dvdrip', r'camrip', r'hdts', r'hdcam', 
         r'av1', r'x264', r'x265', r'hevc', r'10bit', r'aac', r'eac3', r'ac3', r'ddp[\s\-]?7\.1', r'ddp[\s\-]?5\.1', r'dd[\s\-]?5\.1', r'dd[\s\-]?2\.0', r'ddp', r'5\.1', r'7\.1', r'2\.0', r'2ch', r'stereo',
         r'download', r'watch', r'full[\s\-]?movie', r'web[\s\-]?series', r'new', r'latest', 
         r'netflix', r'amazon', r'prime', r'hotstar', r'zee5', r'sonyliv', r'jio', r'jiocinema', r'voot', r'altbalaji' 
     ]
 
+    # Ensure language tags (e.g., 'Hindi', 'Korean') are only stripped if followed 
+    # by other quality/source tags to prevent stripping the actual title.
     LANG_PREFIX_WORDS = {
         'hindi', 'english', 'tamil', 'telugu', 'malayalam', 'kannada',
         'bengali', 'marathi', 'korean', 'japanese', 'chinese', 'spanish',
-        'russian', 'french', 'bhin'
+        'russian', 'french'
     }
     _prefix_token_re = re.compile('(?:' + '|'.join(prefix_tags) + ')', re.IGNORECASE)
-    # 🚀 FIX: Added dot (.) so prefix stripping doesn't break if tags are dot-separated
-    _sep_re = re.compile(r'[\s_\-\.]*')
+    _sep_re = re.compile(r'[\s_\-]*')
 
     def _splits_a_word(text, end_pos):
+        """True if `end_pos` lands mid-word (next char is still alphanumeric) — meaning
+        the match only consumed a *prefix* of a longer real word (e.g. 'new' matching
+        just the first 3 letters of 'Newtons'), not the whole word/tag."""
         return end_pos < len(text) and text[end_pos].isalnum()
 
     pos = 0
@@ -433,6 +442,8 @@ def extract_pure_title(original_name):
         if not tok_m:
             break
         if _splits_a_word(clean_name, tok_m.end()):
+            # This tag only matched part of a longer word (e.g. "new" inside "Newtons") —
+            # that's not a real noise tag, it's the start of the actual title. Stop here.
             break
         is_lang = tok_m.group(0).lower() in LANG_PREFIX_WORDS
         if is_lang:
@@ -444,11 +455,7 @@ def extract_pure_title(original_name):
 
     clean_name = clean_name[pos:].strip()
 
-    # 🚀 MASTER FIX: यहाँ हम ओरिजिनल नाम को बिल्कुल नहीं छेड़ेंगे। 
-    # हम सिर्फ ढूंढने के लिए एक नकली स्ट्रिंग (search_string) बना रहे हैं, जहाँ सारे सिंबल 'Space' बन जाएंगे।
-    # इससे Year (2024) और Pixels (1080p) कभी मिक्स नहीं होंगे और बॉट एग्जैक्ट लोकेशन ढूँढ लेगा!
-    search_string = re.sub(r'[._\[\]\(\)\-!@#$%^&*+=;:<>?/\\|~`–—―•✓™®©🎬🗃️✨🔥]', ' ', clean_name).lower()
-
+    # Stop anchors: The title ends where these tags begin.
     stop_anchors = [
         r'\bseason[\s\-_]*\d{1,2}\b',
         r'\be\d{1,4}[\s\-_]*[tT][\s\-_]*e?\d{1,4}\b',
@@ -467,8 +474,8 @@ def extract_pure_title(original_name):
         r'\bweb[\s\-]?dl\b', 
         r'\bwebrip\b', 
         r'\bbluray\b', r'\bbdrip\b', r'\bbrrip\b', r'\bbdremux\b', r'\bremux\b',
-        r'\bhd[\-\s]?rip\b', r'\bdvd[\-\s]?rip\b', r'\bdvdscr\b',
-        r'\bhdtc\b', r'\bhdts\b', r'\bhdcam\b', r'\bcam[\-\s]?rip\b', r'\bts[\-\s]?rip\b', r'\bpredvd\b',
+        r'\bhdrip\b', r'\bdvdrip\b', r'\bdvdscr\b',
+        r'\bhdtc\b', r'\bhdts\b', r'\bhdcam\b', r'\bcamrip\b', r'\bpredvd\b',
         r'\bx264\b', r'\bx265\b', r'\bh264\b', r'\bh265\b', r'\bhevc\b', r'\bavc\b', r'\bav1\b',
         r'\b10bit\b', r'\b12bit\b',
         r'\bnetflix\b', r'\bamazon\b', r'\bprime\b', r'\bhotstar\b', r'\bdisney\b',
@@ -477,28 +484,19 @@ def extract_pure_title(original_name):
         r'\bsunnxt\b', r'\bmx[\s\-]?player\b', r'\blionsgate\b',
     ]
 
+    lower_name = clean_name.lower()
     first_match_index = len(clean_name)
+
     for anchor in stop_anchors:
-        # असली नाम की जगह, स्पेस वाली नकली स्ट्रिंग में क्वालिटी और साल ढूँढो
-        match = re.search(anchor, search_string)
+        match = re.search(anchor, lower_name)
         if match and match.start() < first_match_index:
             if match.start() > 2: 
                 first_match_index = match.start()
 
-    # 🚀 अब ओरिजिनल सुरक्षित नाम (clean_name) को सही जगह से काट लो
     if first_match_index < len(clean_name):
         pure_title = clean_name[:first_match_index].strip()
     else:
         pure_title = clean_name.strip()
-
-    # 🚀 नाम सुरक्षित तरीके से कटने के बाद, अब इसमें से कचरा (symbols) हटाओ
-    pure_title = re.sub(r'[!@#$%^&*()_+={}\[\]:;<>,.?/\\|~`–—―•✓™®©🎬🗃️✨🔥]+', ' ', pure_title)
-    pure_title = re.sub(r'[@\[\]\(\)_]+', ' ', pure_title)
-    pure_title = re.sub(r"[._\-]+", " ", pure_title)
-
-    # Final cleanup
-    pure_title = re.sub(r'\b(full|hindi|tamil|english|telugu|malayalam|kannada|bengali|new|latest|hd|mp4)\s+(movie|video)\b', '', pure_title, flags=re.IGNORECASE).strip()
-    pure_title = re.sub(r'\b(web[\s\-]?series|tv[\s\-]?series)\b', '', pure_title, flags=re.IGNORECASE).strip()
 
     for lang, aliases in LANGUAGE_ALIASES.items():
         for alias in aliases:
@@ -621,39 +619,28 @@ def apply_dual_multi_audio_tag(languages, scan_lower):
 
 
 def extract_episode_title(text):
-    """Robust extraction for episode titles like 'Day 01 Housemates Bane'."""
     text = re.sub(r'\.[a-z0-9]{2,4}$', '', text, flags=re.IGNORECASE)
 
     # Stop keywords to prevent capturing quality tags as episode titles
     stop_keywords = [
-        r'19\d{2}', r'20\d{2}', r'2160p', r'1080p', r'720p', r'480p', r'360p',
+        r'19\d{2}', r'20\d{2}', r'2160p', r'1080p', r'720p', r'480p',
         r'web[- ]?dl', r'webrip', r'bluray', r'hdrip', r'x264', r'x265', r'hevc', r'avc',
         r'aac', r'ac3', r'ddp', r'hindi', r'english', r'tamil', r'telugu',
-        r'dual', r'multi', r'combined', r'complete', r'jhs', r'netflix', r'amazon', r'mp4', r'mkv', r'🗃️'
+        r'dual', r'multi', r'combined', r'complete', r'jhs', r'netflix', r'amazon', r'🗃️'
     ]
     stop_pattern = '|'.join(stop_keywords)
     lookahead = rf'(?=\b(?:{stop_pattern})\b|$|\[|\(|@|🗃️)'
 
     patterns = [
-        r'(?:S\d{1,2}[\s._\-]*E\d{1,4}[-\d]*)[\s._\-]+(.*?)(?=' + stop_pattern + r'|$)',
-        r'(?:Episode|Ep)[\s._\-]*\d+[\s._\-]+(.*?)(?=' + stop_pattern + r'|$)',
-        r'S\d{1,2}\s*E\d{1,4}\s+[A-Za-z0-9\s\-]+(?:\d{4})?\s+(.*?)(?=' + stop_pattern + r'|$)'
+        r'(?:S\d{1,2}[\s._\-]*E\d{1,4}[-\d]*)[\s._\-]+(.*?)' + lookahead,
+        r'(?:Episode|Ep)[\s._\-]*\d+[\s._\-]+(.*?)' + lookahead
     ]
-
-    specific_match = re.search(r'S\d{1,2}\s*E\d{1,4}\s+(.*?)(?=\s+(?:\d{3,4}[pi]|\d{4}|WEB|BluRay|Mp4|Mkv))\b', text, re.IGNORECASE)
-    if specific_match:
-        title = specific_match.group(1)
-        title = re.sub(r'[!@#$%^&*()_+={}\[\]:;<>,.?/\\|~`–—―•]+', ' ', title)
-        title = re.sub(r'\s+', ' ', title).strip()
-        if len(title) > 1 and not re.fullmatch(r'[\d\s\-]+', title):
-            return title.title()
 
     for pattern in patterns:
         match = re.search(pattern, text, re.IGNORECASE)
         if match:
             title = match.group(1)
-            title = re.sub(r'[!@#$%^&*()_+={}\[\]:;<>,.?/\\|~`–—―•]+', ' ', title)
-            title = re.sub(r'\s+', ' ', title).strip()
+            title = re.sub(r'[\s._\-()\[\]]+', ' ', title).strip()
 
             # Ignore pure numeric/symbol sequences 
             if len(title) > 2 and not re.fullmatch(r'[\d\s\-🗃️]+', title):
@@ -669,14 +656,11 @@ def extract_episode_title(text):
 # DATA EXTRACTOR
 # =========================================================
 def extract_languages_quality(text_to_scan):
-    # 🚀 MASTER FIX: दुनिया का कोई भी अजीब सिंबल हो (डॉट, अंडरस्कोर, ब्रैकेट, टिल्ड आदि),
-    # बॉट उसे सेफली "स्पेस" मान लेगा ताकि साल, पिक्सल्स और क्वालिटी कभी आपस में मिक्स न हों।
-    scan_text = re.sub(r'[._\[\]\(\){}\~;:|/\\,!?@#$%^&*=`<>\'\"]', ' ', text_to_scan)
-    scan_text = re.sub(r'\s+', ' ', scan_text).strip()
+    # Normalize underscores and dots to spaces for proper word boundary matching
+    scan_text = re.sub(r'[._]+', ' ', text_to_scan)
     scan_lower = scan_text.lower()
 
-    # 1. Year Extraction (अब यह साफ़ scan_text में ढूंढेगा, मिस नहीं होगा)
-    year_match = re.search(r'\b(19\d{2}|20[0-2]\d)\b', scan_text)
+    year_match = re.search(r'\b(19\d{2}|20[0-2]\d)\b', text_to_scan)
     year = year_match.group(1) if year_match else None
 
     # Parse Season and Episode
@@ -687,6 +671,7 @@ def extract_languages_quality(text_to_scan):
     full_match = re.search(r'\b(S\d{2})[\s\[\]\-_]*?(E\d{2,4}(?:-\d{2,4})?)\b', normalized_se)
     if full_match:
         season_episode = f"{full_match.group(1)} {full_match.group(2)}"
+        # Skip episode-title extraction for batch ranges
         if not re.search(r'E\d{1,4}\s*-\s*\d{1,4}', season_episode, flags=re.IGNORECASE):
             episode_title = extract_episode_title(text_to_scan)
     else:
@@ -707,48 +692,44 @@ def extract_languages_quality(text_to_scan):
     if status_match:
         series_status = "COMBINED" if status_match.group(1) == "combined" else "COMPLETE"
 
-    # 2. Resolution (Pixels)
     resolution = None
-    res = re.search(r'\b(4320[pi]|2160[pi]|1440[pi]|1080[pi]|720[pi]|480[pi]|360[pi]|240[pi]|4k|8k)\b', scan_lower)
+    res = re.search(r'(4320[pi]|2160[pi]|1440[pi]|1080[pi]|720[pi]|480[pi]|360[pi]|240[pi]|4k|8k)', scan_lower)
     if res:
         resolution = "2160P" if res.group(1) == "4k" else res.group(1).upper()
 
-    # 3. Source (Quality)
     source = None
     SOURCES = {
         "WEB-DL": ["web-dl", "webdl", "web dl"],
         "WEBRip": ["webrip", "web rip"],
-        "HDRip": ["hdrip", "hd rip", "hd-rip"],
+        "HDRip": ["hdrip"],
         "BluRay": ["bluray", "bdrip", "brrip", "bdremux"],
-        "DVDRip": ["dvdrip", "dvd rip"],
-        "DVDScr": ["dvdscr", "scr", "dvd-scr", "dvd scr"],
+        "DVDRip": ["dvdrip"],
+        "DVDScr": ["dvdscr", "scr", "dvd-scr"],
         "REMUX": ["remux"],
         "Digital": ["digital"],
-        "HDTC": ["hdtc", "hd-tc", "hd tc", "telecine"],       
-        "HDTS": ["hdts", "hd-ts", "hd ts", "tsrip", "ts rip", "telesync", "ts"], 
+        "HDTC": ["hdtc", "hd-tc", "telecine"],       
+        "HDTS": ["hdts", "hd-ts", "ts", "telesync"], 
         "HDCAM": ["hdcam", "hd-cam", "hd cam"],
-        "CAMRip": ["camrip", "cam rip", "cinema", "cam"],
-        "PreDVD": ["predvd", "pre dvd", "pre-dvd"]
+        "CAMRip": ["cam", "camrip", "cinema"],
+        "PreDVD": ["predvd", "pre dvd"]
     }
     for src, aliases in SOURCES.items():
         for a in aliases:
-            if re.search(rf'\b{re.escape(a)}\b', scan_lower):
+            if a in scan_lower:
                 source = src  
                 break
         if source:
             break
 
-    # 4. OTT Platform
     ott_tag = None
     for platform, aliases in OTT_MAP.items():
         for a in aliases:
-            if re.search(rf'\b{re.escape(a)}\b', scan_lower):
+            if re.search(r'\b' + re.escape(a) + r'\b', scan_lower) or a in scan_lower:
                 ott_tag = platform
                 break
         if ott_tag:
             break
 
-    # 5. Extra Tags (Codecs, HDR, Audio, Subtitles)
     extra_tags = []
     TAGS_MAP = {
         "AV1": ["av1"], 
@@ -778,11 +759,10 @@ def extract_languages_quality(text_to_scan):
     }
     for tag, aliases in TAGS_MAP.items():
         for a in aliases:
-            if re.search(rf'\b{re.escape(a)}\b', scan_lower):
+            if a in scan_lower:
                 extra_tags.append(tag)
                 break
 
-    # 6. Custom Qualifiers
     custom_qualifiers = []
     target_keywords = [
         r'\bunrated\b', r'\bopen[\s\-]?matte\b', r'\bultimate[\s\-]?edition\b', r'\bchronological\b', r'\bredux\b',
@@ -825,7 +805,7 @@ def extract_languages_quality(text_to_scan):
             custom_qualifiers.append(word)
             seen_lower.add(word.lower())
 
-    # 7. Language Scan
+    # Language Scan
     languages = []
     for lang, aliases in LANGUAGE_ALIASES.items():
         for a in aliases:
@@ -837,13 +817,13 @@ def extract_languages_quality(text_to_scan):
         languages = apply_dual_multi_audio_tag(languages, scan_lower)
 
     kbps_tag = None
-    kbps = re.search(r'\b(\d{2,4}\s?kbps)\b', scan_lower)
+    kbps = re.search(r'(\d{2,4}\s?kbps)', scan_lower)
     if kbps:
         kbps_tag = kbps.group(1).upper().replace(" ", "")
 
     # Title Part / Volume / Chapter
     title_part = None
-    tp_match = re.search(r'\b(vol|volume|chapter|part|pt)[\s]*(\d{1,2}|[IVX]+)\b(?!\d)', scan_lower)
+    tp_match = re.search(r'\b(vol|volume|chapter|part|pt)[\s\.\-_]*(\d{1,2}|[IVX]+)\b(?!\d)', scan_lower)
     if tp_match:
         tag_name = tp_match.group(1).capitalize()
         if tag_name == "Pt": tag_name = "Part"
@@ -852,7 +832,7 @@ def extract_languages_quality(text_to_scan):
 
     # File Split Part
     split_part = None
-    sp_match = re.search(r'\b(?:part|pt)[\s]*(\d{3,4})\b', scan_lower)
+    sp_match = re.search(r'\b(?:part|pt)[\s\.\-_]*(\d{3,4})\b', scan_lower)
     if sp_match:
         split_part = f"Part {sp_match.group(1)}"
 
@@ -1269,7 +1249,22 @@ def is_series_file(name) -> bool:
     return bool(SERIES_REGEX.search(str(name).lower()))
 
 # 🚀 SPEED FIX: Movie/Series button (mtype#..) aur uske Next/Back pagination
-
+# (next_..) dono hamesha get_search_results() ko media_type="movie"/"series"
+# ke saath call karte hain (dekho plugins/pmfilter.py: media_type_cb_handler
+# aur next_page). Naye upload hue files ka media_type save time par hi set ho
+# jaata hai (line ~1149), lekin migration se pehle ke purane files me
+# media_type None hi hai. Filter query in None-wale docs ke liye runtime par
+# `{"file_name": {"$not": SERIES_REGEX}}` jaisa un-indexable regex evaluate
+# karti hai — ye MongoDB text/regex index use nahi kar sakta, isliye har
+# search + har next/back click par utna hi collection scan lagta hai jitna
+# purane (media_type=None) documents hain. Plain /search me ye extra $and/$or
+# branch bilkul nahi lagta, isiliye wahan speed sahi rehti hai.
+#
+# Fix: ek baar sab purane docs ka media_type precompute karke store kar do
+# (is_series_file() ka wahi logic jo naye uploads ke liye already use hota
+# hai). Uske baad movie/series filter sirf indexed `media_type` equality pe
+# match karega — koi live regex scan nahi lagega, aur Next/Back bhi utne hi
+# fast honge jitna normal search.
 async def backfill_media_type(
     batch_size: int = 500,
     media_dbs=None,
