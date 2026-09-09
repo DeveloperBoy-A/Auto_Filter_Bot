@@ -701,16 +701,19 @@ def normalize_season_episode(text):
                   lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}-{int(m.group(3)):02d}", text)
 
     # S02 E01 to E04
-    text = re.sub(r'\bs(\d{1,2})[\s\-_]*e(\d{1,4})[\s\-_]*(?:to|&|and)[\s\-_]*e?(\d{1,4})\b', 
-                  lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}-{int(m.group(3)):02d}", text)
+    text = re.sub(r'\bs(\d{1,2})[\s\-_]*e(\d{1,4})[\s\-_]*(?:to|&|and)[\s\-_]*e?(?!(?:19|20)\d{2}\b|(?:480|720|1080|2160)\b)(\d{1,4})\b', 
+              lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}-{int(m.group(3)):02d}", text)
+
 
     # S02-E01-E04 (multiple separators)
-    text = re.sub(r'\bs(\d{1,2})[\s\-_]+e(\d{1,4})[\s\-_]+e?(\d{1,4})\b', 
-                  lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}-{int(m.group(3)):02d}", text)
+    text = re.sub(r'\bs(\d{1,2})[\s\-_]+e(\d{1,4})[\s\-_]+e?(?!(?:19|20)\d{2}\b|(?:480|720|1080|2160)\b)(\d{1,4})\b', 
+              lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}-{int(m.group(3)):02d}", text)
+
 
     # 2x01-04
-    text = re.sub(r'\b(\d{1,2})[xX](\d{1,4})[\s\-_]+(?:\d{1,2}[xX])?(\d{1,4})\b', 
-                  lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}-{int(m.group(3)):02d}", text)
+    text = re.sub(r'\b(\d{1,2})[xX](\d{1,4})[\s\-_]+(?:\d{1,2}[xX])?(?!(?:19|20)\d{2}\b|(?:480|720|1080|2160)\b)(\d{1,4})\b', 
+              lambda m: f"s{int(m.group(1)):02d} e{int(m.group(2)):02d}-{int(m.group(3)):02d}", text)
+
 
     # Season 1 to Season 3
     text = re.sub(r'\bseason[\s\-_]*(\d{1,2})[\s\-_~]+(?:to|and|&)?[\s\-_~]*(?:season[\s\-_]*)?(\d{1,2})\b',
@@ -736,12 +739,14 @@ def normalize_season_episode(text):
                   lambda m: f"e{int(m.group(1)):02d}-{int(m.group(2)):02d}", text)
 
     # ep(01-04) or ep 01
-    text = re.sub(r'\bep(?:isode)?[\s\-_]*\(?(\d{1,4})(?:[\s\-–~]+(?:to|and|&)?[\s\-–~]*(\d{1,4}))?\)?\b', 
-                  lambda m: f"e{int(m.group(1)):02d}-{int(m.group(2)):02d}" if m.group(2) else f"e{int(m.group(1)):02d}", text)
+    text = re.sub(r'\bep(?:isode)?[\s\-_]*\(?(\d{1,4})(?:[\s\-–~]+(?:to|and|&)?[\s\-–~]*(?!(?:19|20)\d{2}\b|(?:480|720|1080|2160)\b)(\d{1,4}))?\)?\b', 
+              lambda m: f"e{int(m.group(1)):02d}-{int(m.group(2)):02d}" if m.group(2) else f"e{int(m.group(1)):02d}", text)
+
 
     # e01-e04 or e01
-    text = re.sub(r'\be(\d{1,4})(?:[\s\-–~]+(?:to|and|&)?[\s\-–~]*e?(\d{1,4}))?\b', 
-                  lambda m: f"e{int(m.group(1)):02d}-{int(m.group(2)):02d}" if m.group(2) else f"e{int(m.group(1)):02d}", text)
+    text = re.sub(r'\be(\d{1,4})(?:[\s\-–~]+(?:to|and|&)?[\s\-–~]*e?(?!(?:19|20)\d{2}\b|(?:480|720|1080|2160)\b)(\d{1,4}))?\b', 
+              lambda m: f"e{int(m.group(1)):02d}-{int(m.group(2)):02d}" if m.group(2) else f"e{int(m.group(1)):02d}", text)
+
 
     # 01-04 (fallback if both numbers < 60)
     text = re.sub(r'\b(\d{2})[\s\-–]+(\d{2})\b', 
@@ -761,7 +766,8 @@ def normalize_season_episode(text):
     # Episode keywords
     text = re.sub(r'\b(?:episode)[\s\-_]*(\d{1,4})\b', lambda m: f"e{int(m.group(1)):02d}", text)
     text = re.sub(r'\bep(?:isode)?[\s\-_]*(\d{1,4})\b', lambda m: f"e{int(m.group(1)):02d}", text)
-    text = re.sub(r'\be[\s\-_]*(\d{1,4})\b', lambda m: f"e{int(m.group(1)):02d}", text)
+    text = re.sub(r'\be[\s\-_]*(?!(?:19|20)\d{2}\b|(?:480|720|1080|2160)\b)(\d{1,4})\b', lambda m: f"e{int(m.group(1)):02d}", text)
+
     
     text = re.sub(r'\s+', ' ', text).strip()
 
