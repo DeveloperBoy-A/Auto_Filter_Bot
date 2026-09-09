@@ -228,7 +228,7 @@ async def start(client, message):
     try:
         _, grp_id, file_id = data.split("_", 2)
         grp_id = int(grp_id)
-    except Exception::
+    except Exception:
         grp_id = 0
         file_id = data
 
