@@ -680,9 +680,10 @@ def extract_pure_title(original_name):
     return re.sub(r'\s+', ' ', pure_title).strip()
 
 
-# =========================================================
+#===================================
 # SEASON & EPISODE NORMALIZER
-# =========================================================
+#===================================
+
 def normalize_season_episode(text):
     text = text.lower()
 
@@ -766,36 +767,13 @@ def normalize_season_episode(text):
 
     return text.upper()
 
-
-# =========================================================
-# DUAL AUDIO / MULTI AUDIO TAG HELPER
-# =========================================================
-def apply_dual_multi_audio_tag(languages, scan_lower):
-    """
-    Ensures 'Dual/Multi Audio' tags are preserved or dynamically 
-    added based on explicit keywords or language count.
-    """
-    if "Dual Audio" in languages or "Multi Audio" in languages:
-        return languages
-
-    has_dual_word = bool(re.search(r'\bdual\b', scan_lower) or re.search(r'\bdual[\s\.\-_]?audio\b', scan_lower))
-    has_multi_word = bool(re.search(r'\bmulti\b', scan_lower) or re.search(r'\bmulti[\s\.\-_]?audio\b', scan_lower))
-
-    if has_multi_word:
-        languages.append("Multi Audio")
-    elif has_dual_word:
-        languages.append("Dual Audio")
-    elif len(languages) > 2:
-        languages.append("Multi Audio")
-    elif len(languages) == 2:
-        languages.append("Dual Audio")
-
-    return languages
-
+#===================================
+# 🎬 SMART EPISODE TITLE EXTRACTOR
+#===================================
 
 def extract_episode_title(text):
-    # 1. Extension hatao (.mkv, .mp4, etc.)
-    text = re.sub(r'\.[a-z0-9]{2,4}$', '', text, flags=re.IGNORECASE)
+    # 1. Extension hatao (Kahin bhi ho, word boundary ke sath)
+    text = re.sub(r'\.?\b(?:mkv|mp4|avi|webm|flv|wmv)\b', '', text, flags=re.IGNORECASE)
 
     # 2. Episode ke har tarah ke Start Patterns dhoondho
     start_patterns = [
@@ -822,6 +800,7 @@ def extract_episode_title(text):
     remainder = text[start_idx:]
     
     # 3. Stop keywords (Sabhi Quality, Source, Language, Resolution)
+    # (Yahan se mkv/mp4 hata diya gaya hai taki inki wajah se title cut na ho)
     stop_keywords = [
         # Years
         r'19\d{2}', r'20[0-2]\d', 
@@ -870,10 +849,35 @@ def extract_episode_title(text):
     return None
 
 
+#===================================
+# DUAL AUDIO / MULTI AUDIO TAG HELPER
+#===================================
+def apply_dual_multi_audio_tag(languages, scan_lower):
+    """
+    Ensures 'Dual/Multi Audio' tags are preserved or dynamically 
+    added based on explicit keywords or language count.
+    """
+    if "Dual Audio" in languages or "Multi Audio" in languages:
+        return languages
 
-# =========================================================
+    has_dual_word = bool(re.search(r'\bdual\b', scan_lower) or re.search(r'\bdual[\s\.\-_]?audio\b', scan_lower))
+    has_multi_word = bool(re.search(r'\bmulti\b', scan_lower) or re.search(r'\bmulti[\s\.\-_]?audio\b', scan_lower))
+
+    if has_multi_word:
+        languages.append("Multi Audio")
+    elif has_dual_word:
+        languages.append("Dual Audio")
+    elif len(languages) > 2:
+        languages.append("Multi Audio")
+    elif len(languages) == 2:
+        languages.append("Dual Audio")
+
+    return languages
+
+#===================================
 # DATA EXTRACTOR
-# =========================================================
+#===================================
+
 def extract_languages_quality(text_to_scan):
     # Normalize underscores and dots to spaces for proper word boundary matching
     scan_text = re.sub(r'[._]+', ' ', text_to_scan)
@@ -1081,9 +1085,10 @@ def extract_languages_quality(text_to_scan):
 
 
 
-# =========================================================
+#===================================
 # MAIN ASYNC SAVE PIPELINE
-# =========================================================
+#===================================
+
 async def _get_session() -> "aiohttp.ClientSession":
     import aiohttp
     if temp.AIOHTTP_SESSION is None or temp.AIOHTTP_SESSION.closed:
@@ -1570,23 +1575,10 @@ def is_series_file(name) -> bool:
     """
     return bool(SERIES_REGEX.search(str(name).lower()))
 
-# 🚀 SPEED FIX: Movie/Series button (mtype#..) aur uske Next/Back pagination
-# (next_..) dono hamesha get_search_results() ko media_type="movie"/"series"
-# ke saath call karte hain (dekho plugins/pmfilter.py: media_type_cb_handler
-# aur next_page). Naye upload hue files ka media_type save time par hi set ho
-# jaata hai (line ~1149), lekin migration se pehle ke purane files me
-# media_type None hi hai. Filter query in None-wale docs ke liye runtime par
-# `{"file_name": {"$not": SERIES_REGEX}}` jaisa un-indexable regex evaluate
-# karti hai — ye MongoDB text/regex index use nahi kar sakta, isliye har
-# search + har next/back click par utna hi collection scan lagta hai jitna
-# purane (media_type=None) documents hain. Plain /search me ye extra $and/$or
-# branch bilkul nahi lagta, isiliye wahan speed sahi rehti hai.
-#
-# Fix: ek baar sab purane docs ka media_type precompute karke store kar do
-# (is_series_file() ka wahi logic jo naye uploads ke liye already use hota
-# hai). Uske baad movie/series filter sirf indexed `media_type` equality pe
-# match karega — koi live regex scan nahi lagega, aur Next/Back bhi utne hi
-# fast honge jitna normal search.
+
+# 🚀 SPEED FIX: Movie/Series button 
+# fast honge jitna normal search
+
 async def backfill_media_type(
     batch_size: int = 500,
     media_dbs=None,
@@ -1831,7 +1823,7 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
         }
 
     # 🚀 SEARCH POOL CACHE: after the first MongoDB search, keep the sorted
-    # result pool in memory so pagination/repeated clicks do not rescan MongoDB.
+    
     pool_q = tuple(query) if isinstance(query, list) else query
     pool_key = (chat_id, pool_q, file_type, filter, media_type)
     pool_entry = _SEARCH_POOL_CACHE.get(pool_key)
