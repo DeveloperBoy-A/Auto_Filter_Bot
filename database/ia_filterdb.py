@@ -684,8 +684,16 @@ def extract_pure_title(original_name):
 # SEASON & EPISODE NORMALIZER
 #===================================
 
+import re
+
 def normalize_season_episode(text):
     text = text.lower()
+
+    # ==========================================
+    # --- 🛡️ SAFETY SHIELD (Saal aur Resolution hide karo) ---
+    text = re.sub(r'\b((?:19|20)\d{2})\b', r'__YEAR\1__', text)
+    text = re.sub(r'\b(480|720|1080|2160)(p?)\b', r'__RES\1\2__', text)
+    # ==========================================
 
     # --- Season + Episode Ranges ---
     text = re.sub(r'\bs(\d{1,2})[\s._\-]*e(\d{1,4})\b', r's\1 e\2', text)
@@ -768,7 +776,13 @@ def normalize_season_episode(text):
     text = re.sub(r'\bep(?:isode)?[\s\-_]*(\d{1,4})\b', lambda m: f"e{int(m.group(1)):02d}", text)
     text = re.sub(r'\be[\s\-_]*(?!(?:19|20)\d{2}\b|(?:480|720|1080|2160)\b)(\d{1,4})\b', lambda m: f"e{int(m.group(1)):02d}", text)
 
-    
+
+    # ==========================================
+    # --- 🛡️ RESTORE SHIELD (Chhupayi hui cheezen wapas normal karo) ---
+    text = re.sub(r'__YEAR(\d+)__', r'\1', text)
+    text = re.sub(r'__RES(\d+)(p?)__', r'\1\2', text)
+    # ==========================================
+
     text = re.sub(r'\s+', ' ', text).strip()
 
     return text.upper()
