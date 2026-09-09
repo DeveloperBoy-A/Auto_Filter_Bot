@@ -14,7 +14,7 @@ from datetime import datetime
 from database.refer import referdb
 from database.config_db import mdb
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, ReplyKeyboardMarkup
-from pyrogram import Client, filters, enums
+from pyrogram import Client, filters, enums, StopPropagation
 from pyrogram.errors import FloodWait, ChatAdminRequired, UserNotParticipant
 from database.ia_filterdb import Media, Media2, MEDIA_DBS, delete_file_by_id, delete_files_by_query, get_file_details, unpack_new_file_id, get_bad_files, get_cover_url, backfill_media_type
 from database.users_chats_db import db
@@ -222,13 +222,13 @@ async def start(client, message):
         movie = movies.replace('-',' ')
         message.text = movie 
         await auto_filter(client, message) 
-        return
+        raise StopPropagation
 
     data = message.command[1]
     try:
         _, grp_id, file_id = data.split("_", 2)
         grp_id = int(grp_id)
-    except:
+    except Exception::
         grp_id = 0
         file_id = data
 
