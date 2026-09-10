@@ -384,25 +384,25 @@ class Database:
         status = await self.get_download_status(user_id)
         return status["is_premium"] or status["remaining"] > 0
 
-    async def increase_download(self, user_id, count: int = 1):
-    """Increments the free user's daily_download_count by `count` (default 1). Call this only AFTER file(s) have been sent. Pass a higher count for bulk/batch downloads to avoid multiple DB round trips."""
-    user_id = int(user_id)
-    if count <= 0:
-        return
-    await self.users.update_one(
-        {"id": user_id},
-        {
-            "$inc": {"daily_download_count": count},
-            "$setOnInsert": {"last_download_reset": datetime.datetime.now()}
-        },
-        upsert=True
-    )
+     async def increase_download(self, user_id, count: int = 1):
+        """Increments the free user's daily_download_count by `count` (default 1). Call this only AFTER file(s) have been sent. Pass a higher count for bulk/batch downloads to avoid multiple DB round trips."""
+        user_id = int(user_id)
+        if count <= 0:
+            return
+
+        await self.users.update_one(
+            {"id": user_id},
+            {
+                "$inc": {"daily_download_count": count},
+                "$setOnInsert": {"last_download_reset": datetime.datetime.now()}
+            },
+            upsert=True
+        )
 
     async def remaining_downloads(self, user_id):
         """Returns remaining downloads left today for the user. Premium users get DAILY_DOWNLOAD_LIMIT (unlimited)."""
         status = await self.get_download_status(user_id)
         return DAILY_DOWNLOAD_LIMIT if status["is_premium"] else status["remaining"]
-
     
 
     async def update_one(self, filter_query, update_data):
