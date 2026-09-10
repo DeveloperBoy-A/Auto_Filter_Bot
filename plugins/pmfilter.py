@@ -2479,83 +2479,119 @@ async def old_advantage_spell_chok(client, message):
 
 async def advantage_spell_chok(client, message):
     search = message.text
-    
-    # Clean the input text by removing unwanted words
     query = re.sub(
-        r"\b(pl(i|e)?(s|z+|ease|se|ese|(e+)s(e)?)|((send|snd|giv(e)?|gib)(\sme)?)|movie(s)?|new|latest|br((o|u)h?)|^h(e|a)?(l)(o)|mal(ayalam)?|t(h)?amil|file|that|find|und(o)|kit(t(i|y)?)?o(w)?|thar(u)?(o)w?|kittum(o)|aya(k)(um(o)*)?|full\smovie|any(one)|with\ssubtitle(s)?)\b",
-        "", 
-        search, 
+        r"\b(pl(i|e)*?(s|z+|ease|se|ese|(e+)s(e)?)|((send|snd|giv(e)?|gib)(\sme)?)|movie(s)?|new|latest|br((o|u)h?)*|^h(e|a)?(l)*(o)*|mal(ayalam)?|t(h)?amil|file|that|find|und(o)*|kit(t(i|y)?)?o(w)?|thar(u)?(o)*w?|kittum(o)*|aya(k)*(um(o)*)?|full\smovie|any(one)|with\ssubtitle(s)?)",
+        "",
+        message.text, flags=re.IGNORECASE
+    )
+    query = query.strip() + " movie"
+
+    # IMDb ke liye actual movie title nikalo.
+    # Year ko intentionally remove nahi kiya gaya hai.
+    imdb_query = query
+
+    # Season / Episode remove
+    imdb_query = re.sub(
+        r"\b(?:s\d{1,2}(?:\s*e\d{1,3})?|e\d{1,3}|season\s*\d{1,2}|episode\s*\d{1,3}|ep\s*\d{1,3})\b",
+        "",
+        imdb_query,
         flags=re.IGNORECASE
     )
-    
-    # Strip spaces. DO NOT append " movie" here as it ruins exact IMDb matches.
-    query = query.strip()
-    
-    if not query:
-        return
+
+    # Language / Audio / Subtitles remove
+    imdb_query = re.sub(
+        r"\b(?:hindi|english|tamil|telugu|malayalam|kannada|bengali|marathi|punjabi|gujarati|"
+        r"urdu|dubbed|dual\s+audio|multi\s+audio|multi-audio|"
+        r"subtitles?|with\s+subtitles?)\b",
+        "",
+        imdb_query,
+        flags=re.IGNORECASE
+    )
+
+    # Quality / Print / Codec / Technical tags remove
+    imdb_query = re.sub(
+        r"\b(?:480p|576p|720p|1080p|1440p|2160p|4k|8k|"
+        r"web[-\s]?dl|web[-\s]?rip|webrip|bluray|blu[-\s]?ray|"
+        r"brrip|bdrip|hdrip|hdtv|dvdrip|dvdscr|hdcam|camrip|cam|"
+        r"hevc|x264|x265|h\.?264|h\.?265|10bit|8bit|"
+        r"remux|proper|repack|uncut|extended|"
+        r"hdr|dolby\s+vision|dv|atmos)\b",
+        "",
+        imdb_query,
+        flags=re.IGNORECASE
+    )
+
+    imdb_query = re.sub(r"\s+", " ", imdb_query).strip()
 
     try:
-        # FIX: Pass 'query' (cleaned text) instead of 'search' (uncleaned text)
-        movies = await get_poster(query, bulk=True)
+        movies = await get_poster(imdb_query, bulk=True)
     except Exception as e:
         logger.exception("get_poster failed for query=%s: %s", query, e)
-        movies = None
+        try:
+            k = await message.reply(script.I_CUDNT.format(message.from_user.mention))
+            await asyncio.sleep(60)
+            try:
+                await k.delete()
+            except Exception:
+                pass
+        except Exception:
+            pass
+        try:
+            await message.delete()
+        except Exception:
+            pass
+        return
 
     if not movies:
-        google = quote_plus(query)
+        google = quote_plus(search)
         button = [[InlineKeyboardButton(
-            "🔍 ᴄʜᴇᴄᴋ sᴘᴇʟʟɪɴɢ ᴏɴ ɢᴏᴏɢʟᴇ 🔍", 
+            "🔍 ᴄʜᴇᴄᴋ sᴘᴇʟʟɪɴɢ ᴏɴ ɢᴏᴏɢʟᴇ 🔍",
             url=f"https://www.google.com/search?q={google}"
         )]]
+
         k = await message.reply_text(
-            text=script.I_CUDNT.format(search), 
+            text=script.I_CUDNT.format(search),
             reply_markup=InlineKeyboardMarkup(button)
         )
+
         await asyncio.sleep(60)
+        await k.delete()
+
         try:
-            await k.delete()
             await message.delete()
         except Exception:
             pass
         return
 
     user = message.from_user.id if message.from_user else 0
-    buttons = []
-    seen_titles = set()
 
-    for movie in movies:
-        # Handle both dictionary and object formats safely based on get_poster return type
-        title = getattr(movie, "title", None) or (movie.get("title") if isinstance(movie, dict) else None)
-        imdb_id = getattr(movie, "imdb_id", None) or (movie.get("imdb_id") if isinstance(movie, dict) else getattr(movie, "movieID", None))
-        
-        if not title or not imdb_id:
-            continue
-            
-        # Filter duplicate titles to show only exact, clean IMDb titles
-        title_lower = title.lower()
-        if title_lower not in seen_titles:
-            seen_titles.add(title_lower)
-            buttons.append([
-                InlineKeyboardButton(
-                    text=title, 
-                    callback_data=f"spol#{imdb_id}#{user}"
-                )
-            ])
+    buttons = [
+        [
+            InlineKeyboardButton(
+                text=movie.title,
+                callback_data=f"spol#{movie.imdb_id}#{user}"
+            )
+        ]
+        for movie in movies
+    ]
 
-    if not buttons:
-        return
+    buttons.append([
+        InlineKeyboardButton(
+            text="🚫 ᴄʟᴏsᴇ 🚫",
+            callback_data='close_data'
+        )
+    ])
 
-    buttons.append([InlineKeyboardButton(text="🚫 ᴄʟᴏsᴇ 🚫", callback_data='close_data')])
-    
     d = await message.reply_text(
-        text=script.CUDNT_FND.format(message.from_user.mention), 
-        reply_markup=InlineKeyboardMarkup(buttons), 
+        text=script.CUDNT_FND.format(message.from_user.mention),
+        reply_markup=InlineKeyboardMarkup(buttons),
         reply_to_message_id=message.id
     )
-    
+
     await asyncio.sleep(60)
+    await d.delete()
+
     try:
-        await d.delete()
         await message.delete()
     except Exception:
         pass
