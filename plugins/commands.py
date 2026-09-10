@@ -13,13 +13,14 @@ from Script import script
 from datetime import datetime
 from database.refer import referdb
 from database.config_db import mdb
+from motor.motor_asyncio import AsyncIOMotorClient
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, ReplyKeyboardMarkup
 from pyrogram import Client, filters, enums, StopPropagation
 from pyrogram.errors import FloodWait, ChatAdminRequired, UserNotParticipant
 from database.ia_filterdb import Media, Media2, MEDIA_DBS, delete_file_by_id, delete_files_by_query, get_file_details, unpack_new_file_id, get_bad_files, get_cover_url, backfill_media_type
 from database.users_chats_db import db
 from info import *
-from utils import get_settings, save_group_settings, is_subscribed, is_req_subscribed, get_size, get_shortlink, is_check_admin, temp, get_readable_time, get_time, generate_settings_text, log_error, clean_filename, extract_caption_meta
+from utils import get_settings, save_group_settings, is_subscribed, is_req_subscribed, get_size, get_shortlink, is_check_admin, temp, get_readable_time, get_time, generate_settings_text, log_error, clean_filename, extract_caption_meta, enforce_daily_limit
 
 
 
@@ -325,6 +326,25 @@ async def start(client, message):
             if not files:
                 return await message.reply('<b><i>ɴᴏ ꜱᴜᴄʜ ꜰɪʟᴇ ᴇxɪꜱᴛꜱ !</b></i>')
 
+            # --- Daily Download Limit System: check BEFORE the batch starts sending ---
+            dl_status = await db.get_download_status(message.from_user.id)
+            is_premium_user = dl_status["is_premium"]
+            if is_premium_user:
+                files_to_send = files
+            else:
+                if dl_status["remaining"] <= 0:
+                    # Limit already used up -> send the 🚫 message + buttons and stop, no files sent
+                    await enforce_daily_limit(client, message)
+                    return
+                # Show remaining limit BEFORE the files are sent
+                await client.send_message(
+                    chat_id=message.from_user.id,
+                    text=script.REMAINING_LIMIT_TXT.format(dl_status["remaining"], DAILY_DOWNLOAD_LIMIT),
+                    parse_mode=enums.ParseMode.HTML
+                )
+                # Only send as many files as the free user still has remaining today
+                files_to_send = files[:dl_status["remaining"]]
+
             filesarr = []
             settings = await get_settings(int(grp_id))
             DREAMX_CAPTION = settings.get('caption', CUSTOM_FILE_CAPTION)
@@ -376,8 +396,17 @@ async def start(client, message):
                             await asyncio.sleep(e.value + 1)
                     return None
 
-            sent = await asyncio.gather(*(_send_one(file) for file in files), return_exceptions=True)
+            sent = await asyncio.gather(*(_send_one(file) for file in files_to_send), return_exceptions=True)
             filesarr.extend(x for x in sent if x is not None and not isinstance(x, Exception))
+
+            # --- Daily Download Limit System: bulk-increment by files actually sent (free users only) ---
+            if not is_premium_user and filesarr:
+                await db.increase_download(message.from_user.id, len(filesarr))
+
+            # If the batch got truncated due to the limit, tell the user now (0 remaining at this point)
+            if not is_premium_user and len(files_to_send) < len(files):
+                await enforce_daily_limit(client, message)
+
             # --- अब ये लाइनें FOR LOOP के बाहर हैं (4 स्पेस पीछे) ---
             if filesarr:
                 k = await client.send_message(chat_id=message.from_user.id, text=script.DEL_MSG.format(get_time(DELETE_TIME)), parse_mode=enums.ParseMode.HTML)
@@ -399,6 +428,16 @@ async def start(client, message):
     settings = await get_settings(int(grp_id))
     if not files_:
         pre, file_id = ((base64.urlsafe_b64decode(data + "=" * (-len(data) % 4))).decode("utf-8")).split("_", 1)
+        # --- Daily Download Limit System: check before sending the file ---
+        allowed, is_premium_user, remaining = await enforce_daily_limit(client, message)
+        if not allowed:
+            return
+        # Show remaining limit BEFORE the file is sent
+        if not is_premium_user:
+            await message.reply_text(
+                script.REMAINING_LIMIT_TXT.format(remaining, DAILY_DOWNLOAD_LIMIT),
+                parse_mode=enums.ParseMode.HTML
+            )
         try:
             if STREAM_MODE and not PREMIUM_STREAM_MODE:
                 btn = [
@@ -424,6 +463,9 @@ async def start(client, message):
                 file_id=file_id,
                 protect_content=settings.get('file_secure', PROTECT_CONTENT),
                 reply_markup=InlineKeyboardMarkup(btn))
+
+            if not is_premium_user:
+                await db.increase_download(message.from_user.id)
 
             filetype = msg.media
             file = getattr(msg, filetype.value)
@@ -453,6 +495,18 @@ async def start(client, message):
             logger.exception(e)
             pass
         return await message.reply('ɴᴏ ꜱᴜᴄʜ ꜰɪʟᴇ ᴇxɪꜱᴛꜱ !')
+
+    # --- Daily Download Limit System: check before sending the file ---
+    allowed, is_premium_user, remaining = await enforce_daily_limit(client, message)
+    if not allowed:
+        return
+
+    # Show remaining limit BEFORE the file is sent
+    if not is_premium_user:
+        await message.reply_text(
+            script.REMAINING_LIMIT_TXT.format(remaining, DAILY_DOWNLOAD_LIMIT),
+            parse_mode=enums.ParseMode.HTML
+        )
 
     files = files_[0]
     title = clean_filename(files.file_name)
@@ -498,6 +552,8 @@ async def start(client, message):
         reply_markup=InlineKeyboardMarkup(btn),
         cover=cover_url
     )
+    if not is_premium_user:
+        await db.increase_download(message.from_user.id)
     k = await msg.reply(script.DEL_MSG.format(get_time(DELETE_TIME)),
             quote=True, parse_mode=enums.ParseMode.HTML
     )     
@@ -1446,7 +1502,7 @@ async def reset_trial(client, message):
     except Exception as e:
         await message.reply_text(f"An error occurred: {e}")
 
-from motor.motor_asyncio import AsyncIOMotorClient
+
 
 @Client.on_message(filters.command("old_cleandb") & filters.user(ADMINS))
 async def clean_db_command(client, message):
