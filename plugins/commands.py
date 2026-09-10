@@ -435,7 +435,7 @@ async def start(client, message):
         # Show remaining limit BEFORE the file is sent
         if not is_premium_user:
             await message.reply_text(
-                script.REMAINING_LIMIT_TXT.format(remaining, DAILY_DOWNLOAD_LIMIT),
+                script.REMAINING_LIMIT_TXT.format(max(remaining - 1, 0), DAILY_DOWNLOAD_LIMIT),
                 parse_mode=enums.ParseMode.HTML
             )
         try:
@@ -504,7 +504,7 @@ async def start(client, message):
     # Show remaining limit BEFORE the file is sent
     if not is_premium_user:
         await message.reply_text(
-            script.REMAINING_LIMIT_TXT.format(remaining, DAILY_DOWNLOAD_LIMIT),
+            script.REMAINING_LIMIT_TXT.format(max(remaining - 1, 0), DAILY_DOWNLOAD_LIMIT),
             parse_mode=enums.ParseMode.HTML
         )
 
