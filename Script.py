@@ -290,7 +290,20 @@ Mᴇꜱꜱᴀɢᴇ : <code>{}</code>"""
 
     𝙱𝙾𝚃 𝚆𝙾𝚁𝙺𝙸𝙽𝙶 𝙿𝚁𝙾𝙿𝙴𝚁𝙻𝚈....
     """
+    # ============================
+    # Daily Download Limit System
+    # ============================
+    DOWNLOAD_LIMIT_TXT = """🚫 <b>Daily download limit reached.</b>
 
+📦 Free users can download only <b>{0}</b> files every 24 hours.
+
+💎 Upgrade to Premium for unlimited downloads.
+
+📦 Remaining limit: <b>0/{0}</b>"""
+
+    REMAINING_LIMIT_TXT = """📦 Remaining limit: <b>{}/{}</b>"""
+
+    
 
     #PLANS
 
