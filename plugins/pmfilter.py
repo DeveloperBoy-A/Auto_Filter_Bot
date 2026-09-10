@@ -2647,14 +2647,24 @@ async def ai_spell_check(chat_id, wrong_name):
             corrected_query = search_movie
 
             if metadata:
-                corrected_query = (
-                    f"{corrected_query} "
-                    f"{' '.join(metadata)}"
-                )
+                new_metadata = []
 
-            # Yehi query auto_filter ko wapas milegi
+                for item in metadata:
+                    # Word boundary ke saath duplicate check
+                    if not re.search(
+                        rf"(?<!\w){re.escape(item)}(?!\w)",
+                        corrected_query,
+                        flags=re.IGNORECASE
+                    ):
+                        new_metadata.append(item)
+
+                if new_metadata:
+                    corrected_query = (
+                        f"{corrected_query} "
+                        f"{' '.join(new_metadata)}"
+                    )
+
             return corrected_query
-
     return
 
 
