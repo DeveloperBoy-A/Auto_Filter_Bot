@@ -2567,8 +2567,7 @@ async def advantage_spell_chok(client, message):
     buttons.append([
         InlineKeyboardButton(
             text="🚫 ᴄʟᴏsᴇ 🚫",
-            callback_data='close_data',
-            style=enums.ButtonStyle.DANGER
+            callback_data='close_data'
         )
     ])
 
