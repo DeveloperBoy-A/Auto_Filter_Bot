@@ -334,7 +334,8 @@ async def advantage_spoll_choker(bot, query):
     # Get movie details
     movies = await get_poster(id, id=True)
     movie = movies.get('title') or "Unknown Movie"
-    movie = re.sub(r"[:-]", " ", movie)
+    movie = re.sub(r"[-:.,&]", " ", movie)
+    movie = re.sub(r"[!@#$%^*()_+=\[\]{};\"<>?/\\|]", " ", movie)
     movie = re.sub(r"\s+", " ", movie).strip()
     year = movies.get('year')  # Optional: get year if available
     
