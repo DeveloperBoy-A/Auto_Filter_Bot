@@ -12,6 +12,7 @@ import asyncio
 from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
 from pyrogram.errors import InputUserDeactivated, UserNotParticipant, FloodWait, UserIsBlocked, PeerIdInvalid, ChatAdminRequired, MessageNotModified
 from pyrogram import enums
+from pyrogram import Client
 from typing import Union,Optional, Dict, Any
 import aiohttp
 from Script import script
@@ -110,7 +111,80 @@ async def is_check_admin(bot, chat_id, user_id):
     except:
         return False
     
-from pyrogram import Client
+
+# ==========================================================
+# Daily Download Limit System
+# ----------------------------------------------------------
+# Wraps database.users_chats_db.db's can_download / increase_download /
+# remaining_downloads / reset_download_if_needed so plugin code only has
+# to make ONE call before sending a file. Free users get a daily limit
+# (stored in MongoDB and auto reset by db.get_download_status). 
+# Premium users are always unlimited.
+# ==========================================================
+
+async def enforce_daily_limit(client, message):
+    """
+    Call this right before sending a file to a user.
+    Returns a tuple: (allowed: bool, is_premium: bool, remaining: int)
+
+    If the free user's daily limit has already been used up, this sends
+    the download limit reached message (with Upgrade to Premium / Contact 
+    Owner buttons) on its own, so the caller simply needs to 
+    `return`/`continue`/`break` when allowed is False.
+    """
+    user_id = message.from_user.id
+    status = await db.get_download_status(user_id)
+
+    # Agar user premium hai ya limit bachi hai, toh file bhej sakte hain
+    if status["is_premium"] or status["remaining"] > 0:
+        return True, status["is_premium"], status["remaining"]
+
+    # Limit exceeded -> Inform the free user and stop here
+    buttons = [
+        [InlineKeyboardButton('💎 Upgrade to Premium', callback_data='premium_info')], 
+        [InlineKeyboardButton('📱 Contact Owner', url=OWNER_LNK)]
+    ]
+
+    # 1 retry on FloodWait, so the message is never silently dropped
+    for attempt in range(2): 
+        try:
+            # Agar bot me limit ki value DB se aati hai, tab status.get("limit", DAILY_DOWNLOAD_LIMIT) bhi use kar sakte hain.
+            total_limit = status.get("daily_limit", DAILY_DOWNLOAD_LIMIT)
+            
+            await client.send_message(
+                chat_id=user_id,
+                text=script.DOWNLOAD_LIMIT_TXT.format(total_limit),
+                reply_markup=InlineKeyboardMarkup(buttons),
+                parse_mode=enums.ParseMode.HTML
+            )
+            break
+        except FloodWait as e:
+            # Added 1 second extra buffer for safety
+            await asyncio.sleep(e.value + 1)
+        except Exception as e:
+            logger.error(f"Error sending download limit message: {e}")
+            break
+
+    return False, False, 0
+
+
+async def get_remaining_limit_text(user_id):
+    """
+    Returns a small ready-to-send remaining limit string dynamically, 
+    (e.g., '📦 Remaining limit: {remaining}/{total_limit}'),
+    or None for premium users.
+    """
+    status = await db.get_download_status(user_id)
+    
+    if status["is_premium"]:
+        return None
+        
+    # Yahan "total_limit" DB se le raha hai, agar DB me nahi hai toh default "DAILY_DOWNLOAD_LIMIT" lega
+    total_limit = status.get("daily_limit", DAILY_DOWNLOAD_LIMIT)
+    
+    return script.REMAINING_LIMIT_TXT.format(status["remaining"], total_limit)
+
+
 
 # Users broadcast
 async def users_broadcast(user_id, message, is_pin=False):
