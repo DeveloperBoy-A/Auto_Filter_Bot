@@ -1924,12 +1924,11 @@ async def auto_filter(client, msg, spoll=False):
             
             # Faltu words ki list jo movie ke naam ke sath log bhejte hain
             find = search.split(" ")
-            removes = ["in", "upload", "series", "full", "horror", "thriller", "mystery", 
-                       "print", "file", "pls", "please", "send", "give", "movie", "movies", 
-                       "new", "latest", "'", "bruh", "link", "dubbed", "download", 
-                       "subtitle", "subtitles", ",", "any", "()", "iruka", 
-                       "pannunga", "anuppunga", "film", "undo", "kitti", "kitty", "tharu", "&"]
-            
+            removes = [r"\bin\b", r"\bupload\b", r"\bseries\b", r"\bfull\b", r"\bhorror\b", r"\bthriller\b", r"\bmystery\b",
+                     r"\bprint\b", r"\bfile\b", r"\bpls\b", r"\bplease\b", r"\bsend\b", r"\bgive\b", r"\bmovie\b", r"\bmovies\b",
+                     r"\bnew\b", "'", r"\bbruh\b", r"\blink\b", r"\bdubbed\b", r"\bdownload\b",
+                     r"\bsubtitle\b", r"\bsubtitles\b", ",", r"\bany\b", r"\(\)", r"\biruka\b",
+                     r"\bpannunga\b", r"\banuppunga\b", r"\bfilm\b", r"\bundo\b", r"\bkitti\b", r"\bkitty\b", r"\btharu\b", "&"]
             # List comprehension se faltu words ko remove karna
             search = " ".join([x for x in find if x not in removes])
             
@@ -2452,6 +2451,8 @@ async def old_advantage_spell_chok(client, message):
         pass
 
 
+
+
 async def ai_spell_check(chat_id, wrong_name):
     async def search_movie(wrong_name):
         search_results = await asyncio.to_thread(imdb.search_movie, wrong_name.lower())
@@ -2462,7 +2463,7 @@ async def ai_spell_check(chat_id, wrong_name):
     movie_list = await search_movie(wrong_name)
     if not movie_list:
         return
-    for _ in range(5):
+    for _ in range(4):
         closest_match = process.extractOne(wrong_name, movie_list)
         if not closest_match or closest_match[1] <= 70:
             return
@@ -2475,9 +2476,38 @@ async def ai_spell_check(chat_id, wrong_name):
 async def advantage_spell_chok(client, message):
     search = message.text
     query = re.sub(
-        r"\b(pl(i|e)*?(s|z+|ease|se|ese|(e+)s(e)?)|((send|snd|giv(e)?|gib)(\sme)?)|movie(s)?|new|latest|br((o|u)h?)*|^h(e|a)?(l)*(o)*|mal(ayalam)?|t(h)?amil|file|that|find|und(o)*|kit(t(i|y)?)?o(w)?|thar(u)?(o)*w?|kittum(o)*|aya(k)*(um(o)*)?|full\smovie|any(one)|with\ssubtitle(s)?)",
-        "", message.text, flags=re.IGNORECASE)
-    query = query.strip() + " movie"
+        r"(?:"
+        r"\bpl(i|e)*?(s|z+|ease|se|ese|(e+)s(e+)?)\b|"
+        r"\b(send|snd|giv(e)?|gib)(\sme)?\b|"
+        r"\bmovie(s)?\b|"
+        r"\bnew\b|\blatest\b|"
+        r"\bbr((o|u)h?)*\b|"
+        r"\bmal(ayalam)?\b|\bt(h)?amil\b|\btelugu\b|\bkannada\b|"
+        r"\bbengali\b|\bpunjabi\b|\bmarathi\b|\bgujarati\b|"
+        r"\benglish\b|\bhindi\b|"
+        r"\bfile(s)?\b|\bthat\b|\bfind\b|\bund(o)*\b|"
+        r"\bkit(t(i|y)?)?o(w)?\b|"
+        r"\bthar(u)?(o)*\b|\bkittum(o)*\b|"
+        r"\baya(k)*(um(o)*)?\b|"
+        r"\bfull\s*movie\b|\bany(one)?\b|"
+        r"\bwith\s*subtitle(s)?\b|\bsubtitle(s)?\b|\bsubs?\b|"
+        r"\bdownload\b|\bcomplete\b|\bcombined\b|\bproper\b|"
+        r"\bquality\b|\baudio\b|\bvideo\b|"
+        r"\b480p\b|\b576p\b|\b720p\b|\b1080p\b|\b1440p\b|\b2160p\b|"
+        r"\b4k\b|\b8k\b|\bhd\b|\bfhd\b|\bfullhd\b|\buhd\b|\bhdr\b|"
+        r"\bwebrip\b|\bweb[- ]?dl\b|\bwebdl\b|\bbluray\b|\bbrrip\b|"
+        r"\bhdrip\b|\bdvdrip\b|\bcamrip\b|\bhdtc\b|"
+        r"\bdubbed\b|\bdual\s*audio\b|\bmulti\s*audio\b|"
+        r"\bseason\b|\bs\d{1,2}\b|\bepisode\b|\bep\d{1,3}\b|\be\d{1,3}\b"
+        r")",
+        "",
+        message.text,
+        flags=re.IGNORECASE
+    )
+
+    query = re.sub(r"[\s._|•~]+", " ", query).strip()
+    query = query + " movie"
+
     try:
         movies = await get_poster(search, bulk=True)
     except Exception as e:
@@ -2496,35 +2526,66 @@ async def advantage_spell_chok(client, message):
         except Exception:
             pass
         return
+
     if not movies:
         google = quote_plus(search)
         button = [[InlineKeyboardButton(
-            "🔍 ᴄʜᴇᴄᴋ sᴘᴇʟʟɪɴɢ ᴏɴ ɢᴏᴏɢʟᴇ 🔍", url=f"https://www.google.com/search?q={google}")]]
-        k = await message.reply_text(text=script.I_CUDNT.format(search), reply_markup=InlineKeyboardMarkup(button))
+            "🔍 ᴄʜᴇᴄᴋ sᴘᴇʟʟɪɴɢ ᴏɴ ɢᴏᴏɢʟᴇ 🔍",
+            url=f"https://www.google.com/search?q={google}"
+        )]]
+
+        k = await message.reply_text(
+            text=script.I_CUDNT.format(search),
+            reply_markup=InlineKeyboardMarkup(button)
+        )
+
         await asyncio.sleep(60)
-        await k.delete()
+
+        try:
+            await k.delete()
+        except Exception:
+            pass
+
         try:
             await message.delete()
         except Exception:
             pass
         return
-    user = message.from_user.id if message.from_user else 0
-    buttons = [
-        [InlineKeyboardButton(text=movie.title, callback_data=f"spol#{movie.imdb_id}#{user}")
-         ] for movie in movies]
 
-    buttons.append([InlineKeyboardButton(
-        text="🚫 ᴄʟᴏsᴇ 🚫", callback_data='close_data')])
-    d = await message.reply_text(text=script.CUDNT_FND.format(message.from_user.mention), reply_markup=InlineKeyboardMarkup(buttons), reply_to_message_id=message.id)
+    user = message.from_user.id if message.from_user else 0
+
+    buttons = [
+        [
+            InlineKeyboardButton(
+                text=movie.title,
+                callback_data=f"spol#{movie.imdb_id}#{user}"
+            )
+        ]
+        for movie in movies
+    ]
+
+    buttons.append([
+        InlineKeyboardButton(
+            text="🚫 ᴄʟᴏsᴇ 🚫",
+            callback_data='close_data',
+            style=enums.ButtonStyle.DANGER
+        )
+    ])
+
+    d = await message.reply_text(
+        text=script.CUDNT_FND.format(message.from_user.mention),
+        reply_markup=InlineKeyboardMarkup(buttons),
+        reply_to_message_id=message.id
+    )
+
     await asyncio.sleep(60)
-    await d.delete()
+
+    try:
+        await d.delete()
+    except Exception:
+        pass
+
     try:
         await message.delete()
     except Exception:
         pass
-
-
-    # Never leave Telegram's callback spinner running when a new/unknown
-    # callback reaches this catch-all router.
-    if not answered:
-        await answer_callback()
