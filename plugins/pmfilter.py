@@ -2720,281 +2720,59 @@ async def old_advantage_spell_chok(client, message):
         pass
 
 
-
 async def advantage_spell_chok(client, message):
     search = message.text
-
     query = re.sub(
         r"\b(pl(i|e)*?(s|z+|ease|se|ese|(e+)s(e)?)|((send|snd|giv(e)?|gib)(\sme)?)|movie(s)?|new|latest|br((o|u)h?)*|^h(e|a)?(l)*(o)*|mal(ayalam)?|t(h)?amil|file|that|find|und(o)*|kit(t(i|y)?)?o(w)?|thar(u)?(o)*w?|kittum(o)*|aya(k)*(um(o)*)?|full\smovie|any(one)|with\ssubtitle(s)?)",
-        "",
-        message.text,
-        flags=re.IGNORECASE
-    )
-
+        "", message.text, flags=re.IGNORECASE)
     query = query.strip() + " movie"
-
-    # ---------------------------------------------------------
-    # IMDb QUERY CLEANING
-    # Year intentionally preserve kiya gaya hai.
-    # ---------------------------------------------------------
-
-    imdb_query = query
-
-    # Season / Episode
-    imdb_query = re.sub(
-        r"\b(?:s\d{1,2}(?:\s*e\d{1,3})?|e\d{1,3}|season\s*\d{1,2}|episode\s*\d{1,3}|ep\s*\d{1,3})\b",
-        "",
-        imdb_query,
-        flags=re.IGNORECASE
-    )
-
-    # Language / Audio / Subtitles
-    imdb_query = re.sub(
-        r"\b(?:hindi|english|tamil|telugu|malayalam|kannada|bengali|marathi|punjabi|gujarati|"
-        r"urdu|dubbed|dual\s+audio|multi\s+audio|multi-audio|"
-        r"subtitles?|with\s+subtitles?)\b",
-        "",
-        imdb_query,
-        flags=re.IGNORECASE
-    )
-
-    # Quality / Print / Codec / Technical
-    imdb_query = re.sub(
-        r"\b(?:480p|576p|720p|1080p|1440p|2160p|4k|8k|"
-        r"web[-\s]?dl|web[-\s]?rip|webrip|bluray|blu[-\s]?ray|"
-        r"brrip|bdrip|hdrip|hdtv|dvdrip|dvdscr|hdcam|camrip|cam|"
-        r"hevc|x264|x265|h\.?264|h\.?265|10bit|8bit|"
-        r"remux|proper|repack|uncut|extended|"
-        r"hdr|dolby\s+vision|dv|atmos)\b",
-        "",
-        imdb_query,
-        flags=re.IGNORECASE
-    )
-
-    imdb_query = re.sub(r"\s+", " ", imdb_query).strip()
-
-    def normalize_title(text):
-        text = str(text).lower()
-
-        text = unicodedata.normalize("NFKD", text)
-        text = text.encode("ascii", "ignore").decode("ascii")
-
-        # Year ko title matching se hata rahe hain,
-        # lekin IMDb query me year already preserve hai.
-        text = re.sub(r"\b(?:19|20)\d{2}\b", "", text)
-
-        text = re.sub(r"[^a-z0-9\s]", " ", text)
-        text = re.sub(r"\s+", " ", text).strip()
-
-        return text
-
-    def is_good_match(query_text, candidate):
-        query_text = normalize_title(query_text)
-        candidate = normalize_title(candidate)
-
-        if not query_text or not candidate:
-            return False
-
-        query_words = query_text.split()
-        candidate_words = candidate.split()
-
-        meaningful_words = [
-            word for word in query_words
-            if len(word) >= 3
-        ]
-
-        if not meaningful_words:
-            meaningful_words = query_words
-
-        matched = 0
-
-        for qword in meaningful_words:
-            best_score = 0
-
-            for cword in candidate_words:
-                score = fuzz.ratio(qword, cword)
-
-                if score > best_score:
-                    best_score = score
-
-            if best_score >= 72:
-                matched += 1
-
-        word_ratio = matched / len(meaningful_words)
-
-        overall_score = max(
-            fuzz.ratio(query_text, candidate),
-            fuzz.token_sort_ratio(query_text, candidate),
-            fuzz.token_set_ratio(query_text, candidate)
-        )
-
-        # 5+ title words
-        if len(meaningful_words) >= 5:
-            return word_ratio >= 0.60 and overall_score >= 68
-
-        # 3-4 title words
-        if len(meaningful_words) >= 3:
-            return word_ratio >= 0.66 and overall_score >= 70
-
-        # 2 title words
-        if len(meaningful_words) == 2:
-            return word_ratio >= 0.80 and overall_score >= 72
-
-        # Single word
-        return overall_score >= 78
-
     try:
-        movies = await get_poster(imdb_query, bulk=True)
+        movies = await get_poster(search, bulk=True)
     except Exception as e:
-        logger.exception(
-            "get_poster failed for query=%s: %s",
-            imdb_query,
-            e
-        )
-
+        logger.exception("get_poster failed for query=%s: %s", query, e)
         try:
-            k = await message.reply(
-                script.I_CUDNT.format(message.from_user.mention)
-            )
-
+            k = await message.reply(script.I_CUDNT.format(message.from_user.mention))
             await asyncio.sleep(60)
-
             try:
                 await k.delete()
             except Exception:
                 pass
-
         except Exception:
             pass
-
         try:
             await message.delete()
         except Exception:
             pass
-
         return
-
     if not movies:
         google = quote_plus(search)
-
         button = [[InlineKeyboardButton(
-            "🔍 ᴄʜᴇᴄᴋ sᴘᴇʟʟɪɴɢ ᴏɴ ɢᴏᴏɢʟᴇ 🔍",
-            url=f"https://www.google.com/search?q={google}"
-        )]]
-
-        k = await message.reply_text(
-            text=script.I_CUDNT.format(search),
-            reply_markup=InlineKeyboardMarkup(button)
-        )
-
+            "🔍 ᴄʜᴇᴄᴋ sᴘᴇʟʟɪɴɢ ᴏɴ ɢᴏᴏɢʟᴇ 🔍", url=f"https://www.google.com/search?q={google}")]]
+        k = await message.reply_text(text=script.I_CUDNT.format(search), reply_markup=InlineKeyboardMarkup(button))
         await asyncio.sleep(60)
-
-        try:
-            await k.delete()
-        except Exception:
-            pass
-
+        await k.delete()
         try:
             await message.delete()
         except Exception:
             pass
-
         return
-
     user = message.from_user.id if message.from_user else 0
+    buttons = [
+        [InlineKeyboardButton(text=movie.title, callback_data=f"spol#{movie.imdb_id}#{user}")
+         ] for movie in movies]
 
-    # ---------------------------------------------------------
-    # IMDb results ko STRICTLY validate karo
-    # ---------------------------------------------------------
-
-    valid_movies = []
-    seen_titles = set()
-
-    for movie in movies:
-        title = getattr(movie, "title", None)
-
-        if not title:
-            continue
-
-        title_key = title.lower().strip()
-
-        if title_key in seen_titles:
-            continue
-
-        # Random IMDb result reject
-        if not is_good_match(imdb_query, title):
-            continue
-
-        seen_titles.add(title_key)
-        valid_movies.append(movie)
-
-    # Koi genuinely matching result nahi mila
-    if not valid_movies:
-        google = quote_plus(search)
-
-        button = [[InlineKeyboardButton(
-            "🔍 ᴄʜᴇᴄᴋ sᴘᴇʟʟɪɴɢ ᴏɴ ɢᴏᴏɢʟᴇ 🔍",
-            url=f"https://www.google.com/search?q={google}"
-        )]]
-
-        k = await message.reply_text(
-            text=script.I_CUDNT.format(search),
-            reply_markup=InlineKeyboardMarkup(button)
-        )
-
-        await asyncio.sleep(60)
-
-        try:
-            await k.delete()
-        except Exception:
-            pass
-
-        try:
-            await message.delete()
-        except Exception:
-            pass
-
-        return
-
-    buttons = []
-
-    for movie in valid_movies:
-        if not getattr(movie, "imdb_id", None):
-            continue
-
-        buttons.append([
-            InlineKeyboardButton(
-                text=movie.title,
-                callback_data=f"spol#{movie.imdb_id}#{user}"
-            )
-        ])
-
-    if not buttons:
-        return
-
-    buttons.append([
-        InlineKeyboardButton(
-            text="🚫 ᴄʟᴏsᴇ 🚫",
-            callback_data="close_data"
-        )
-    ])
-
-    d = await message.reply_text(
-        text=script.CUDNT_FND.format(
-            message.from_user.mention
-        ),
-        reply_markup=InlineKeyboardMarkup(buttons),
-        reply_to_message_id=message.id
-    )
-
+    buttons.append([InlineKeyboardButton(
+        text="🚫 ᴄʟᴏsᴇ 🚫", callback_data='close_data')])
+    d = await message.reply_text(text=script.CUDNT_FND.format(message.from_user.mention), reply_markup=InlineKeyboardMarkup(buttons), reply_to_message_id=message.id)
     await asyncio.sleep(60)
-
-    try:
-        await d.delete()
-    except Exception:
-        pass
-
+    await d.delete()
     try:
         await message.delete()
     except Exception:
         pass
+
+
+    # Never leave Telegram's callback spinner running when a new/unknown
+    # callback reaches this catch-all router.
+    if not answered:
+        await answer_callback()
