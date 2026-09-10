@@ -2404,7 +2404,7 @@ async def ai_spell_check(chat_id, wrong_name):
     def clean_imdb_query(text):
         imdb_query = str(text)
 
-        # Season / Episode
+        # Season / Episode remove
         imdb_query = re.sub(
             r"\b(?:s\d{1,2}(?:\s*e\d{1,3})?|e\d{1,3}|season\s*\d{1,2}|episode\s*\d{1,3}|ep\s*\d{1,3})\b",
             "",
@@ -2412,7 +2412,7 @@ async def ai_spell_check(chat_id, wrong_name):
             flags=re.IGNORECASE
         )
 
-        # Language / Audio / Subtitles
+        # Language / Audio / Subtitles remove
         imdb_query = re.sub(
             r"\b(?:hindi|english|tamil|telugu|malayalam|kannada|bengali|marathi|punjabi|gujarati|"
             r"urdu|dubbed|dual\s+audio|multi\s+audio|multi-audio|"
@@ -2422,7 +2422,7 @@ async def ai_spell_check(chat_id, wrong_name):
             flags=re.IGNORECASE
         )
 
-        # Quality / Print / Codec / Technical
+        # Quality / Print / Codec / Technical tags remove
         imdb_query = re.sub(
             r"\b(?:480p|576p|720p|1080p|1440p|2160p|4k|8k|"
             r"web[-\s]?dl|web[-\s]?rip|webrip|bluray|blu[-\s]?ray|"
@@ -2435,73 +2435,43 @@ async def ai_spell_check(chat_id, wrong_name):
             flags=re.IGNORECASE
         )
 
-        return re.sub(r"\s+", " ", imdb_query).strip()
+        imdb_query = re.sub(r"\s+", " ", imdb_query).strip()
 
-    def normalize_title(text):
-        text = str(text).lower()
+        return imdb_query
 
-        text = unicodedata.normalize("NFKD", text)
-        text = text.encode("ascii", "ignore").decode("ascii")
+    def get_metadata(text):
+        metadata = []
 
-        text = re.sub(r"\b(?:19|20)\d{2}\b", "", text)
-        text = re.sub(r"[^a-z0-9\s]", " ", text)
-        text = re.sub(r"\s+", " ", text).strip()
-
-        return text
-
-    def is_good_match(query, candidate):
-        query = normalize_title(query)
-        candidate = normalize_title(candidate)
-
-        if not query or not candidate:
-            return False
-
-        query_words = query.split()
-        candidate_words = candidate.split()
-
-        # Very short / meaningless words ko matching me ignore karo
-        meaningful_words = [
-            word for word in query_words
-            if len(word) >= 3
-        ]
-
-        if not meaningful_words:
-            meaningful_words = query_words
-
-        matched = 0
-
-        for qword in meaningful_words:
-            best_score = 0
-
-            for cword in candidate_words:
-                score = fuzz.ratio(qword, cword)
-                if score > best_score:
-                    best_score = score
-
-            # Har important title word ka close match hona chahiye
-            if best_score >= 72:
-                matched += 1
-
-        word_ratio = matched / len(meaningful_words)
-
-        # Overall title similarity
-        overall_score = max(
-            fuzz.ratio(query, candidate),
-            fuzz.token_sort_ratio(query, candidate),
-            fuzz.token_set_ratio(query, candidate)
+        metadata_pattern = re.compile(
+            r"\b(?:"
+            r"s\d{1,2}(?:\s*e\d{1,3})?|"
+            r"e\d{1,3}|"
+            r"season\s*\d{1,2}|"
+            r"episode\s*\d{1,3}|"
+            r"ep\s*\d{1,3}|"
+            r"hindi|english|tamil|telugu|malayalam|kannada|bengali|marathi|punjabi|gujarati|urdu|"
+            r"dubbed|dual\s+audio|multi\s+audio|multi-audio|"
+            r"subtitles?|with\s+subtitles?|"
+            r"480p|576p|720p|1080p|1440p|2160p|4k|8k|"
+            r"web[-\s]?dl|web[-\s]?rip|webrip|bluray|blu[-\s]?ray|"
+            r"brrip|bdrip|hdrip|hdtv|dvdrip|dvdscr|hdcam|camrip|cam|"
+            r"hevc|x264|x265|h\.?264|h\.?265|10bit|8bit|"
+            r"remux|proper|repack|uncut|extended|"
+            r"hdr|dolby\s+vision|dv|atmos|"
+            r"(?:19|20)\d{2}"
+            r")\b",
+            flags=re.IGNORECASE
         )
 
-        # Strict validation
-        if len(meaningful_words) >= 5:
-            return word_ratio >= 0.60 and overall_score >= 68
+        for match in metadata_pattern.finditer(str(text)):
+            value = match.group(0).strip()
 
-        if len(meaningful_words) >= 3:
-            return word_ratio >= 0.66 and overall_score >= 70
+            if value and value.lower() not in [
+                item.lower() for item in metadata
+            ]:
+                metadata.append(value)
 
-        if len(meaningful_words) == 2:
-            return word_ratio >= 0.80 and overall_score >= 72
-
-        return overall_score >= 78
+        return metadata
 
     async def search_movie(wrong_name):
         imdb_query = clean_imdb_query(wrong_name)
@@ -2525,45 +2495,40 @@ async def ai_spell_check(chat_id, wrong_name):
 
         return movie_list
 
-    imdb_query = clean_imdb_query(wrong_name)
+    original_query = str(wrong_name).strip()
+
+    # Original query se metadata save karo
+    metadata = get_metadata(original_query)
+
+    # IMDb ke liye metadata remove karo
+    imdb_query = clean_imdb_query(original_query)
 
     if not imdb_query:
         return
 
-    movie_list = await search_movie(wrong_name)
+    movie_list = await search_movie(original_query)
 
     if not movie_list:
         return
 
-    # IMDb candidates ko similarity ke according check karo
-    checked = set()
-
     for _ in range(min(10, len(movie_list))):
-        remaining = [
-            movie for movie in movie_list
-            if movie not in checked
-        ]
-
-        if not remaining:
-            break
-
         closest_match = process.extractOne(
             imdb_query,
-            remaining,
+            movie_list,
             scorer=fuzz.token_set_ratio
         )
 
         if not closest_match:
-            break
+            return
 
         movie = closest_match[0]
-        checked.add(movie)
 
-        # Random / unrelated IMDb result reject
-        if not is_good_match(imdb_query, movie):
+        # Fuzzy score low hai to random result accept mat karo
+        if closest_match[1] <= 70:
+            movie_list.remove(movie)
             continue
 
-        # DB me actual corrected movie available hai ya nahi
+        # Corrected movie ko DB me verify karo
         search_movie = re.sub(r"[-:.,&]", " ", movie)
         search_movie = re.sub(
             r"[!@#$%^*()_+=\[\]{};\"<>?/\\|]",
@@ -2578,7 +2543,18 @@ async def ai_spell_check(chat_id, wrong_name):
         )
 
         if files:
-            return movie
+            # Corrected title + original metadata
+            corrected_query = search_movie
+
+            if metadata:
+                corrected_query = (
+                    f"{corrected_query} "
+                    f"{' '.join(metadata)}"
+                )
+
+            return corrected_query
+
+        movie_list.remove(movie)
 
     return
 
