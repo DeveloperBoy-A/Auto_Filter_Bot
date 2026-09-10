@@ -330,12 +330,6 @@ class Database:
     # ----------------------------------------------------------
     # Free users are allowed DAILY_DOWNLOAD_LIMIT file downloads
     # every rolling 24 hours. Premium users are always unlimited.
-    # Counters are stored on the same document used for premium
-    # (self.users / "uersz" collection) so that a single find_one
-    # query can resolve BOTH premium status and download status,
-    # keeping this efficient for bots with millions of users.
-    #   - daily_download_count : int   -> downloads used today
-    #   - last_download_reset  : dt    -> when the counter last reset
     # ==========================================================
 
     async def get_download_status(self, user_id):
@@ -390,17 +384,19 @@ class Database:
         status = await self.get_download_status(user_id)
         return status["is_premium"] or status["remaining"] > 0
 
-    async def increase_download(self, user_id):
-        """Increments the free user's daily_download_count by 1. Call this only AFTER a file has been sent."""
-        user_id = int(user_id)
-        await self.users.update_one(
-            {"id": user_id},
-            {
-                "$inc": {"daily_download_count": 1},
-                "$setOnInsert": {"last_download_reset": datetime.datetime.now()}
-            },
-            upsert=True
-        )
+    async def increase_download(self, user_id, count: int = 1):
+    """Increments the free user's daily_download_count by `count` (default 1). Call this only AFTER file(s) have been sent. Pass a higher count for bulk/batch downloads to avoid multiple DB round trips."""
+    user_id = int(user_id)
+    if count <= 0:
+        return
+    await self.users.update_one(
+        {"id": user_id},
+        {
+            "$inc": {"daily_download_count": count},
+            "$setOnInsert": {"last_download_reset": datetime.datetime.now()}
+        },
+        upsert=True
+    )
 
     async def remaining_downloads(self, user_id):
         """Returns remaining downloads left today for the user. Premium users get DAILY_DOWNLOAD_LIMIT (unlimited)."""
