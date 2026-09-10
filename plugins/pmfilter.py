@@ -2402,25 +2402,114 @@ async def old_auto_filter(client, msg, spoll=False):
 
 async def ai_spell_check(chat_id, wrong_name):
     async def search_movie(wrong_name):
-        search_results = await asyncio.to_thread(imdb.search_movie, wrong_name.lower())
+        imdb_query = wrong_name
+
+        # Season / Episode remove
+        imdb_query = re.sub(
+            r"\b(?:s\d{1,2}(?:\s*e\d{1,3})?|e\d{1,3}|season\s*\d{1,2}|episode\s*\d{1,3}|ep\s*\d{1,3})\b",
+            "",
+            imdb_query,
+            flags=re.IGNORECASE
+        )
+
+        # Language / Audio / Subtitles remove
+        imdb_query = re.sub(
+            r"\b(?:hindi|english|tamil|telugu|malayalam|kannada|bengali|marathi|punjabi|gujarati|"
+            r"urdu|dubbed|dual\s+audio|multi\s+audio|multi-audio|"
+            r"subtitles?|with\s+subtitles?)\b",
+            "",
+            imdb_query,
+            flags=re.IGNORECASE
+        )
+
+        # Quality / Print / Codec / Technical tags remove
+        imdb_query = re.sub(
+            r"\b(?:480p|576p|720p|1080p|1440p|2160p|4k|8k|"
+            r"web[-\s]?dl|web[-\s]?rip|webrip|bluray|blu[-\s]?ray|"
+            r"brrip|bdrip|hdrip|hdtv|dvdrip|dvdscr|hdcam|camrip|cam|"
+            r"hevc|x264|x265|h\.?264|h\.?265|10bit|8bit|"
+            r"remux|proper|repack|uncut|extended|"
+            r"hdr|dolby\s+vision|dv|atmos)\b",
+            "",
+            imdb_query,
+            flags=re.IGNORECASE
+        )
+
+        imdb_query = re.sub(r"\s+", " ", imdb_query).strip()
+
+        search_results = await asyncio.to_thread(
+            imdb.search_movie,
+            imdb_query.lower()
+        )
+
         if not search_results or not hasattr(search_results, "titles"):
             return []
+
         movie_list = [movie.title for movie in search_results.titles]
         return movie_list
+
     movie_list = await search_movie(wrong_name)
+
     if not movie_list:
         return
-    for _ in range(4):
-        closest_match = process.extractOne(wrong_name, movie_list)
-        if not closest_match or closest_match[1] <= 65:
+
+    # Same cleaning for fuzzy matching
+    imdb_query = wrong_name
+
+    imdb_query = re.sub(
+        r"\b(?:s\d{1,2}(?:\s*e\d{1,3})?|e\d{1,3}|season\s*\d{1,2}|episode\s*\d{1,3}|ep\s*\d{1,3})\b",
+        "",
+        imdb_query,
+        flags=re.IGNORECASE
+    )
+
+    imdb_query = re.sub(
+        r"\b(?:hindi|english|tamil|telugu|malayalam|kannada|bengali|marathi|punjabi|gujarati|"
+        r"urdu|dubbed|dual\s+audio|multi\s+audio|multi-audio|"
+        r"subtitles?|with\s+subtitles?)\b",
+        "",
+        imdb_query,
+        flags=re.IGNORECASE
+    )
+
+    imdb_query = re.sub(
+        r"\b(?:480p|576p|720p|1080p|1440p|2160p|4k|8k|"
+        r"web[-\s]?dl|web[-\s]?rip|webrip|bluray|blu[-\s]?ray|"
+        r"brrip|bdrip|hdrip|hdtv|dvdrip|dvdscr|hdcam|camrip|cam|"
+        r"hevc|x264|x265|h\.?264|h\.?265|10bit|8bit|"
+        r"remux|proper|repack|uncut|extended|"
+        r"hdr|dolby\s+vision|dv|atmos)\b",
+        "",
+        imdb_query,
+        flags=re.IGNORECASE
+    )
+
+    imdb_query = re.sub(r"\s+", " ", imdb_query).strip()
+
+    for _ in range(5):
+        closest_match = process.extractOne(imdb_query, movie_list)
+
+        if not closest_match or closest_match[1] <= 70:
             return
+
         movie = closest_match[0]
-        movie = re.sub(r"[-:.,&]", " ", movie)
-        movie = re.sub(r"[!@#$%^*()_+=\[\]{};\"<>?/\\|]", " ", movie)
-        movie = re.sub(r"\s+", " ", movie).strip()
-        files, _, _ = await get_search_results(chat_id=chat_id, query=movie)
+
+        search_movie = re.sub(r"[-:.,&]", " ", movie)
+        search_movie = re.sub(
+            r"[!@#$%^*()_+=\[\]{};\"<>?/\\|]",
+            " ",
+            search_movie
+        )
+        search_movie = re.sub(r"\s+", " ", search_movie).strip()
+
+        files, _, _ = await get_search_results(
+            chat_id=chat_id,
+            query=search_movie
+        )
+
         if files:
             return movie
+
         movie_list.remove(movie)
 
 
