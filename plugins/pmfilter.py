@@ -2452,6 +2452,7 @@ async def old_advantage_spell_chok(client, message):
         pass
 
 
+
 # NOTE: ye humesha ensure karo ki upar wale imports (imdb, get_search_results,
 # get_poster, script, InlineKeyboardButton, InlineKeyboardMarkup, logger) apki
 # main file mein already available hain, jaise pehle the.
@@ -2554,40 +2555,33 @@ def is_good_match(query: str, candidate: str) -> bool:
     return overall_score >= max(MIN_OVERALL_SCORE, 76)
 
 
-# ---------------------------------------------------------------------------
-# Chat/slang filler words (please, send me, latest, bro/hi, malayalam/tamil,
-# kittuo/tharuo type Manglish words waghera) -> ye title ka part nahi hote,
-# sirf request-phrasing hote hain, isliye title/year nikalne se pehle hata do.
-# ---------------------------------------------------------------------------
-_FILLER_WORDS_PATTERN = re.compile(
-    r"\b(pl(i|e)*?(s|z+|ease|se|ese|(e+)s(e)?)|((send|snd|giv(e)?|gib)(\sme)?)|movie(s)?|new|"
-    r"latest|br((o|u)h?)*|^h(e|a)?(l)*(o)*|mal(ayalam)?|t(h)?amil|file|that|find|und(o)*|"
-    r"kit(t(i|y)?)?o(w)?|thar(u)?(o)*w?|kittum(o)*|aya(k)*(um(o)*)?|full\smovie|any(one)|"
-    r"with\ssubtitle(s)?)",
-    flags=re.IGNORECASE,
-)
-
-
 def build_title_year_query(text: str):
     """
-    Query se sirf TITLE + YEAR nikalta hai. Language, quality, codec, season/
-    episode tags aur chat-filler words (please/send/latest/bro etc.) sab hata
-    diye jaate hain kyunki inka title se koi lena dena nahi hota.
+    Query se sirf TITLE + YEAR nikalta hai. Sirf language, quality, codec,
+    season/episode tags jaise WELL-DEFINED metadata hi hataye jaate hain
+    (clean_imdb_query se) — ye safe hai kyunki specific known words/patterns
+    hi target karta hai.
+
+    NOTE: Chat-filler slang jaisa "please/send/bro/thar/kittuo" wala regex
+    jaanbujh kar yahan USE NAHI kiya gaya - wo bahut loose tha aur asli movie
+    titles ke letters kaat deta tha (e.g. "Thar", "Brahmastra", "Hulk" jaisi
+    titles poori ya partially delete ho jaati thi). get_poster/IMDb search
+    already extra filler words ko ignore kar leta hai, isliye unhe chhedne ki
+    zaroorat nahi - sirf metadata (jo genuinely search ko bhatka sakta hai)
+    hi hatana kaafi hai.
 
     Returns: (title_only, search_query)
-      title_only   -> sirf title, fuzzy-matching ke liye
+      title_only   -> sirf title (metadata hataya hua), fuzzy-matching ke liye
       search_query -> "title year" (agar year mila) ya sirf title, get_poster
                        ko bhejne ke liye
     """
     year_match = re.search(r"\b(19|20)\d{2}\b", text)
     year = year_match.group(0) if year_match else ""
 
-    cleaned = _FILLER_WORDS_PATTERN.sub("", text)
-    cleaned = clean_imdb_query(cleaned)   # language/quality/season/year etc. strip
-    cleaned = cleaned.strip()
+    cleaned = clean_imdb_query(text).strip()   # sirf language/quality/season/year etc.
 
     if not cleaned:
-        cleaned = clean_imdb_query(text).strip() or text.strip()
+        cleaned = text.strip()
 
     search_query = f"{cleaned} {year}".strip() if year else cleaned
     return cleaned, search_query
