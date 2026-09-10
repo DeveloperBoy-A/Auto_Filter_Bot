@@ -2452,279 +2452,79 @@ async def old_advantage_spell_chok(client, message):
         pass
 
 
-
-# NOTE: ye humesha ensure karo ki upar wale imports (imdb, get_search_results,
-# get_poster, script, InlineKeyboardButton, InlineKeyboardMarkup, logger) apki
-# main file mein already available hain, jaise pehle the.
-
-# ---------------------------------------------------------------------------
-# Shared metadata pattern (season/ep, language, quality, codec, year)
-# Pehle ye pura pattern 2 jagah alag-alag likha hua tha -> ab ek hi jagah hai
-# ---------------------------------------------------------------------------
-_METADATA_PATTERN = re.compile(
-    r"\b(?:"
-    r"s\d{1,2}(?:\s*e\d{1,3})?|e\d{1,3}|season\s*\d{1,2}|episode\s*\d{1,3}|ep\s*\d{1,3}|"
-    r"hindi|english|tamil|telugu|malayalam|kannada|bengali|marathi|punjabi|gujarati|urdu|"
-    r"dubbed|dual\s+audio|multi\s+audio|multi-audio|subtitles?|with\s+subtitles?|"
-    r"480p|576p|720p|1080p|1440p|2160p|4k|8k|"
-    r"web[-\s]?dl|web[-\s]?rip|webrip|bluray|blu[-\s]?ray|brrip|bdrip|hdrip|hdtv|"
-    r"dvdrip|dvdscr|hdcam|camrip|cam|"
-    r"hevc|x264|x265|h\.?264|h\.?265|10bit|8bit|"
-    r"remux|proper|repack|uncut|extended|hdr|dolby\s+vision|dv|atmos|"
-    r"(?:19|20)\d{2}"
-    r")\b",
-    flags=re.IGNORECASE,
-)
-
-# In-memory lock/cache -> same (chat_id, query) ka baar baar search rokne ke liye.
-# Isse ye guarantee hoti hai ki agar handler kisi wajah se dobara/parallel fire ho
-# jaye to IMDb + DB search dobara nahi chalega.
-_INFLIGHT_LOOKUPS: dict[str, float] = {}
-_LOOKUP_TTL = 25  # seconds - itni der tak same query dobara skip hogi
-
-
-def _lookup_key(chat_id, text: str) -> str:
-    return f"{chat_id}:{re.sub(r'\\s+', ' ', text.strip().lower())}"
-
-
-def _acquire_lookup(key: str) -> bool:
-    """True agar naya lookup allowed hai, False agar already chal raha/recent hai."""
-    now = time.monotonic()
-    # purani/expired entries hata do
-    expired = [k for k, ts in _INFLIGHT_LOOKUPS.items() if now - ts > _LOOKUP_TTL]
-    for k in expired:
-        _INFLIGHT_LOOKUPS.pop(k, None)
-
-    if key in _INFLIGHT_LOOKUPS:
-        return False
-
-    _INFLIGHT_LOOKUPS[key] = now
-    return True
-
-
-def _release_lookup(key: str):
-    _INFLIGHT_LOOKUPS.pop(key, None)
-
-
-def clean_imdb_query(text) -> str:
-    imdb_query = _METADATA_PATTERN.sub("", str(text))
-    return re.sub(r"\s+", " ", imdb_query).strip()
-
-
-def normalize_title(text) -> str:
-    text = str(text).lower()
-    text = unicodedata.normalize("NFKD", text)
-    text = text.encode("ascii", "ignore").decode("ascii")
-    text = re.sub(r"\b(?:19|20)\d{2}\b", "", text)   # year ignore
-    text = re.sub(r"[^a-z0-9\s]", " ", text)          # punctuation remove
-    return re.sub(r"\s+", " ", text).strip()
-
-
-MIN_OVERALL_SCORE = 70  # user ne bola: kam se kam 70-75% match zaroor ho
-
-
-def is_good_match(query: str, candidate: str) -> bool:
-    query = normalize_title(query)
-    candidate = normalize_title(candidate)
-    if not query or not candidate:
-        return False
-
-    query_words = query.split()
-    candidate_words = candidate.split()
-    meaningful_words = [w for w in query_words if len(w) >= 3] or query_words
-
-    matched = sum(
-        1
-        for qword in meaningful_words
-        if max((fuzz.ratio(qword, cword) for cword in candidate_words), default=0) >= 72
-    )
-    word_ratio = matched / len(meaningful_words)
-
-    overall_score = max(
-        fuzz.ratio(query, candidate),
-        fuzz.token_sort_ratio(query, candidate),
-        fuzz.token_set_ratio(query, candidate),
-    )
-
-    if len(meaningful_words) >= 5:
-        return word_ratio >= 0.65 and overall_score >= max(MIN_OVERALL_SCORE, 70)
-    if len(meaningful_words) >= 3:
-        return word_ratio >= 0.70 and overall_score >= max(MIN_OVERALL_SCORE, 72)
-    if len(meaningful_words) == 2:
-        return word_ratio >= 0.82 and overall_score >= max(MIN_OVERALL_SCORE, 74)
-    return overall_score >= max(MIN_OVERALL_SCORE, 76)
-
-
-def build_title_year_query(text: str):
-    """
-    Query se sirf TITLE + YEAR nikalta hai. Sirf language, quality, codec,
-    season/episode tags jaise WELL-DEFINED metadata hi hataye jaate hain
-    (clean_imdb_query se) — ye safe hai kyunki specific known words/patterns
-    hi target karta hai.
-
-    NOTE: Chat-filler slang jaisa "please/send/bro/thar/kittuo" wala regex
-    jaanbujh kar yahan USE NAHI kiya gaya - wo bahut loose tha aur asli movie
-    titles ke letters kaat deta tha (e.g. "Thar", "Brahmastra", "Hulk" jaisi
-    titles poori ya partially delete ho jaati thi). get_poster/IMDb search
-    already extra filler words ko ignore kar leta hai, isliye unhe chhedne ki
-    zaroorat nahi - sirf metadata (jo genuinely search ko bhatka sakta hai)
-    hi hatana kaafi hai.
-
-    Returns: (title_only, search_query)
-      title_only   -> sirf title (metadata hataya hua), fuzzy-matching ke liye
-      search_query -> "title year" (agar year mila) ya sirf title, get_poster
-                       ko bhejne ke liye
-    """
-    year_match = re.search(r"\b(19|20)\d{2}\b", text)
-    year = year_match.group(0) if year_match else ""
-
-    cleaned = clean_imdb_query(text).strip()   # sirf language/quality/season/year etc.
-
-    if not cleaned:
-        cleaned = text.strip()
-
-    search_query = f"{cleaned} {year}".strip() if year else cleaned
-    return cleaned, search_query
-
-
-async def _search_imdb_titles(cleaned_query: str) -> list[str]:
-    if not cleaned_query:
-        return []
-    search_results = await asyncio.to_thread(imdb.search_movie, cleaned_query.lower())
-    if not search_results or not hasattr(search_results, "titles"):
-        return []
-    return [m.title for m in search_results.titles if getattr(m, "title", None)]
-
-
 async def ai_spell_check(chat_id, wrong_name):
-    original_query = str(wrong_name).strip()
-    imdb_query = clean_imdb_query(original_query)
-    if not imdb_query:
+    async def search_movie(wrong_name):
+        search_results = await asyncio.to_thread(imdb.search_movie, wrong_name.lower())
+        if not search_results or not hasattr(search_results, "titles"):
+            return []
+        movie_list = [movie.title for movie in search_results.titles]
+        return movie_list
+    movie_list = await search_movie(wrong_name)
+    if not movie_list:
         return
-
-    # ---- duplicate-search guard: same query thodi der ke liye skip ----
-    key = _lookup_key(chat_id, original_query)
-    if not _acquire_lookup(key):
-        return
-    try:
-        movie_list = await _search_imdb_titles(imdb_query)
-        if not movie_list:
+    for _ in range(5):
+        closest_match = process.extractOne(wrong_name, movie_list)
+        if not closest_match or closest_match[1] <= 70:
             return
+        movie = closest_match[0]
+        files, _, _ = await get_search_results(chat_id=chat_id, query=movie)
+        if files:
+            return movie
+        movie_list.remove(movie)
 
-        checked = set()
-        for _ in range(min(10, len(movie_list))):
-            remaining = [m for m in movie_list if m not in checked]
-            if not remaining:
-                break
-
-            closest = process.extractOne(imdb_query, remaining, scorer=fuzz.token_set_ratio)
-            if not closest:
-                break
-
-            candidate = closest[0]
-            checked.add(candidate)
-
-            if not is_good_match(imdb_query, candidate):
-                continue
-
-            # DB me actual corrected title check (sirf good-match ke liye hi chalta hai)
-            cleaned_title = re.sub(r"[-:.,&]", " ", candidate)
-            cleaned_title = re.sub(r"[!@#$%^*()_+=\[\]{};\"<>?/\\|]", " ", cleaned_title)
-            cleaned_title = re.sub(r"\s+", " ", cleaned_title).strip()
-
-            files, _, _ = await get_search_results(chat_id=chat_id, query=cleaned_title)
-            if not files:
-                continue
-
-            # original metadata (season/quality/lang/year) wapas jodo
-            metadata = _METADATA_PATTERN.findall(original_query)
-            corrected_query = cleaned_title
-            if metadata:
-                new_metadata = [
-                    m for m in metadata
-                    if not re.search(rf"(?<!\w){re.escape(m)}(?!\w)", corrected_query, re.IGNORECASE)
-                ]
-                if new_metadata:
-                    corrected_query = f"{corrected_query} {' '.join(new_metadata)}"
-
-            return corrected_query
-        return
-    finally:
-        _release_lookup(key)
-
-
-# ---------------------------------------------------------------------------
-# advantage_spell_chok -> same as before, bas:
-#  1) end ka orphan/broken "answered / answer_callback" block hataya (ye kisi
-#     alag callback handler ka code tha, is function mein crash karta agar chalta)
-#  2) duplicate-trigger guard laga diya taaki same message ke liye get_poster
-#     baar baar na chale
-# old_advantage_spell_chok bilkul untouched hai, wo waisa hi rehne do.
-# ---------------------------------------------------------------------------
 async def advantage_spell_chok(client, message):
     search = message.text
-    key = _lookup_key(message.chat.id, search)
-    if not _acquire_lookup(key):
-        return
-
+    query = re.sub(
+        r"\b(pl(i|e)*?(s|z+|ease|se|ese|(e+)s(e)?)|((send|snd|giv(e)?|gib)(\sme)?)|movie(s)?|new|latest|br((o|u)h?)*|^h(e|a)?(l)*(o)*|mal(ayalam)?|t(h)?amil|file|that|find|und(o)*|kit(t(i|y)?)?o(w)?|thar(u)?(o)*w?|kittum(o)*|aya(k)*(um(o)*)?|full\smovie|any(one)|with\ssubtitle(s)?)",
+        "", message.text, flags=re.IGNORECASE)
+    query = query.strip() + " movie"
     try:
-        # Sirf title + year use hoga get_poster ke liye - baaki (language,
-        # quality, filler words) sab hata diya
-        title_only, search_query = build_title_year_query(message.text)
-
+        movies = await get_poster(search, bulk=True)
+    except Exception as e:
+        logger.exception("get_poster failed for query=%s: %s", query, e)
         try:
-            movies = await get_poster(search_query, bulk=True)
-        except Exception as e:
-            logger.exception("get_poster failed for query=%s: %s", search_query, e)
-            try:
-                k = await message.reply(script.I_CUDNT.format(message.from_user.mention))
-                await asyncio.sleep(60)
-                try:
-                    await k.delete()
-                except Exception:
-                    pass
-            except Exception:
-                pass
-            try:
-                await message.delete()
-            except Exception:
-                pass
-            return
-
-        # Sirf title se genuinely related suggestions rakho, faltu results hata do
-        if movies:
-            movies = [m for m in movies if is_good_match(title_only, m.title)]
-
-        if not movies:
-            google = quote_plus(search)
-            button = [[InlineKeyboardButton(
-                "🔍 ᴄʜᴇᴄᴋ sᴘᴇʟʟɪɴɢ ᴏɴ ɢᴏᴏɢʟᴇ 🔍", url=f"https://www.google.com/search?q={google}")]]
-            k = await message.reply_text(text=script.I_CUDNT.format(search), reply_markup=InlineKeyboardMarkup(button))
+            k = await message.reply(script.I_CUDNT.format(message.from_user.mention))
             await asyncio.sleep(60)
-            await k.delete()
             try:
-                await message.delete()
+                await k.delete()
             except Exception:
                 pass
-            return
-
-        user = message.from_user.id if message.from_user else 0
-        buttons = [
-            [InlineKeyboardButton(text=movie.title, callback_data=f"spol#{movie.imdb_id}#{user}")]
-            for movie in movies
-        ]
-        buttons.append([InlineKeyboardButton(text="🚫 ᴄʟᴏsᴇ 🚫", callback_data='close_data')])
-
-        d = await message.reply_text(
-            text=script.CUDNT_FND.format(message.from_user.mention),
-            reply_markup=InlineKeyboardMarkup(buttons),
-            reply_to_message_id=message.id,
-        )
-        await asyncio.sleep(60)
-        await d.delete()
+        except Exception:
+            pass
         try:
             await message.delete()
         except Exception:
             pass
-    finally:
-        _release_lookup(key)
+        return
+    if not movies:
+        google = quote_plus(search)
+        button = [[InlineKeyboardButton(
+            "🔍 ᴄʜᴇᴄᴋ sᴘᴇʟʟɪɴɢ ᴏɴ ɢᴏᴏɢʟᴇ 🔍", url=f"https://www.google.com/search?q={google}")]]
+        k = await message.reply_text(text=script.I_CUDNT.format(search), reply_markup=InlineKeyboardMarkup(button))
+        await asyncio.sleep(60)
+        await k.delete()
+        try:
+            await message.delete()
+        except Exception:
+            pass
+        return
+    user = message.from_user.id if message.from_user else 0
+    buttons = [
+        [InlineKeyboardButton(text=movie.title, callback_data=f"spol#{movie.imdb_id}#{user}")
+         ] for movie in movies]
+
+    buttons.append([InlineKeyboardButton(
+        text="🚫 ᴄʟᴏsᴇ 🚫", callback_data='close_data')])
+    d = await message.reply_text(text=script.CUDNT_FND.format(message.from_user.mention), reply_markup=InlineKeyboardMarkup(buttons), reply_to_message_id=message.id)
+    await asyncio.sleep(60)
+    await d.delete()
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+
+    # Never leave Telegram's callback spinner running when a new/unknown
+    # callback reaches this catch-all router.
+    if not answered:
+        await answer_callback()
