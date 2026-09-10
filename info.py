@@ -151,6 +151,11 @@ AUTH_USERS = (auth_users + ADMINS) if auth_users else []
 PREMIUM_USER = [int(user) if id_pattern.search(user) else user for user in environ.get('PREMIUM_USER', '').split()]
 
 # ============================
+# Daily Download Limit Configuration
+# ============================
+DAILY_DOWNLOAD_LIMIT = int(environ.get('DAILY_DOWNLOAD_LIMIT', '10'))  # Max files a FREE user can download every 24 hours. Premium users are unlimited.
+
+# ============================
 # Miscellaneous Configuration
 # ============================
 MAX_B_TN = environ.get("MAX_B_TN", "10") # Maximum number of buttons in a row (default: 5)
