@@ -115,11 +115,6 @@ async def is_check_admin(bot, chat_id, user_id):
 # ==========================================================
 # Daily Download Limit System
 # ----------------------------------------------------------
-# Wraps database.users_chats_db.db's can_download / increase_download /
-# remaining_downloads / reset_download_if_needed so plugin code only has
-# to make ONE call before sending a file. Free users get a daily limit
-# (stored in MongoDB and auto reset by db.get_download_status). 
-# Premium users are always unlimited.
 # ==========================================================
 
 async def enforce_daily_limit(client, message):
@@ -300,6 +295,17 @@ def listx_to_str(k):
 
 
 
+# Sirf movie, TV series, web series (IMDb pe ye bhi "tv series"/"tv mini
+# series" hi hote hain) aur TV serial (tv movie / tv special) allow hain.
+# Podcast, video game, short, music video, review jaisi cheezein IMDb kabhi
+
+ALLOWED_KIND_KEYS = {"movie", "tvseries", "tvminiseries", "tvmovie"}
+
+
+def _normalize_kind(kind):
+    return re.sub(r'[\s\-]+', '', (kind or '').strip().lower())
+
+
 async def get_poster(query, bulk=False, id=False, file=None):
     if not id:
         query = (query.strip()).lower()
@@ -328,11 +334,14 @@ async def get_poster(query, bulk=False, id=False, file=None):
         else:
             filtered = movie_list
 
-        kind_filter = ['movie', 'tv series', 'tvSeries', 'tvMiniSeries', 'tvMovie']
-        filtered_kind = [m for m in filtered if m.kind and m.kind in kind_filter]
-
-        if not filtered_kind:
-            filtered_kind = filtered
+        # 🔑 Sirf title (movie/series) rakho — kuch bhi aur (podcast, game,
+        # review, short, music video, etc.) yahin filter ho jaata hai. Agar
+        # kisi bhi result ka kind allow-list me nahi hai to use "unfiltered"
+        # list me wapas mix nahi karte — warna wahi purana bug repeat hoga.
+        filtered_kind = [
+            m for m in filtered
+            if _normalize_kind(getattr(m, "kind", None)) in ALLOWED_KIND_KEYS
+        ]
 
         if bulk:
             return filtered_kind[:MAX_LIST_ELM]
@@ -1384,4 +1393,3 @@ async def get_cap(settings, remaining_seconds, files, query, total_results, sear
     except Exception as e:
         logging.error(f"Error in get_cap: {e}")
         return None
-
