@@ -2452,26 +2452,114 @@ async def old_advantage_spell_chok(client, message):
 
 
 
+# ── Splits a messy query into a clean IMDB-searchable title (with year
+# glued to it) + the language/quality/season/episode words the user also
+# typed, so those don't get sent to IMDB but don't get lost either — they
+# get stitched back onto the corrected title before the DB search. ──
+
+YEAR_PATTERN = re.compile(r"\b(19\d{2}|20\d{2})\b")
+
+META_TOKEN_PATTERN = re.compile(
+    r"\b("
+    r"malayalam|mal|tamil|telugu|kannada|bengali|punjabi|marathi|gujarati|"
+    r"english|hindi|dual\s*audio|multi\s*audio|dubbed|"
+    r"480p|576p|720p|1080p|1440p|2160p|4k|8k|hd|fhd|fullhd|uhd|hdr|"
+    r"webrip|web[- ]?dl|webdl|bluray|brrip|hdrip|dvdrip|camrip|hdtc|"
+    r"season\s*\d{1,2}|s\d{1,2}|episode\s*\d{1,3}|ep\s*\d{1,3}|e\d{1,3}"
+    r")\b",
+    re.IGNORECASE
+)
+
+FILLER_WORD_PATTERN = re.compile(
+    r"\b(pl(i|e)*?(s|z+|ease|se|ese|(e+)s(e)?)|(send|snd|giv(e)?|gib)(\sme)?|"
+    r"movie(s)?|new|latest|bro|bruh|broh|helo|that|find|link|download|"
+    r"full\s*movie|any(one)?|with\s*subtitle(s)?|subtitle(s)?|subs?|complete)\b",
+    re.IGNORECASE
+)
+
+
+def split_query_meta(raw_text):
+    """
+    raw_text ko 2 parts me todta hai:
+      title_for_imdb -> saaf title (year ke saath, agar year diya ho),
+                        yahi IMDB ko bheja jayega
+      meta_suffix    -> language/quality/season/episode jo user ne
+                        title ke saath likha tha, ye alag rakha jata hai
+                        taaki IMDB confuse na ho, lekin baad me DB search
+                        ke liye corrected title ke saath wapas joda jaye
+      year           -> agar mila to string, warna None
+    """
+    text = (raw_text or "").lower()
+
+    year_match = YEAR_PATTERN.search(text)
+    year = year_match.group(1) if year_match else None
+
+    meta_words = []
+    for m in META_TOKEN_PATTERN.finditer(text):
+        word = re.sub(r"\s+", " ", m.group(0)).strip()
+        if word and word not in meta_words:
+            meta_words.append(word)
+
+    cleaned = META_TOKEN_PATTERN.sub(" ", text)
+    if year:
+        cleaned = cleaned.replace(year, " ")
+    cleaned = FILLER_WORD_PATTERN.sub(" ", cleaned)
+    cleaned = re.sub(r"[!@#$%^*()_+=\[\]{};\"<>?/\\|.,:_-]", " ", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+
+    title_for_imdb = f"{cleaned} {year}".strip() if year else cleaned
+    meta_suffix = " ".join(meta_words).strip()
+
+    return title_for_imdb, meta_suffix, year
+
 
 async def ai_spell_check(chat_id, wrong_name):
-    async def search_movie(wrong_name):
-        search_results = await asyncio.to_thread(imdb.search_movie, wrong_name.lower())
+    # 🔑 IMDB ko sirf saaf title (+ year) bhejo — language/quality/season
+    # jaisi cheezein IMDB search ko bhatka deti hain aur unrelated title
+    # de deta hain. Baaki cheezein meta_suffix me safe rehti hain.
+    title_for_imdb, meta_suffix, year = split_query_meta(wrong_name)
+    if not title_for_imdb:
+        title_for_imdb = wrong_name
+
+    async def search_movie(name):
+        search_results = await asyncio.to_thread(imdb.search_movie, name.lower())
         if not search_results or not hasattr(search_results, "titles"):
             return []
-        movie_list = [movie.title for movie in search_results.titles]
-        return movie_list
-    movie_list = await search_movie(wrong_name)
+        return [movie.title for movie in search_results.titles]
+
+    movie_list = await search_movie(title_for_imdb)
     if not movie_list:
-        return
-    for _ in range(4):
-        closest_match = process.extractOne(wrong_name, movie_list)
-        if not closest_match or closest_match[1] <= 70:
-            return
-        movie = closest_match[0]
-        files, _, _ = await get_search_results(chat_id=chat_id, query=movie)
+        return None
+
+    # Hamesha ek "related" title milna chahiye: pehle best fuzzy match try
+    # karo, warna IMDB ne khud jo top relevant result diya hai wahi use
+    # karo (IMDB apna khud ka relevance ranking already deta hai).
+    candidates = []
+    best = process.extractOne(title_for_imdb, movie_list)
+    if best and best[1] > 70:
+        candidates.append(best[0])
+    for m in movie_list:
+        if m not in candidates:
+            candidates.append(m)
+
+    for movie in candidates[:4]:
+        # 🔑 Year ko hamesha title ke saath hi rakho, meta ke saath nahi.
+        title_with_year = f"{movie} {year}".strip() if year else movie
+        final_query = re.sub(r"\s+", " ", f"{title_with_year} {meta_suffix}").strip()
+
+        files, _, _ = await get_search_results(chat_id=chat_id, query=final_query)
         if files:
-            return movie
-        movie_list.remove(movie)
+            return final_query
+
+        # Us exact language/quality/season combo me file na ho to bhi
+        # corrected title (+ year) akela try karo, poori tarah give up
+        # karne se pehle.
+        if meta_suffix:
+            files, _, _ = await get_search_results(chat_id=chat_id, query=title_with_year)
+            if files:
+                return title_with_year
+
+    return None
 
 async def advantage_spell_chok(client, message):
     search = message.text
@@ -2508,8 +2596,13 @@ async def advantage_spell_chok(client, message):
     query = re.sub(r"[\s._|•~]+", " ", query).strip()
     query = query + " movie"
 
+    # 🔑 IMDB ko poori (noisy) query nahi, sirf saaf title (+year) bhejo,
+    # warna language/quality/season ke wajah se unrelated suggestions aate hain.
+    title_for_imdb, _meta_suffix, _year = split_query_meta(search)
+    poster_query = title_for_imdb or search
+
     try:
-        movies = await get_poster(search, bulk=True)
+        movies = await get_poster(poster_query, bulk=True)
     except Exception as e:
         logger.exception("get_poster failed for query=%s: %s", query, e)
         try:
@@ -2553,6 +2646,22 @@ async def advantage_spell_chok(client, message):
         return
 
     user = message.from_user.id if message.from_user else 0
+
+    # 🔑 IMDB "bulk" search apni hi relevance order me results deta hai,
+    # jisme kabhi bilkul unrelated titles bhi mix ho jaate hain. Yahan
+    # hum apne saaf-kiye title se fuzzy-match score nikaal kar sabse
+    # related titles ko upar laate hain aur bahut kam-match wale (random)
+    # titles ko hata dete hain, taaki suggestions consistently sahi aaye.
+    scored_movies = sorted(
+        movies,
+        key=lambda m: fuzz.token_sort_ratio(poster_query, (m.title or "").lower()),
+        reverse=True
+    )
+    relevant_movies = [
+        m for m in scored_movies
+        if fuzz.token_sort_ratio(poster_query, (m.title or "").lower()) >= 40
+    ]
+    movies = (relevant_movies or scored_movies)[:8]
 
     buttons = [
         [
