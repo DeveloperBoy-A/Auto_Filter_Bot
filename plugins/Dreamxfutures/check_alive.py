@@ -5,8 +5,12 @@ import platform
 import os
 import shutil
 import logging
-from pyrogram.types import BotCommand
-from info import ADMINS, Bot_cmds
+from pyrogram.types import (
+    BotCommand,
+    BotCommandScopeDefault,
+    BotCommandScopeChat,
+)
+from info import ADMINS, USER_COMMANDS, OWNER_COMMANDS
 
 logging.basicConfig(level=logging.INFO)
 
@@ -114,9 +118,52 @@ async def send_system_info(client, message):
 
 @Client.on_message(filters.command("commands") & filters.user(ADMINS))
 async def set_commands(client, message):
-    commands = [BotCommand(cmd, desc) for cmd, desc in Bot_cmds.items()]
-    await client.set_bot_commands(commands)
-    bot_set = await message.reply("ʙᴏᴛ ᴄᴏᴍᴍᴀɴᴅs ᴜᴘᴅᴀᴛᴇᴅ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ✅ ")
-    await asyncio.sleep(119)  
+
+    # ==========================================
+    # Commands for ALL users
+    # ==========================================
+    user_commands = [
+        BotCommand(cmd, desc)
+        for cmd, desc in USER_COMMANDS.items()
+    ]
+
+    await client.set_bot_commands(
+        user_commands,
+        scope=BotCommandScopeDefault()
+    )
+
+    # ==========================================
+    # Extra commands for BOT OWNER only
+    # ==========================================
+    owner_commands = [
+        BotCommand(cmd, desc)
+        for cmd, desc in {
+            **USER_COMMANDS,
+            **OWNER_COMMANDS,
+        }.items()
+    ]
+
+    # Set complete command list for every bot owner
+    for owner_id in ADMINS:
+        try:
+            await client.set_bot_commands(
+                owner_commands,
+                scope=BotCommandScopeChat(
+                    chat_id=owner_id
+                )
+            )
+        except Exception as e:
+            logging.warning(
+                f"Could not set owner commands for {owner_id}: {e}"
+            )
+
+    # ==========================================
+    # Success message
+    # ==========================================
+    bot_set = await message.reply(
+        "ʙᴏᴛ ᴄᴏᴍᴍᴀɴᴅs ᴜᴘᴅᴀᴛᴇᴅ ꜱᴜᴄᴄᴇꜱꜱғᴜʟʟʏ ✅"
+    )
+
+    await asyncio.sleep(119)
     await bot_set.delete()
     await message.delete()
