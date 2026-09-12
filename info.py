@@ -261,31 +261,102 @@ else:
 # ============================
 REACTIONS = ["🤝", "😇", "🤗", "😍", "👍", "🎅", "😐", "🥰", "🤩", "😱", "🤣", "😘", "👏", "😛", "😈", "🎉", "⚡️", "🫡", "🤓", "😎", "🏆", "🔥", "🤭", "🌚", "🆒", "👻", "😁"]
 
-# ============================
-# Commands Bot
-# ============================
-Bot_cmds = {
+# ============================================================
+# BOT COMMANDS
+# ============================================================
+
+# Commands visible to ALL users
+USER_COMMANDS = {
+
     "start": "Sᴛᴀʀᴛ Mᴇ Bᴀʙʏ",
     "stats": "Gᴇᴛ Bᴏᴛ Sᴛᴀᴛs",
-    "alive": " Cʜᴇᴄᴋ Bᴏᴛ Aʟɪᴠᴇ ᴏʀ Nᴏᴛ ",
-    "settings": "ᴄʜᴀɴɢᴇ sᴇᴛᴛɪɴɢs",
-    "id": "ɢᴇᴛ ɪᴅ ᴛᴇʟᴇɢʀᴀᴍ ",
-    "info": "Gᴇᴛ Usᴇʀ ɪɴғᴏ ",
-    "del_msg": "ʀᴇᴍᴏᴠᴇ ғɪʟᴇ ɴᴀᴍᴇ ᴄᴏʟʟᴇᴄᴛɪᴏɴ ɴᴏтɪғɪᴄᴀᴛɪᴏɴ...",
-    "movie_update": "ᴏɴ ᴏғғ ᴀᴄᴄᴏʀᴅɪɴɢ ʏᴏᴜʀ ɴᴇᴇᴅᴇᴅ...",
-    "pm_search": "ᴘᴍ sᴇᴀʀᴄʜ ᴏɴ ᴏғғ ᴀᴄᴄᴏʀᴅɪɴɢ ʏᴏᴜʀ ɴᴇᴇᴅᴇᴅ...",
-    "trendlist": "Gᴇᴛ Tᴏᴘ Tʀᴀɴᴅɪɴɢ Sᴇᴀʀᴄʜ Lɪsᴛ",
-    "broadcast": "ʙʀᴏᴀᴅᴄᴀꜱᴛ ᴀ ᴍᴇꜱꜱᴀɢᴇ ᴛᴏ ᴀʟʟ ᴜꜱᴇʀꜱ.",
-    "grp_broadcast": "ʙʀᴏᴀᴅᴄᴀsᴛ ᴀ ᴍᴇssᴀɢᴇ ᴛᴏ ᴀʟʟ ᴄᴏɴɴᴇᴄᴛᴇᴅ ɢʀᴏᴜᴘs",
-    "send": "ꜱᴇɴᴅ ᴍᴇꜱꜱᴀɢᴇ ᴛᴏ ᴀ ᴘᴀʀᴛɪᴄᴜʟᴀʀ ᴜꜱᴇʀ.",
-    "add_premium": "ᴀᴅᴅ ᴀɴʏ ᴜꜱᴇʀ ᴛᴏ ᴘʀᴇᴍɪᴜᴍ.",
-    "remove_premium": "ʀᴇᴍᴏᴠᴇ ᴀɴʏ ᴜꜱᴇʀ ꜰʀᴏᴍ ᴘʀᴇᴍɪᴜᴍ.",
-    "premium_users": "ɢᴇᴛ ʟɪꜱᴛ ᴏꜰ ᴘʀᴇᴍɪᴜᴍ ᴜꜱᴇʀꜱ.",
-    "restart": "ʀᴇꜱᴛᴀʀᴛ ᴛʜᴇ ʙᴏᴛ.",
-    "group_cmd": "ɢʀᴏᴜᴘ ᴄᴏᴍᴍᴀɴᴅ ʟɪsᴛ",
-    "admin_cmd": "ᴀᴅᴍɪɴ ᴄᴏᴍᴍᴀɴᴅs ʟɪsᴛ.",
-    "reset_group": "Group Setting Default",
-    "trial_reset": "User Trial Reset"
+    "alive": "Cʜᴇᴄᴋ Bᴏᴛ Aʟɪᴠᴇ ᴏʀ Nᴏᴛ",
+    "settings": "Cʜᴀɴɢᴇ Sᴇᴛᴛɪɴɢs",
+    "id": "Gᴇᴛ Iᴅ Tᴇʟᴇɢʀᴀᴍ",
+    "info": "Gᴇᴛ Usᴇʀ Iɴғᴏ",
+    "del_msg": "Rᴇᴍᴏᴠᴇ Fɪʟᴇ Nᴀᴍᴇ Cᴏʟʟᴇᴄᴛɪᴏɴ Nᴏᴛɪғɪᴄᴀᴛɪᴏɴ",
+    "movie_update": "Oɴ Oғғ Aᴄᴄᴏʀᴅɪɴɢ Yᴏᴜʀ Nᴇᴇᴅᴇᴅ",
+    "pm_search": "Pᴍ Sᴇᴀʀᴄʜ Oɴ Oғғ Aᴄᴄᴏʀᴅɪɴɢ Yᴏᴜʀ Nᴇᴇᴅᴇᴅ",
+    "trendlist": "Gᴇᴛ Tᴏᴘ Tʀᴇɴᴅɪɴɢ Sᴇᴀʀᴄʜ Lɪsᴛ",
+    "broadcast": "Bʀᴏᴀᴅᴄᴀsᴛ A Mᴇssᴀɢᴇ Tᴏ Aʟʟ Usᴇʀs",
+    "grp_broadcast": "Bʀᴏᴀᴅᴄᴀsᴛ A Mᴇssᴀɢᴇ Tᴏ Aʟʟ Cᴏɴɴᴇᴄᴛᴇᴅ Gʀᴏᴜᴘs",
+    "send": "Sᴇɴᴅ Mᴇssᴀɢᴇ Tᴏ A Pᴀʀᴛɪᴄᴜʟᴀʀ Usᴇʀ",
+    "add_premium": "Aᴅᴅ Aɴʏ Usᴇʀ Tᴏ Pʀᴇᴍɪᴜᴍ",
+    "remove_premium": "Rᴇᴍᴏᴠᴇ Aɴʏ Usᴇʀ Fʀᴏᴍ Pʀᴇᴍɪᴜᴍ",
+    "premium_users": "Gᴇᴛ Lɪsᴛ Oғ Pʀᴇᴍɪᴜᴍ Usᴇʀs",
+    "restart": "Rᴇsᴛᴀʀᴛ Tʜᴇ Bᴏᴛ",
+    "group_cmd": "Gʀᴏᴜᴘ Cᴏᴍᴍᴀɴᴅ Lɪsᴛ",
+    "admin_cmd": "Aᴅᴍɪɴ Cᴏᴍᴍᴀɴᴅs Lɪsᴛ",
+    "reset_group": "Gʀᴏᴜᴘ Sᴇᴛᴛɪɴɢ Dᴇғᴀᴜʟᴛ",
+    "trial_reset": "Usᴇʀ Tʀɪᴀʟ Rᴇsᴇᴛ",
+
+    "ping": "Cʜᴇᴄᴋ Bᴏᴛ Rᴇsᴘᴏɴsᴇ Tɪᴍᴇ",
+    "top_search": "Tᴏᴘ Sᴇᴀʀᴄʜᴇs Oғ Tʜᴇ Dᴀʏ",
+    "imdb": "Sᴇᴀʀᴄʜ Mᴏᴠɪᴇ / Sᴇʀɪᴇs Oɴ Iᴍᴅʙ",
+    "myplan": "Cʜᴇᴄᴋ Yᴏᴜʀ Pʀᴇᴍɪᴜᴍ Pʟᴀɴ",
+    "plan": "Vɪᴇᴡ Aᴠᴀɪʟᴀʙʟᴇ Pʀᴇᴍɪᴜᴍ Pʟᴀɴs",
+    "redeem": "Rᴇᴅᴇᴇᴍ A Pʀᴇᴍɪᴜᴍ Cᴏᴅᴇ",
+    "movies": "Lɪsᴛ Sᴀᴠᴇᴅ Mᴏᴠɪᴇs",
+    "series": "Lɪsᴛ Sᴀᴠᴇᴅ Sᴇʀɪᴇs",
+    "system": "Cʜᴇᴄᴋ Bᴏᴛ Sʏsᴛᴇᴍ Iɴғᴏ",
+    "stickerid": "Gᴇᴛ A Sᴛɪᴄᴋᴇʀ's Iᴅ",
+    "font": "Cᴏɴᴠᴇʀᴛ Tᴇxᴛ Tᴏ Sᴛʏʟɪsʜ Fᴏɴᴛ",
+
+    "reload": "Lɪɴᴋ / Rᴇʟᴏᴀᴅ Tʜɪs Gʀᴏᴜᴘ Tᴏ Pᴍ",
+    "details": "Cʜᴇᴄᴋ Yᴏᴜʀ Gʀᴏᴜᴘ Sᴇᴛᴛɪɴɢs",
+    "set_caption": "Sᴇᴛ A Cᴜsᴛᴏᴍ Fɪʟᴇ Cᴀᴘᴛɪᴏɴ",
+    "set_template": "Sᴇᴛ A Cᴜsᴛᴏᴍ Iᴍᴅʙ Tᴇᴍᴘʟᴀᴛᴇ",
+    "set_fsub": "Sᴇᴛ Cᴜsᴛᴏᴍ Fᴏʀᴄᴇ Sᴜʙ Cʜᴀɴɴᴇʟ",
+    "set_shortner": "Sᴇᴛ Yᴏᴜʀ 1sᴛ Sʜᴏʀᴛɴᴇʀ",
+    "set_shortner_2": "Sᴇᴛ Yᴏᴜʀ 2ɴᴅ Sʜᴏʀᴛɴᴇʀ",
+    "set_shortner_3": "Sᴇᴛ Yᴏᴜʀ 3ʀᴅ Sʜᴏʀᴛɴᴇʀ",
+    "set_tutorial": "Sᴇᴛ Yᴏᴜʀ 1sᴛ Tᴜᴛᴏʀɪᴀʟ Vɪᴅᴇᴏ",
+    "set_tutorial_2": "Sᴇᴛ Yᴏᴜʀ 2ɴᴅ Tᴜᴛᴏʀɪᴀʟ Vɪᴅᴇᴏ",
+    "set_tutorial_3": "Sᴇᴛ Yᴏᴜʀ 3ʀᴅ Tᴜᴛᴏʀɪᴀʟ Vɪᴅᴇᴏ",
+    "set_time": "Sᴇᴛ 1sᴛ Vᴇʀɪғɪᴄᴀᴛɪᴏɴ Gᴀᴘ",
+    "set_time_2": "Sᴇᴛ 2ɴᴅ Vᴇʀɪғɪᴄᴀᴛɪᴏɴ Gᴀᴘ",
+    "set_log_channel": "Sᴇᴛ Vᴇʀɪғɪᴄᴀᴛɪᴏɴ Lᴏɢ Cʜᴀɴɴᴇʟ",
+}
+
+
+# Commands visible ONLY to BOT OWNER
+OWNER_COMMANDS = {
+
+    "verify": "Tᴜʀɴ Oɴ / Oғғ Vᴇʀɪғɪᴄᴀᴛɪᴏɴ",
+    "logs": "Gᴇᴛ Rᴇᴄᴇɴᴛ Bᴏᴛ Eʀʀᴏʀs",
+    "delete": "Dᴇʟᴇᴛᴇ A Fɪʟᴇ Fʀᴏᴍ Dʙ",
+    "deleteall": "Dᴇʟᴇᴛᴇ Aʟʟ Iɴᴅᴇxᴇᴅ Fɪʟᴇs",
+    "users": "Lɪsᴛ Aʟʟ Bᴏᴛ Usᴇʀs",
+    "chats": "Lɪsᴛ Aʟʟ Bᴏᴛ Cʜᴀᴛs",
+    "leave": "Lᴇᴀᴠᴇ A Cʜᴀᴛ",
+    "invite": "Gᴇᴛ Iɴᴠɪᴛᴇ Lɪɴᴋ Fᴏʀ A Cʜᴀᴛ",
+    "disable": "Dɪsᴀʙʟᴇ A Cʜᴀᴛ",
+    "enable": "Rᴇ-Eɴᴀʙʟᴇ A Cʜᴀᴛ",
+    "ban": "Bᴀɴ A Usᴇʀ",
+    "unban": "Uɴʙᴀɴ A Usᴇʀ",
+    "del_broadcast": "Dᴇʟᴇᴛᴇ Aʟʟ Usᴇʀ Bʀᴏᴀᴅᴄᴀsᴛs",
+    "del_grp_broadcast": "Dᴇʟᴇᴛᴇ Aʟʟ Gʀᴏᴜᴘ Bʀᴏᴀᴅᴄᴀsᴛs",
+    "deletefiles": "Dᴇʟᴇᴛᴇ Cᴀᴍʀɪᴘ / Pʀᴇᴅᴠᴅ Fɪʟᴇs",
+    "setskip": "Sᴇᴛ Fɪʟᴇ Iɴᴅᴇxɪɴɢ Sᴋɪᴘ Nᴜᴍʙᴇʀ",
+    "rename_db": "Rᴇɴᴀᴍᴇ / Cʟᴇᴀɴ Fɪʟᴇ Nᴀᴍᴇs Iɴ Dʙ",
+    "cleandb": "Cʟᴇᴀɴ Uɴɴᴇᴄᴇssᴀʀʏ Dʙ Fɪᴇʟᴅs",
+    "old_cleandb": "Lᴇɢᴀᴄʏ Dʙ Cʟᴇᴀɴᴜᴘ",
+    "fix_media_speed": "Cʟᴀssɪғʏ Oʟᴅ Fɪʟᴇs Fᴏʀ Fᴀsᴛᴇʀ Fɪʟᴛᴇʀɪɴɢ",
+    "resetallgroup": "Rᴇsᴇᴛ Sᴇᴛᴛɪɴɢs Fᴏʀ Aʟʟ Gʀᴏᴜᴘs",
+    "post": "Pᴏsᴛ A Mᴏᴠɪᴇ Uᴘᴅᴀᴛᴇ Tᴏ Cʜᴀɴɴᴇʟ",
+    "delreq": "Dᴇʟᴇᴛᴇ Pᴇɴᴅɪɴɢ Jᴏɪɴ Rᴇǫᴜᴇsᴛs",
+    "add_redeem": "Gᴇɴᴇʀᴀᴛᴇ Pʀᴇᴍɪᴜᴍ Rᴇᴅᴇᴇᴍ Cᴏᴅᴇs",
+    "get_premium": "Gᴇᴛ Pʀᴇᴍɪᴜᴍ Usᴇʀ Iɴғᴏ",
+    "quality_report": "Dʙ Qᴜᴀʟɪᴛʏ / Rᴇsᴏʟᴜᴛɪᴏɴ Rᴇᴘᴏʀᴛ",
+    "quality_help": "Qᴜᴀʟɪᴛʏ Mᴀɴᴀɢᴇʀ Cᴏᴍᴍᴀɴᴅs Hᴇʟᴘ",
+    "commands": "Uᴘᴅᴀᴛᴇ Bᴏᴛ's Cᴏᴍᴍᴀɴᴅ Mᴇɴᴜ",
+}
+
+
+# Compatibility: agar kisi aur file me Bot_cmds import ho raha hai
+Bot_cmds = {
+    **USER_COMMANDS,
+    **OWNER_COMMANDS,
 }
 
 
