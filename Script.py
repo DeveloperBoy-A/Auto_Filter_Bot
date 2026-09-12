@@ -523,31 +523,55 @@ This Is An Open-Source Project. You Can Use It Freely, But Selling The Source Co
 • /stats - <code>ɢᴇᴛ ᴛʜᴇ ᴛᴏᴛᴀʟ ᴜꜱᴇʀꜱ ᴀɴᴅ ᴄʜᴀᴛꜱ.</code>
 • /del_msg - <code>ʀᴇᴍᴏᴠᴇ ғɪʟᴇ ɴᴀᴍᴇ ᴄᴏʟʟᴇᴄᴛɪᴏɴ ɴᴏтɪғɪᴄᴀᴛɪᴏɴ...</code>
 • /movie_update - <code>ᴏɴ / ᴏғғ ᴀᴄᴄᴏʀᴅɪɴɢ ʏᴏᴜʀ ɴᴇᴇᴅᴇᴅ...</code> 
-• /autobutton - ᴀᴜᴛᴏ ʙᴜᴛᴛᴏɴ ꜰᴏʀ ᴍᴏᴠɪᴇ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ [ON/OFF]
 • /pm_search - <code>ᴘᴍ sᴇᴀʀᴄʜ ᴏɴ / ᴏғғ ᴀᴄᴄᴏʀᴅɪɴɢ ʏᴏᴜʀ ɴᴇᴇᴅᴇᴅ...</code>
 • /verify - <code>ᴛᴜʀɴ ᴏɴ / ᴏꜰꜰ ᴠᴇʀɪꜰɪᴄᴀᴛɪᴏɴ (ᴏɴʟʏ ᴡᴏʀᴋ ɪɴ ɢʀᴏᴜᴘ)</code>
 • /logs - <code>ɢᴇᴛ ᴛʜᴇ ʀᴇᴄᴇɴᴛ ᴇʀʀᴏʀꜱ.</code>
 • /delete - <code>ᴅᴇʟᴇᴛᴇ ᴀ ꜱᴘᴇᴄɪꜰɪᴄ ꜰɪʟᴇ ꜰʀᴏᴍ ᴅʙ.</code>
+• /deleteall - <code>ᴅᴇʟᴇᴛᴇ ᴀʟʟ ɪɴᴅᴇxᴇᴅ ꜰɪʟᴇꜱ ꜰʀᴏᴍ ᴅʙ.</code>
 • /users - <code>ɢᴇᴛ ʟɪꜱᴛ ᴏꜰ ᴍʏ ᴜꜱᴇʀꜱ ᴀɴᴅ ɪᴅꜱ.</code>
 • /chats - <code>ɢᴇᴛ ʟɪꜱᴛ ᴏꜰ ᴍʏ ᴄʜᴀᴛꜱ ᴀɴᴅ ɪᴅꜱ.</code>
 • /leave  - <code>ʟᴇᴀᴠᴇ ꜰʀᴏᴍ ᴀ ᴄʜᴀᴛ.</code>
+• /invite - <code>ɢᴇᴛ ᴀɴ ɪɴᴠɪᴛᴇ ʟɪɴᴋ ꜰᴏʀ ᴀ ᴄʜᴀᴛ.</code>
 • /disable  -  <code>ᴅɪꜱᴀʙʟᴇ ᴀ ᴄʜᴀᴛ.</code>
+• /enable  -  <code>ʀᴇ-ᴇɴᴀʙʟᴇ ᴀ ᴘʀᴇᴠɪᴏᴜꜱʟʏ ᴅɪꜱᴀʙʟᴇᴅ ᴄʜᴀᴛ.</code>
 • /ban  - <code>ʙᴀɴ ᴀ ᴜꜱᴇʀ.</code>
 • /unban  - <code>ᴜɴʙᴀɴ ᴀ ᴜꜱᴇʀ.</code>
 • /broadcast - <code>ʙʀᴏᴀᴅᴄᴀꜱᴛ ᴀ ᴍᴇꜱꜱᴀɢᴇ ᴛᴏ ᴀʟʟ ᴜꜱᴇʀꜱ.</code>
+• /del_broadcast - <code>ᴅᴇʟᴇᴛᴇ ᴀʟʟ ᴘʀᴇᴠɪᴏᴜꜱ ᴜꜱᴇʀ ʙʀᴏᴀᴅᴄᴀꜱᴛ ᴍᴇꜱꜱᴀɢᴇꜱ.</code>
 • /grp_broadcast - <code>ʙʀᴏᴀᴅᴄᴀsᴛ ᴀ ᴍᴇssᴀɢᴇ ᴛᴏ ᴀʟʟ ᴄᴏɴɴᴇᴄᴛᴇᴅ ɢʀᴏᴜᴘs.</code>
+• /del_grp_broadcast - <code>ᴅᴇʟᴇᴛᴇ ᴀʟʟ ᴘʀᴇᴠɪᴏᴜꜱ ɢʀᴏᴜᴘ ʙʀᴏᴀᴅᴄᴀꜱᴛ ᴍᴇꜱꜱᴀɢᴇꜱ.</code>
 • /deletefiles - <code>ᴅᴇʟᴇᴛᴇ CᴀᴍRɪᴘ ᴀɴᴅ PʀᴇDVD ғɪʟᴇs ғʀᴏᴍ ᴛʜᴇ ʙᴏᴛ's ᴅᴀᴛᴀʙᴀsᴇ.</code>
 • /send - <code>ꜱᴇɴᴅ ᴍᴇꜱꜱᴀɢᴇ ᴛᴏ ᴀ ᴘᴀʀᴛɪᴄᴜʟᴀʀ ᴜꜱᴇʀ.</code>
+• /setskip - <code>ꜱᴇᴛ ꜰɪʟᴇ ɪɴᴅᴇxɪɴɢ ꜱᴋɪᴘ ɴᴜᴍʙᴇʀ.</code>
+• /rename_db - <code>ʀᴇɴᴀᴍᴇ / ᴄʟᴇᴀɴ ꜰɪʟᴇ ɴᴀᴍᴇꜱ ɪɴ ᴅᴀᴛᴀʙᴀꜱᴇ.</code>
+• /cleandb - <code>ᴄʟᴇᴀɴ ᴜɴɴᴇᴄᴇꜱꜱᴀʀʏ ꜰɪᴇʟᴅꜱ ꜰʀᴏᴍ ᴅᴀᴛᴀʙᴀꜱᴇ.</code>
+• /fix_media_speed - <code>ᴄʟᴀꜱꜱɪꜰʏ ᴏʟᴅ ꜰɪʟᴇꜱ ꜰᴏʀ ꜰᴀꜱᴛᴇʀ ᴍᴏᴠɪᴇ/ꜱᴇʀɪᴇꜱ ꜰɪʟᴛᴇʀɪɴɢ.</code>
+• /resetallgroup - <code>ʀᴇꜱᴇᴛ ꜱᴇᴛᴛɪɴɢꜱ ꜰᴏʀ ᴀʟʟ ᴄᴏɴɴᴇᴄᴛᴇᴅ ɢʀᴏᴜᴘꜱ.</code>
+• /post - <code>ᴘᴏꜱᴛ ᴀ ᴍᴏᴠɪᴇ ᴜᴘᴅᴀᴛᴇ ᴛᴏ ᴛʜᴇ ᴄʜᴀɴɴᴇʟ.</code>
+• /delreq - <code>ᴅᴇʟᴇᴛᴇ ᴀʟʟ ᴘᴇɴᴅɪɴɢ ᴊᴏɪɴ ʀᴇǫᴜᴇꜱᴛꜱ.</code>
+• /trial_reset - <code>ʀᴇꜱᴇᴛ ꜰʀᴇᴇ ᴛʀɪᴀʟ ꜰᴏʀ ᴀ ᴜꜱᴇʀ (ᴏʀ ᴀʟʟ).</code>
 • /add_premium - <code>ᴀᴅᴅ ᴀɴʏ ᴜꜱᴇʀ ᴛᴏ ᴘʀᴇᴍɪᴜᴍ.</code>
 • /remove_premium - <code>ʀᴇᴍᴏᴠᴇ ᴀɴʏ ᴜꜱᴇʀ ꜰʀᴏᴍ ᴘʀᴇᴍɪᴜᴍ.</code>
 • /premium_users - <code>ɢᴇᴛ ʟɪꜱᴛ ᴏꜰ ᴘʀᴇᴍɪᴜᴍ ᴜꜱᴇʀꜱ.</code>
 • /get_premium - <code>ɢᴇᴛ ɪɴꜰᴏ ᴏꜰ ᴀɴʏ ᴘʀᴇᴍɪᴜᴍ ᴜꜱᴇʀ.</code>
+• /add_redeem - <code>ɢᴇɴᴇʀᴀᴛᴇ ᴘʀᴇᴍɪᴜᴍ ʀᴇᴅᴇᴇᴍ ᴄᴏᴅᴇꜱ.</code>
+• /quality_report - <code>ᴅᴀᴛᴀʙᴀꜱᴇ ǫᴜᴀʟɪᴛʏ / ʀᴇꜱᴏʟᴜᴛɪᴏɴ ʀᴇᴘᴏʀᴛ.</code>
+• /quality_help - <code>ꜱʜᴏᴡ ᴀʟʟ ǫᴜᴀʟɪᴛʏ ᴍᴀɴᴀɢᴇʀ ᴄᴏᴍᴍᴀɴᴅꜱ & ᴇxᴀᴍᴘʟᴇꜱ.</code>
+• /cleanup_dry_single - <code>ᴘʀᴇᴠɪᴇᴡ (ɴᴏ ᴅᴇʟᴇᴛᴇ) ᴅᴜᴘʟɪᴄᴀᴛᴇ ᴄʟᴇᴀɴᴜᴘ ꜰᴏʀ 1 ᴍᴏᴠɪᴇ.</code>
+• /cleanup_confirm_single - <code>ᴅᴇʟᴇᴛᴇ ʟᴏᴡᴇʀ-ǫᴜᴀʟɪᴛʏ ᴅᴜᴘʟɪᴄᴀᴛᴇꜱ ꜰᴏʀ 1 ᴍᴏᴠɪᴇ.</code>
+• /cleanup_dry_year - <code>ᴘʀᴇᴠɪᴇᴡ ᴅᴜᴘʟɪᴄᴀᴛᴇ ᴄʟᴇᴀɴᴜᴘ ꜰᴏʀ ᴀ ꜱᴘᴇᴄɪꜰɪᴄ ʏᴇᴀʀ.</code>
+• /cleanup_confirm_year - <code>ᴅᴇʟᴇᴛᴇ ᴅᴜᴘʟɪᴄᴀᴛᴇꜱ ꜰᴏʀ ᴀ ꜱᴘᴇᴄɪꜰɪᴄ ʏᴇᴀʀ.</code>
+• /cleanup_dry_batch - <code>ᴘʀᴇᴠɪᴇᴡ ᴅᴜᴘʟɪᴄᴀᴛᴇ ᴄʟᴇᴀɴᴜᴘ ꜰᴏʀ ᴡʜᴏʟᴇ ᴅᴀᴛᴀʙᴀꜱᴇ.</code>
+• /cleanup_confirm_batch - <code>ᴅᴇʟᴇᴛᴇ ꜱᴀꜰᴇ ᴅᴜᴘʟɪᴄᴀᴛᴇꜱ ꜰʀᴏᴍ ᴡʜᴏʟᴇ ᴅᴀᴛᴀʙᴀꜱᴇ.</code>
+• /admin_cmd - <code>ꜱʜᴏᴡ ᴛʜɪꜱ ᴀᴅᴍɪɴ ᴄᴏᴍᴍᴀɴᴅꜱ ʟɪꜱᴛ.</code>
 • /restart - <code>ʀᴇꜱᴛᴀʀᴛ ᴛʜᴇ ʙᴏᴛ.</code>"""
 
     GROUP_CMD = """ʜᴇʏ 👋,
 📚 ʜᴇʀᴇ ᴀʀᴇ ᴍʏ ᴄᴏᴍᴍᴀɴᴅꜱ ʟɪꜱᴛ ꜰᴏʀ ᴄᴜꜱᴛᴏᴍɪᴢᴇᴅ ɢʀᴏᴜᴘꜱ ⇊
 
 • /settings - ᴄʜᴀɴɢᴇ ᴛʜᴇ ɢʀᴏᴜᴘ ꜱᴇᴛᴛɪɴɢꜱ ᴀꜱ ʏᴏᴜʀ ᴡɪꜱʜ.
+• /reload - ʟɪɴᴋ / ʀᴇʟᴏᴀᴅ ᴛʜɪꜱ ɢʀᴏᴜᴘ ᴛᴏ ᴍᴀɴᴀɢᴇ ꜰʀᴏᴍ ᴘᴍ.
+• /set_caption - ꜱᴇᴛ ᴀ ᴄᴜꜱᴛᴏᴍ ꜰɪʟᴇ ᴄᴀᴘᴛɪᴏɴ ᴛᴇᴍᴘʟᴀᴛᴇ.
 • /set_shortner - ꜱᴇᴛ ʏᴏᴜʀ 1ꜱᴛ ꜱʜᴏʀᴛɴᴇʀ.
 • /set_shortner_2 - ꜱᴇᴛ ʏᴏᴜʀ 2ɴᴅ ꜱʜᴏʀᴛɴᴇʀ.
 • /set_shortner_3 - ꜱᴇᴛ ʏᴏᴜʀ 3ʀᴅ ꜱʜᴏʀᴛɴᴇʀ.
@@ -560,4 +584,4 @@ This Is An Open-Source Project. You Can Use It Freely, But Selling The Source Co
 • /set_fsub - ꜱᴇᴛ ᴄᴜꜱᴛᴏᴍ ꜰᴏʀᴄᴇ ꜱᴜʙ ᴄʜᴀɴɴᴇʟ.
 • /remove_fsub - ʀᴇᴍᴏᴠᴇ ᴄᴜꜱᴛᴏᴍ ꜰᴏʀᴄᴇ ꜱᴜʙ ᴄʜᴀɴɴᴇʟ.
 • /reset_group - ʀᴇꜱᴇᴛ ʏᴏᴜʀ ꜱᴇᴛᴛɪɴɢꜱ.
-• /details - ᴄʜᴇᴄᴋ ʏᴏᴜʀ ꜱᴇᴛᴛɪɴɢꜱ."""    
+• /details - ᴄʜᴇᴄᴋ ʏᴏᴜʀ ꜱᴇᴛᴛɪɴɢꜱ."""
