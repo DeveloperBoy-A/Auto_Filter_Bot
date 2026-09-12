@@ -9,6 +9,7 @@ from pyrogram.types import (
     BotCommand,
     BotCommandScopeDefault,
     BotCommandScopeChat,
+    BotCommandScopeChatMember,
 )
 from info import ADMINS, USER_COMMANDS, OWNER_COMMANDS
 
@@ -133,7 +134,7 @@ async def set_commands(client, message):
     )
 
     # ==========================================
-    # Extra commands for BOT OWNER only
+    # ALL commands for BOT OWNER
     # ==========================================
     owner_commands = [
         BotCommand(cmd, desc)
@@ -143,7 +144,7 @@ async def set_commands(client, message):
         }.items()
     ]
 
-    # Set complete command list for every bot owner
+    # Owner PM
     for owner_id in ADMINS:
         try:
             await client.set_bot_commands(
@@ -154,14 +155,35 @@ async def set_commands(client, message):
             )
         except Exception as e:
             logging.warning(
-                f"Could not set owner commands for {owner_id}: {e}"
+                f"Could not set owner PM commands "
+                f"for {owner_id}: {e}"
             )
+
+    # ==========================================
+    # Owner in current group
+    # ==========================================
+    if message.chat.type in ["group", "supergroup"]:
+
+        for owner_id in ADMINS:
+            try:
+                await client.set_bot_commands(
+                    owner_commands,
+                    scope=BotCommandScopeChatMember(
+                        chat_id=message.chat.id,
+                        user_id=owner_id
+                    )
+                )
+            except Exception as e:
+                logging.warning(
+                    f"Could not set owner group commands "
+                    f"for {owner_id} in {message.chat.id}: {e}"
+                )
 
     # ==========================================
     # Success message
     # ==========================================
     bot_set = await message.reply(
-        "ʙᴏᴛ ᴄᴏᴍᴍᴀɴᴅs ᴜᴘᴅᴀᴛᴇᴅ ꜱᴜᴄᴄᴇꜱꜱғᴜʟʟʏ ✅"
+        "ʙᴏᴛ ᴄᴏᴍᴍᴀɴᴅs ᴜᴘᴅᴀᴛᴇᴅ ꜱᴜᴄᴄᴇssғᴜʟʟʏ ✅"
     )
 
     await asyncio.sleep(119)
