@@ -9,7 +9,12 @@ from database.users_chats_db import db
 from info import ADMINS, PREMIUM_LOGS
 from utils import get_seconds, temp
 
-REDEEM_CODE = {}
+# Bug fix: redeem codes used to live only in this in-memory dict, so every
+# bot restart (crash / redeploy / update) wiped all pending codes and
+# /redeem would always say "Invalid Redeem Code or Expired" even for
+# codes generated minutes earlier. They are now stored persistently in
+# MongoDB via db.add_redeem_code() / db.use_redeem_code(), so codes
+# survive restarts and work correctly even across multiple bot workers.
 
 def generate_code(length=10):
     letters_and_digits = string.ascii_letters + string.digits
@@ -29,7 +34,7 @@ async def add_redeem_code(client, message):
         codes = []
         for _ in range(num_codes):
             code = generate_code()
-            REDEEM_CODE[code] = time
+            await db.add_redeem_code(code, time)
             codes.append(code)
 
         codes_text = '\n'.join(f"➔ <code>/redeem {code}</code>" for code in codes)
@@ -61,10 +66,17 @@ async def redeem_code(client, message):
     if len(message.command) == 2:
         redeem_code = message.command[1]
 
-        if redeem_code in REDEEM_CODE:
+        # Atomically fetch-and-delete the code from MongoDB so it can never
+        # be redeemed twice, even if two people press it at the same time.
+        code_data = await db.use_redeem_code(redeem_code)
+
+        if code_data:
             try:
-                time = REDEEM_CODE.pop(redeem_code)
-                user = await client.get_users(user_id)
+                time = code_data["duration"]
+                try:
+                    user = await client.get_users(user_id)
+                except Exception:
+                    user = None
                 try:
                     seconds = await get_seconds(time)
                 except Exception:
@@ -76,7 +88,7 @@ async def redeem_code(client, message):
                     now_aware = datetime.now(pytz.utc)
 
                     if current_expiry:
-                        current_expiry = current_expiry.replace(tzinfo=pytz.utc)
+                        current_expiry = current_expiry.replace(tzinfo=pytz.utc) if current_expiry.tzinfo is None else current_expiry
                     if current_expiry and current_expiry > now_aware:
                         expiry_str_in_ist = current_expiry.astimezone(pytz.timezone("Asia/Kolkata")).strftime("%d-%m-%Y\n⏱️ Expiry Time: %I:%M:%S %p")
                         await message.reply_text(
@@ -92,9 +104,10 @@ async def redeem_code(client, message):
                     await db.update_user(user_data)
 
                     expiry_str_in_ist = expiry_time.astimezone(pytz.timezone("Asia/Kolkata")).strftime("%d-%m-%Y\n⏱️ Expiry Time: %I:%M:%S %p")
+                    user_mention = user.mention if user else f"<code>{user_id}</code>"
                     await message.reply_text(
                         f"🎉 <b>Premium activated successfully! 🚀</b>\n\n"
-                        f"👤 <b>User:</b> {user.mention}\n"
+                        f"👤 <b>User:</b> {user_mention}\n"
                         f"⚡ <b>User ID:</b> <code>{user_id}</code>\n"
                         f"⏳ <b>Premium Access Duration:</b> <code>{time}</code>\n"
                         f"⌛️ <b>Expiry Date:</b> {expiry_str_in_ist}",
@@ -103,7 +116,7 @@ async def redeem_code(client, message):
                     log_message = f"""
                         #Redeem_Premium 🔓
 
-                        👤 <b>User:</b> {user.mention}
+                        👤 <b>User:</b> {user_mention}
                         ⚡ <b>User ID:</b> <code>{user_id}</code>
                         ⏳ <b>Premium Access Duration:</b> <code>{time}</code>
                         ⌛️ <b>Expiry Date:</b> {expiry_str_in_ist}
