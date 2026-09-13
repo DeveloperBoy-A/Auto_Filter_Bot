@@ -1,6 +1,7 @@
 import re
 import os
 import datetime
+import pytz
 import logging
 from info import  *
 from imdb import Cinemagoer 
@@ -11,15 +12,14 @@ from urllib.parse import quote_plus
 import asyncio
 from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
 from pyrogram.errors import InputUserDeactivated, UserNotParticipant, FloodWait, UserIsBlocked, PeerIdInvalid, ChatAdminRequired, MessageNotModified
-from pyrogram import enums
 from pyrogram import Client
+from pyrogram import enums
 from typing import Union,Optional, Dict, Any
 import aiohttp
 from Script import script
 from typing import List
 from database.users_chats_db import db
 from bs4 import BeautifulSoup
-import requests
 from shortzy import Shortzy
 
 logger = logging.getLogger(__name__)
@@ -83,7 +83,7 @@ async def is_req_subscribed(bot, user_id, rqfsub_channels):
             logger.warning(f"Bot not admin in {ch_id}")
         except Exception as e:
             logger.warning(f"Invite link error for {ch_id}: {e}")
-            
+
     return btn
 
 
@@ -110,11 +110,9 @@ async def is_check_admin(bot, chat_id, user_id):
         return member.status in [enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.OWNER]
     except:
         return False
-    
 
 # ==========================================================
-# Daily Download Limit System
-# ----------------------------------------------------------
+# Daily Download Limit System For User
 # ==========================================================
 
 async def enforce_daily_limit(client, message):
@@ -136,8 +134,8 @@ async def enforce_daily_limit(client, message):
 
     # Limit exceeded -> Inform the free user and stop here
     buttons = [
-        [InlineKeyboardButton('💎 Upgrade to Premium', callback_data='premium_info')], 
-        [InlineKeyboardButton('📱 Contact Owner', url=OWNER_LNK)]
+        [InlineKeyboardButton('💎 Upgrade to Premium 💎', callback_data='premium_info')], 
+        [InlineKeyboardButton('📱 Contact Owner 📱', url=OWNER_LNK)]
     ]
 
     # 1 retry on FloodWait, so the message is never silently dropped
@@ -145,7 +143,7 @@ async def enforce_daily_limit(client, message):
         try:
             # Agar bot me limit ki value DB se aati hai, tab status.get("limit", DAILY_DOWNLOAD_LIMIT) bhi use kar sakte hain.
             total_limit = status.get("daily_limit", DAILY_DOWNLOAD_LIMIT)
-            
+
             await client.send_message(
                 chat_id=user_id,
                 text=script.DOWNLOAD_LIMIT_TXT.format(total_limit),
@@ -170,13 +168,13 @@ async def get_remaining_limit_text(user_id):
     or None for premium users.
     """
     status = await db.get_download_status(user_id)
-    
+
     if status["is_premium"]:
         return None
-        
+
     # Yahan "total_limit" DB se le raha hai, agar DB me nahi hai toh default "DAILY_DOWNLOAD_LIMIT" lega
     total_limit = status.get("daily_limit", DAILY_DOWNLOAD_LIMIT)
-    
+
     return script.REMAINING_LIMIT_TXT.format(status["remaining"], total_limit)
 
 
@@ -233,7 +231,7 @@ async def junk_group(chat_id, message):
         await db.delete_chat(int(chat_id))       
         logging.info(f"{chat_id} - PeerIdInvalid")
         return False, "deleted", f'{e}\n\n'
-    
+
 
 async def clear_junk(user_id, message):
     try:
@@ -256,7 +254,7 @@ async def clear_junk(user_id, message):
         return False, "Error"
     except Exception as e:
         return False, "Error"
-     
+
 async def get_status(bot_id):
     try:
         return await db.movie_update_status(bot_id) or False  
@@ -270,7 +268,7 @@ async def add_name_to_db(filename):
     """
     Helper function to add a filename to the database.
     """
-    
+
     return await db.add_name(filename) 
 
 
@@ -294,16 +292,55 @@ def listx_to_str(k):
     return ', '.join(result) if result else "N/A"
 
 
+# 🐛 SLOW-RESPONSE FIX: get_poster() used to hit IMDb (via Cinemagoer, which
+# scrapes IMDb's website) TWICE — once to search, once to fetch full details —
+# on every single search, even for the same popular movie searched by many
+# different users. Each of those network round-trips can take a couple of
+# seconds, and since they run one after another, that delay landed directly
+# on top of the "I am searching..." message before the results were sent.
+# This cache makes the 2nd+ search for the same title/id return instantly.
+import time as _time
+_IMDB_SEARCH_CACHE: dict = {}
+_IMDB_MOVIE_CACHE: dict = {}
+_IMDB_CACHE_TTL = 3600          # seconds a cached IMDb lookup stays valid
+_IMDB_CACHE_MAX_ENTRIES = 500   # hard cap so memory can't grow unbounded
 
-# Sirf movie, TV series, web series (IMDb pe ye bhi "tv series"/"tv mini
-# series" hi hote hain) aur TV serial (tv movie / tv special) allow hain.
-# Podcast, video game, short, music video, review jaisi cheezein IMDb kabhi
 
-ALLOWED_KIND_KEYS = {"movie", "tvseries", "tvminiseries", "tvmovie"}
+def _imdb_cache_get(cache, key):
+    entry = cache.get(key)
+    if not entry:
+        return None
+    cached_at, value = entry
+    if _time.time() - cached_at > _IMDB_CACHE_TTL:
+        cache.pop(key, None)
+        return None
+    return value
 
 
-def _normalize_kind(kind):
-    return re.sub(r'[\s\-]+', '', (kind or '').strip().lower())
+def _imdb_cache_set(cache, key, value):
+    if len(cache) >= _IMDB_CACHE_MAX_ENTRIES:
+        oldest_key = min(cache, key=lambda k: cache[k][0])
+        cache.pop(oldest_key, None)
+    cache[key] = (_time.time(), value)
+
+
+async def _cached_imdb_search_movie(title: str):
+    key = title.lower().strip()
+    cached = _imdb_cache_get(_IMDB_SEARCH_CACHE, key)
+    if cached is not None:
+        return cached
+    result = await asyncio.to_thread(imdb.search_movie, title.lower())
+    _imdb_cache_set(_IMDB_SEARCH_CACHE, key, result)
+    return result
+
+
+async def _cached_imdb_get_movie(movieid_str: str):
+    cached = _imdb_cache_get(_IMDB_MOVIE_CACHE, movieid_str)
+    if cached is not None:
+        return cached
+    result = await asyncio.to_thread(imdb.get_movie, movieid_str)
+    _imdb_cache_set(_IMDB_MOVIE_CACHE, movieid_str, result)
+    return result
 
 
 async def get_poster(query, bulk=False, id=False, file=None):
@@ -321,7 +358,7 @@ async def get_poster(query, bulk=False, id=False, file=None):
             if year_list:
                 year_val = year_list[0]
 
-        search_result = await asyncio.to_thread(imdb.search_movie, title.lower())
+        search_result = await _cached_imdb_search_movie(title)
         if not search_result or not search_result.titles:
             return None
 
@@ -334,14 +371,11 @@ async def get_poster(query, bulk=False, id=False, file=None):
         else:
             filtered = movie_list
 
-        # 🔑 Sirf title (movie/series) rakho — kuch bhi aur (podcast, game,
-        # review, short, music video, etc.) yahin filter ho jaata hai. Agar
-        # kisi bhi result ka kind allow-list me nahi hai to use "unfiltered"
-        # list me wapas mix nahi karte — warna wahi purana bug repeat hoga.
-        filtered_kind = [
-            m for m in filtered
-            if _normalize_kind(getattr(m, "kind", None)) in ALLOWED_KIND_KEYS
-        ]
+        kind_filter = ['movie', 'tv series', 'tvSeries', 'tvMiniSeries', 'tvMovie']
+        filtered_kind = [m for m in filtered if m.kind and m.kind in kind_filter]
+
+        if not filtered_kind:
+            filtered_kind = filtered
 
         if bulk:
             return filtered_kind[:MAX_LIST_ELM]
@@ -352,7 +386,7 @@ async def get_poster(query, bulk=False, id=False, file=None):
     else:
         movieid_str = query
 
-    movie = await asyncio.to_thread(imdb.get_movie, movieid_str)
+    movie = await _cached_imdb_get_movie(movieid_str)
     if not movie:
         return None
 
@@ -627,19 +661,35 @@ async def get_best_visual(tmdb_data: Dict) -> Optional[str]:
     if backdrops.get("all") and backdrops["all"]:
         return backdrops["all"][0]["url"]
     return None
-    
+
 async def search_gagala(text):
+    """Non-blocking Google result title lookup with timeout and safe failure."""
     usr_agent = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
-        'Chrome/61.0.3163.100 Safari/537.36'
-        }
-    text = text.replace(" ", '+')
-    url = f'https://www.google.com/search?q={text}'
-    response = requests.get(url, headers=usr_agent)
-    response.raise_for_status()
-    soup = BeautifulSoup(response.text, 'html.parser')
-    titles = soup.find_all( 'h3' )
-    return [title.getText() for title in titles]
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+                      '(KHTML, like Gecko) Chrome/61.0.3163.100 Safari/537.36'
+    }
+    url = 'https://www.google.com/search'
+    try:
+        session = await _get_async_http_session()
+        async with session.get(url, params={'q': str(text).strip()}, headers=usr_agent,
+                               timeout=aiohttp.ClientTimeout(total=8)) as response:
+            response.raise_for_status()
+            html = await response.text()
+        soup = BeautifulSoup(html, 'html.parser')
+        return [title.get_text(strip=True) for title in soup.find_all('h3')]
+    except Exception as e:
+        logger.warning('Google search failed: %s', e)
+        return []
+
+async def _get_async_http_session():
+    session = getattr(temp, 'AIOHTTP_SESSION', None)
+    if session is None or session.closed:
+        session = aiohttp.ClientSession(
+            connector=aiohttp.TCPConnector(limit=20, ttl_dns_cache=300),
+            timeout=aiohttp.ClientTimeout(total=10),
+        )
+        temp.AIOHTTP_SESSION = session
+    return session
 
 async def get_shortlink(link, grp_id, is_second_shortener=False, is_third_shortener=False):
     settings = await get_settings(grp_id)
@@ -663,7 +713,7 @@ async def get_settings(group_id):
         settings = await db.get_settings(group_id)
         temp.SETTINGS.update({group_id: settings})
     return settings
-    
+
 async def save_group_settings(group_id, key, value):
     current = await get_settings(group_id)
     current.update({key: value})
@@ -681,8 +731,8 @@ def clean_filename(file_name):
     # Remove ~[Tokyo_Updates] (Currently commented out in original logic)
     # file_name = re.sub(r'~\[[^\]]*\]', '', file_name)
     
-    # Remove specific symbols (# and $)
-    file_name = re.sub(r'[#$]', '', file_name)
+    # Remove specific symbols (#, $, (, and ))
+    file_name = re.sub(r'[#$()]', '', file_name)
 
     # Symbol-attached prefixes: tags attached directly to a word (e.g., "[Tag]Movie", "@channel")
     symbol_prefixes = ('[', '@', 'www.')
@@ -1227,6 +1277,30 @@ def generate_season_variations(search_raw: str, season_number: int):
         f"{search_raw} season {season_number:02}",
     ]
 
+
+
+def to_aware_utc(dt):
+    """
+    Normalizes a datetime to a timezone-AWARE UTC datetime.
+
+    Bug fix: different parts of the bot were saving `expiry_time` in
+    inconsistent formats — some as naive local time (e.g. /add_premium
+    used `datetime.datetime.now()`), others as UTC-aware
+    (e.g. /redeem used `datetime.now(pytz.utc)`). Comparing/`.astimezone()`-ing
+    these inconsistently caused wrong premium expiry calculations
+    (and could crash with "can't compare offset-naive and
+    offset-aware datetimes" in edge cases).
+
+    This helper makes every legacy naive datetime in the DB behave as if
+    it was always UTC, and leaves already-aware datetimes untouched, so
+    all premium-related code can safely call `.astimezone(...)` or
+    compare against `datetime.datetime.now(pytz.utc)` without errors.
+    """
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=pytz.utc)
+    return dt
 
 
 async def get_seconds(time_string):
