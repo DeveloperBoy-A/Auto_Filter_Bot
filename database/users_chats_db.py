@@ -109,6 +109,20 @@ class Database:
     async def get_all_users(self):
         return self.col.find({})
 
+    async def get_premium_users(self):
+        """
+        Bug fix: /premium_users used to loop through EVERY user who ever
+        started the bot (self.col, could be lakhs) and run a SEPARATE
+        MongoDB query per user just to check for premium — making the
+        command take forever ("Fetching..." never finishes) on any bot
+        with a decent-sized user base.
+
+        This queries the premium collection (self.users) directly for
+        only the users who actually have an expiry_time set — a single
+        efficient filtered query instead of thousands of round trips.
+        """
+        return self.users.find({"expiry_time": {"$ne": None}})
+
     async def delete_user(self, user_id):
         await self.col.delete_many({'id': int(user_id)})
 
