@@ -31,7 +31,8 @@ class Database:
         await self.movie_updates.delete_many({})
         print("All filenames notification have been deleted.")
         return True
- 
+
+
     async def add_join_req(self, user_id: int, channel_id: int): #update
         await self.req.update_one(
             {'user_id': user_id},
@@ -41,7 +42,7 @@ class Database:
             },
             upsert=True
         )
-        
+
     async def has_joined_channel(self, user_id: int, channel_id: int):
         doc = await self.req.find_one({'user_id': user_id})
         return doc and 'channels' in doc and channel_id in doc['channels']
@@ -68,26 +69,26 @@ class Database:
                 reason="",
             ),
         )
-    
+
     async def add_user(self, id, name):
         user = self.new_user(id, name)
         await self.col.insert_one(user)
-    
+
     async def is_user_exist(self, id):
         user = await self.col.find_one({'id':int(id)})
         return bool(user)
-    
+
     async def total_users_count(self):
         count = await self.col.count_documents({})
         return count
-    
+
     async def remove_ban(self, id):
         ban_status = dict(
             is_banned=False,
             ban_reason=''
         )
         await self.col.update_one({'id': id}, {'$set': {'ban_status': ban_status}})
-    
+
     async def ban_user(self, user_id, ban_reason="No Reason"):
         ban_status = dict(
             is_banned=True,
@@ -107,10 +108,10 @@ class Database:
 
     async def get_all_users(self):
         return self.col.find({})
-    
+
     async def delete_user(self, user_id):
         await self.col.delete_many({'id': int(user_id)})
-        
+
     async def delete_chat(self, id):
         await self.grp.delete_many({'id': int(id)})    
 
@@ -120,25 +121,25 @@ class Database:
         b_chats = [chat['id'] async for chat in chats]
         b_users = [user['id'] async for user in users]
         return b_users, b_chats
-    
+
     async def add_chat(self, chat, title):
         chat = self.new_group(chat, title)
         await self.grp.insert_one(chat)
-    
+
     async def get_chat(self, chat):
         chat = await self.grp.find_one({'id':int(chat)})
         return False if not chat else chat.get('chat_status')
-    
+
     async def re_enable_chat(self, id):
         chat_status=dict(
             is_disabled=False,
             reason="",
             )
         await self.grp.update_one({'id': int(id)}, {'$set': {'chat_status': chat_status}})
-        
+
     async def update_settings(self, id, settings):
         await self.grp.update_one({'id': int(id)}, {'$set': {'settings': settings}})
-                                  
+
     async def get_settings(self, id):
         default = {
             'button': BUTTON_MODE,
@@ -194,7 +195,7 @@ class Database:
     async def total_chat_count(self):
         count = await self.grp.count_documents({})
         return count
-    
+
     async def get_all_chats(self):
         return self.grp.find({})
 
@@ -204,10 +205,9 @@ class Database:
     async def get_user(self, user_id):
         user_data = await self.users.find_one({"id": user_id})
         return user_data
-    
     async def update_user(self, user_data):
         await self.users.update_one({"id": user_data["id"]}, {"$set": user_data}, upsert=True)
-  
+
     async def get_notcopy_user(self, user_id):
         user_id = int(user_id)
         user = await self.misc.find_one({"user_id": user_id})
@@ -300,7 +300,7 @@ class Database:
                 second_time = user["third_time_verified"].astimezone(ist_timezone)
                 return second_time < pastDate
         return False
-   
+
     async def create_verify_id(self, user_id: int, hash):
         res = {"user_id": user_id, "hash":hash, "verified":False}
         return await self.verify_id.insert_one(res)
@@ -312,26 +312,59 @@ class Database:
         myquery = {"user_id": user_id, "hash": hash}
         newvalues = { "$set": value }
         return await self.verify_id.update_one(myquery, newvalues)
-        
+
     async def has_premium_access(self, user_id):
         user_data = await self.get_user(user_id)
         if user_data:
             expiry_time = user_data.get("expiry_time")
             if expiry_time is None:
                 return False
-            elif isinstance(expiry_time, datetime.datetime) and datetime.datetime.now() <= expiry_time:
-                return True
+            elif isinstance(expiry_time, datetime.datetime):
+                # Bug fix: normalize naive (legacy) datetimes to UTC-aware
+                # before comparing, so /add_premium (naive) and /redeem
+                # (UTC-aware) expiry values are both compared correctly.
+                if expiry_time.tzinfo is None:
+                    expiry_time = expiry_time.replace(tzinfo=pytz.utc)
+                if datetime.datetime.now(pytz.utc) <= expiry_time:
+                    return True
+                else:
+                    await self.users.update_one({"id": user_id}, {"$set": {"expiry_time": None}})
             else:
                 await self.users.update_one({"id": user_id}, {"$set": {"expiry_time": None}})
         return False
 
     # ==========================================================
-    # Daily Download Limit System
+    # Persistent Redeem Codes
     # ----------------------------------------------------------
+    # Bug fix: redeem codes used to live only in an in-memory Python
+    # dict (REDEEM_CODE = {}), so every bot restart wiped all pending
+    # codes and /redeem would say "Invalid Redeem Code or Expired"
+    # even for codes generated minutes earlier. Storing them here in
+    # MongoDB (self.codes) makes them survive restarts and work across
+    # multiple bot workers/instances.
+    # ==========================================================
+
+    async def add_redeem_code(self, code, duration):
+        """Persist a newly generated redeem code."""
+        await self.codes.update_one(
+            {"code": code},
+            {"$set": {"code": code, "duration": duration, "created_at": datetime.datetime.now(pytz.utc)}},
+            upsert=True
+        )
+
+    async def use_redeem_code(self, code):
+        """
+        Atomically fetch AND delete a redeem code in one operation, so the
+        same code can never be redeemed twice (even under concurrent use).
+        Returns the code document (with 'duration') if valid, else None.
+        """
+        return await self.codes.find_one_and_delete({"code": code})
+
+    # ==========================================================
+    # Daily Download Limit System function start
     # Free users are allowed DAILY_DOWNLOAD_LIMIT file downloads
     # every rolling 24 hours. Premium users are always unlimited.
     # ==========================================================
-
     async def get_download_status(self, user_id):
         """
         Single-query helper that returns the user's current premium +
@@ -404,6 +437,10 @@ class Database:
         status = await self.get_download_status(user_id)
         return DAILY_DOWNLOAD_LIMIT if status["is_premium"] else status["remaining"]
     
+    # Daily Download Limit System function End👆👆
+    # =========================================================
+
+    
     async def update_one(self, filter_query, update_data):
         try:
             result = await self.users.update_one(filter_query, update_data)
@@ -426,37 +463,92 @@ class Database:
 
     async def check_trial_status(self, user_id):
         user_data = await self.get_user(user_id)
-        if user_data:
-            return user_data.get("has_free_trial", False)
-        return False
+
+        if not user_data:
+            return False
+
+        trial_claimed_at = user_data.get("trial_claimed_at")
+
+        if not trial_claimed_at:
+            return False
+
+        if isinstance(trial_claimed_at, datetime.datetime):
+            next_trial_time = trial_claimed_at + datetime.timedelta(days=30)
+
+            if datetime.datetime.now() >= next_trial_time:
+                return False
+
+        return True
 
     async def give_free_trial(self, user_id):
-        user_id = user_id
-        seconds = 5*60         
-        expiry_time = datetime.datetime.now() + datetime.timedelta(seconds=seconds)
-        user_data = {"id": user_id, "expiry_time": expiry_time, "has_free_trial": True}
-        await self.users.update_one({"id": user_id}, {"$set": user_data}, upsert=True)
+        now = datetime.datetime.now()
+        seconds = 5 * 60
+
+        user_data = await self.get_user(user_id)
+
+        if user_data:
+            current_expiry = user_data.get("expiry_time")
+
+            if (
+                isinstance(current_expiry, datetime.datetime)
+                and current_expiry > now
+            ):
+                return False
+
+        expiry_time = now + datetime.timedelta(seconds=seconds)
+
+        await self.users.update_one(
+            {"id": user_id},
+            {
+                "$set": {
+                    "expiry_time": expiry_time,
+                    "has_free_trial": True,
+                    "trial_claimed_at": now
+                }
+            },
+            upsert=True
+        )
+
+        return True
 
     async def reset_free_trial(self, user_id=None):
         if user_id is None:
-            update_data = {"$set": {"has_free_trial": False}}
-            result = await self.users.update_many({}, update_data)  
+            update_data = {
+                "$set": {
+                    "has_free_trial": False
+                },
+                "$unset": {
+                    "trial_claimed_at": ""
+                }
+            }
+            result = await self.users.update_many({}, update_data)
             return result.modified_count
+
         else:
-            update_data = {"$set": {"has_free_trial": False}}
-            result = await self.users.update_one({"id": user_id}, update_data)
-            return 1 if result.modified_count > 0 else 0  
-        
+            update_data = {
+                "$set": {
+                    "has_free_trial": False
+                },
+                "$unset": {
+                    "trial_claimed_at": ""
+                }
+            }
+            result = await self.users.update_one(
+                {"id": user_id},
+                update_data
+            )
+            return 1 if result.modified_count > 0 else 0
+
     async def all_premium_users(self):
         count = await self.users.count_documents({
         "expiry_time": {"$gt": datetime.datetime.now()}
         })
         return count
-    
+
     async def get_bot_setting(self, bot_id, setting_key, default_value):
         bot = await self.botcol.find_one({'id': int(bot_id)}, {setting_key: 1, '_id': 0})
         return bot[setting_key] if bot and setting_key in bot else default_value
-        
+
     async def update_bot_setting(self, bot_id, setting_key, value):
         await self.botcol.update_one(
             {'id': int(bot_id)}, 
@@ -478,7 +570,7 @@ class Database:
             return user["group_ids"]
         else:
             return []
-        
+
     async def remove_group_connection(self, group_id, user_id):
         await self.connection.update_one(
             {'_id': user_id},
@@ -496,6 +588,6 @@ class Database:
 
     async def update_movie_update_status(self, bot_id, enable):
         await self.update_bot_setting(bot_id, 'MOVIE_UPDATE_NOTIFICATION', enable)
-     
+
 db = Database(DATABASE_URI, DATABASE_NAME)    
 db2 = Database(DATABASE_URI2, DATABASE_NAME)
