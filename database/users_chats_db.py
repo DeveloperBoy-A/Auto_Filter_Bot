@@ -351,28 +351,39 @@ class Database:
     # Persistent Redeem Codes
     # ----------------------------------------------------------
     # Bug fix: redeem codes used to live only in an in-memory Python
-    # dict (REDEEM_CODE = {}), so every bot restart wiped all pending
-    # codes and /redeem would say "Invalid Redeem Code or Expired"
-    # even for codes generated minutes earlier. Storing them here in
-    # MongoDB (self.codes) makes them survive restarts and work across
-    # multiple bot workers/instances.
     # ==========================================================
 
-    async def add_redeem_code(self, code, duration):
+   async def add_redeem_code(self, code, duration):
         """Persist a newly generated redeem code."""
         await self.codes.update_one(
             {"code": code},
-            {"$set": {"code": code, "duration": duration, "created_at": datetime.datetime.now(pytz.utc)}},
+            {"$set": {
+                "code": code,
+                "duration": duration,
+                "created_at": datetime.datetime.now(pytz.utc),
+                "used": False,
+                "used_by": None,
+                "used_at": None
+            }},
             upsert=True
         )
 
-    async def use_redeem_code(self, code):
+    async def get_redeem_code(self, code):
+        """Read-only lookup — does NOT consume the code. Returns None if it never existed."""
+        return await self.codes.find_one({"code": code})
+
+    async def mark_redeem_code_used(self, code, user_id):
         """
-        Atomically fetch AND delete a redeem code in one operation, so the
-        same code can never be redeemed twice (even under concurrent use).
-        Returns the code document (with 'duration') if valid, else None.
+        Atomically marks a code as used by `user_id`, but ONLY if it
+        hasn't already been used by anyone (prevents two people redeeming
+        the same code at the exact same time). Returns the updated
+        document on success, or None if someone already grabbed it first.
         """
-        return await self.codes.find_one_and_delete({"code": code})
+        return await self.codes.find_one_and_update(
+            {"code": code, "used": {"$ne": True}},
+            {"$set": {"used": True, "used_by": user_id, "used_at": datetime.datetime.now(pytz.utc)}},
+            return_document=True
+        )
 
     # ==========================================================
     # Daily Download Limit System function start
