@@ -159,9 +159,11 @@ async def premium_user(client, message):
     aa = await message.reply_text("<i>ꜰᴇᴛᴄʜɪɴɢ...</i>")
     new = f" ᴘʀᴇᴍɪᴜᴍ ᴜꜱᴇʀꜱ ʟɪꜱᴛ :\n\n"
     user_count = 1
-    users = await db.get_all_users()
-    async for user in users:
-        data = await db.get_user(user['id'])
+    # Bug fix: was looping through EVERY bot user (self.col, could be
+    # lakhs) with a separate DB query per user just to check for
+    # premium. Now queries only users who actually have expiry_time set.
+    users = await db.get_premium_users()
+    async for data in users:
         if data and data.get("expiry_time"):
             expiry = to_aware_utc(data.get("expiry_time"))
             expiry_ist = expiry.astimezone(pytz.timezone("Asia/Kolkata"))
@@ -176,13 +178,15 @@ async def premium_user(client, message):
             # a single blocked/deleted user in the list would throw and
             # crash the WHOLE command silently (stuck on "Fetching...").
             try:
-                user_mention = (await client.get_users(user['id'])).mention
+                user_mention = (await client.get_users(data['id'])).mention
             except Exception:
-                user_mention = f"<code>{user['id']}</code>"
-            new += f"{user_count}. {user_mention}\n👤 ᴜꜱᴇʀ ɪᴅ : {user['id']}\n⏳ ᴇxᴘɪʀʏ ᴅᴀᴛᴇ : {expiry_str_in_ist}\n⏰ ᴛɪᴍᴇ ʟᴇꜰᴛ : {time_left_str}\n"
+                user_mention = f"<code>{data['id']}</code>"
+            new += f"{user_count}. {user_mention}\n👤 ᴜꜱᴇʀ ɪᴅ : {data['id']}\n⏳ ᴇxᴘɪʀʏ ᴅᴀᴛᴇ : {expiry_str_in_ist}\n⏰ ᴛɪᴍᴇ ʟᴇꜰᴛ : {time_left_str}\n"
             user_count += 1
         else:
             pass
+    if user_count == 1:
+        new += "ɴᴏ ᴀᴄᴛɪᴠᴇ ᴘʀᴇᴍɪᴜᴍ ᴜꜱᴇʀꜱ ꜰᴏᴜɴᴅ."
     try:    
         await aa.edit_text(new)
     except MessageTooLong:
