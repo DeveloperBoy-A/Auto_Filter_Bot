@@ -59,7 +59,8 @@ Ye codes users ko <b>Premium Benefits</b> dene ke liye hain, jaise:
 2️⃣ Sidhe bot me aakar paste karein aur send kar dein.
 3️⃣ Boom 💎 — Aapke Premium benefits instantly unlock ho jayenge!
 ━━━━━━━━━━━━━━━━━━━━━━
-
+ 🏃‍♂️ <b>Fɪʀꜱᴛ Cᴏᴍᴇ, Fɪʀꜱᴛ Sᴇʀᴠᴇᴅ (Pᴇʜʟᴇ Aᴀᴏ, Pᴇʜʟᴇ Pᴀᴏ!)</b>
+<i>Ye limited codes hain, jo jaldi claim karega, Premium usika hoga!</i>
 ⚠️ <i>Eᴀᴄʜ ᴄᴏᴅᴇ ᴡᴏʀᴋꜱ ᴏɴʟʏ ᴏɴᴄᴇ — sʜᴀʀᴇ ʀᴇꜱᴘᴏɴꜱɪʙʟʏ!</i> 🔥"""
         keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🔑 Redeem Now 🔥", url=f"https://t.me/{temp.U_NAME}")]])
         await message.reply_text(text, reply_markup=keyboard)
