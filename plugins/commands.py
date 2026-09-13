@@ -10,10 +10,9 @@ import string
 import pytz
 from .pmfilter import auto_filter 
 from Script import script
-from datetime import datetime
+from datetime import datetime, timedelta
 from database.refer import referdb
 from database.config_db import mdb
-from motor.motor_asyncio import AsyncIOMotorClient
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, ReplyKeyboardMarkup
 from pyrogram import Client, filters, enums, StopPropagation
 from pyrogram.errors import FloodWait, ChatAdminRequired, UserNotParticipant
@@ -85,7 +84,7 @@ async def start(client, message):
         buttons = [[
                     InlineKeyboardButton('❤️ ᴀᴅᴅ ᴍᴇ ᴛᴏ ʏᴏᴜʀ ɢʀᴏᴜᴘ ❤️', url=f'http://t.me/{temp.U_NAME}?startgroup=true')
                 ],[
-                    InlineKeyboardButton('🍁 Update Channel 🍁', url=UPDATE_CHNL_LNK)
+                    InlineKeyboardButton('🍁 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 🍁', url=UPDATE_CHNL_LNK)
                   ]]
         reply_markup = InlineKeyboardMarkup(buttons)
         await message.reply(script.GSTART_TXT.format(message.from_user.mention if message.from_user else message.chat.title, temp.U_NAME, temp.B_NAME), reply_markup=reply_markup, disable_web_page_preview=True)
@@ -102,11 +101,11 @@ async def start(client, message):
         buttons = [[
                     InlineKeyboardButton('🔰 ᴀᴅᴅ ᴍᴇ ᴛᴏ ʏᴏᴜʀ ɢʀᴏᴜᴘ 🔰', url=f'http://telegram.me/{temp.U_NAME}?startgroup=true')
                 ],[
-                    InlineKeyboardButton(' ʜᴇʟᴘ 📢', callback_data='help'),
-                    InlineKeyboardButton(' ᴀʙᴏᴜᴛ 📖', callback_data='about')
+                    InlineKeyboardButton('• ʜᴇʟᴘ 📢', callback_data='help'),
+                    InlineKeyboardButton('• ᴀʙᴏᴜᴛ 📖 •', callback_data='about')
                 ],[
-                    InlineKeyboardButton('ᴛᴏᴘ sᴇᴀʀᴄʜɪɴɢ ⭐', callback_data="topsearch"),
-                    InlineKeyboardButton('ᴜᴘɢʀᴀᴅᴇ 🎟', callback_data="premium_info"),
+                    InlineKeyboardButton('⭐ ᴛᴏᴘ sᴇᴀʀᴄʜɪɴɢ ⭐', callback_data="topsearch"),
+                    InlineKeyboardButton('• ᴜᴘɢʀᴀᴅᴇ ᴀᴄᴄᴏᴜɴᴛ 🎟', callback_data="premium_info"),
                 ]]
         reply_markup = InlineKeyboardMarkup(buttons)
         current_time = datetime.now(pytz.timezone(TIMEZONE))
@@ -134,11 +133,11 @@ async def start(client, message):
         buttons = [[
                     InlineKeyboardButton('🔰 ᴀᴅᴅ ᴍᴇ ᴛᴏ ʏᴏᴜʀ ɢʀᴏᴜᴘ 🔰', url=f'http://telegram.me/{temp.U_NAME}?startgroup=true')
                 ],[
-                    InlineKeyboardButton(' ʜᴇʟᴘ 📢', callback_data='help'),
-                    InlineKeyboardButton(' ᴀʙᴏᴜᴛ 📖', callback_data='about')
+                    InlineKeyboardButton('• ʜᴇʟᴘ 📢 •', callback_data='help'),
+                    InlineKeyboardButton('• ᴀʙᴏᴜᴛ 📖 •', callback_data='about')
                 ],[
-                    InlineKeyboardButton('ᴛᴏᴘ sᴇᴀʀᴄʜɪɴɢ ⭐', callback_data="topsearch"),
-                    InlineKeyboardButton('ᴜᴘɢʀᴀᴅᴇ 🎟', callback_data="premium_info"),
+                    InlineKeyboardButton('⭐ ᴛᴏᴘ sᴇᴀʀᴄʜɪɴɢ ⭐', callback_data="topsearch"),
+                    InlineKeyboardButton('• ᴜᴘɢʀᴀᴅᴇ ᴀᴄᴄᴏᴜɴᴛ 🎟', callback_data="premium_info"),
                 ]]
         reply_markup = InlineKeyboardMarkup(buttons)
         current_time = datetime.now(pytz.timezone(TIMEZONE))
@@ -170,7 +169,7 @@ async def start(client, message):
         if user_id == message.from_user.id:
             await message.reply_text("Hᴇʏ Dᴜᴅᴇ, Yᴏᴜ Cᴀɴ'ᴛ Rᴇғᴇʀ Yᴏᴜʀsᴇʟғ 🤣!\n\nsʜᴀʀᴇ ʟɪɴᴋ ʏᴏᴜʀ ғʀɪᴇɴᴅ ᴀɴᴅ ɢᴇᴛ 10 ʀᴇғᴇʀʀᴀʟ ᴘᴏɪɴᴛ ɪғ ʏᴏᴜ ᴀʀᴇ ᴄᴏʟʟᴇᴄᴛɪɴɢ 100 ʀᴇғᴇʀʀᴀʟ ᴘᴏɪɴᴛs ᴛʜᴇɴ ʏᴏᴜ ᴄᴀɴ ɢᴇᴛ 1 ᴍᴏɴᴛʜ ғʀᴇᴇ ᴘʀᴇᴍɪᴜᴍ ᴍᴇᴍʙᴇʀsʜɪᴘ.")
             return
-        if referdb.is_user_in_list(message.from_user.id):
+        if await referdb.is_user_in_list(message.from_user.id):
             await message.reply_text("Yᴏᴜ ʜᴀᴠᴇ ʙᴇᴇɴ ᴀʟʀᴇᴀᴅʏ ɪɴᴠɪᴛᴇᴅ ❗")
             return
         if await db.is_user_exist(message.from_user.id): 
@@ -180,15 +179,15 @@ async def start(client, message):
             uss = await client.get_users(user_id)
         except Exception:
             return             
-        referdb.add_user(message.from_user.id)
-        fromuse = referdb.get_refer_points(user_id) + 10
+        await referdb.add_user(message.from_user.id)
+        fromuse = await referdb.get_refer_points(user_id) + 10
         if fromuse == 100:
-            referdb.add_refer_points(user_id, 0) 
+            await referdb.add_refer_points(user_id, 0) 
             await message.reply_text(f"🎉 𝗖𝗼𝗻𝗴𝗿𝗮𝘁𝘂𝗹𝗮𝘁𝗶𝗼𝗻𝘀! 𝗬𝗼𝘂 𝘄𝗼𝗻 𝟭𝟬 𝗥𝗲𝗳𝗲𝗿𝗿𝗮𝗹 𝗽𝗼𝗶𝗻𝘁 𝗯𝗲𝗰𝗮𝘂𝘀𝗲 𝗬𝗼𝘂 𝗵𝗮𝘃𝗲 𝗯𝗲𝗲𝗻 𝗦𝘂𝗰𝗰𝗲𝘀𝘀𝗳𝘂𝗹𝗹𝘆 𝗜𝗻𝘃𝗶𝘁𝗲𝗱 ☞ {uss.mention}!")                    
             await message.reply_text(user_id, f"You have been successfully invited by {message.from_user.mention}!")         
             seconds = 2592000
             if seconds > 0:
-                expiry_time = datetime.datetime.now() + datetime.timedelta(seconds=seconds)
+                expiry_time = datetime.now(pytz.utc) + timedelta(seconds=seconds)
                 user_data = {"id": user_id, "expiry_time": expiry_time}  # Using "id" instead of "user_id"  
                 await db.update_user(user_data)  # Use the update_user method to update or insert user data                    
                 await client.send_message(
@@ -198,14 +197,14 @@ async def start(client, message):
             for admin in ADMINS:
                 await client.send_message(chat_id=admin, text=f"Sᴜᴄᴄᴇss ғᴜʟʟʏ ᴛᴀsᴋ ᴄᴏᴍᴘʟᴇᴛᴇᴅ ʙʏ ᴛʜɪs ᴜsᴇʀ:\n\nuser Nᴀᴍᴇ: {uss.mention}\n\nUsᴇʀ ɪᴅ: {uss.id}!")        
         else:
-            referdb.add_refer_points(user_id, fromuse)
+            await referdb.add_refer_points(user_id, fromuse)
             await message.reply_text(f"You have been successfully invited by {uss.mention}!")
             await client.send_message(user_id, f"𝗖𝗼𝗻𝗴𝗿𝗮𝘁𝘂𝗹𝗮𝘁𝗶𝗼𝗻𝘀! 𝗬𝗼𝘂 𝘄𝗼𝗻 𝟭𝟬 𝗥𝗲𝗳𝗲𝗿𝗿𝗮𝗹 𝗽𝗼𝗶𝗻𝘁 𝗯𝗲𝗰𝗮𝘂𝘀𝗲 𝗬𝗼𝘂 𝗵𝗮𝘃𝗲 𝗯𝗲𝗲𝗻 𝗦𝘂𝗰𝗰𝗲𝘀𝘀𝗳𝘂𝗹𝗹𝘆 𝗜𝗻𝘃𝗶𝘁𝗲𝗱 ☞{message.from_user.mention}!")
         return
 
     if len(message.command) == 2 and message.command[1] in ["premium"]:
         buttons = [[
-                    InlineKeyboardButton('📲 ꜱᴇɴᴅ ᴘᴀʏᴍᴇɴᴛ ꜱᴄʀᴇᴇɴꜱʜᴏᴛ', url=OWNER_LNK)
+                    InlineKeyboardButton('📲 ꜱᴇɴᴅ ᴘᴀʏᴍᴇɴᴛ ꜱᴄʀᴇᴇɴꜱʜᴏᴛ 📲', url=OWNER_LNK)
                   ],[
                     InlineKeyboardButton('❌ ᴄʟᴏꜱᴇ ❌', callback_data='close_data')
                   ]]
@@ -346,58 +345,65 @@ async def start(client, message):
                 files_to_send = files[:dl_status["remaining"]]
 
             filesarr = []
+            # Settings lookup fix: fetched ONCE before the loop (was being re-fetched per file before)
             settings = await get_settings(int(grp_id))
             DREAMX_CAPTION = settings.get('caption', CUSTOM_FILE_CAPTION)
-            send_sem = asyncio.Semaphore(3)
 
-            async def _send_one(file):
-                async with send_sem:
-                    f_id = file.file_id
-                    files1 = file
-                    title = clean_filename(files1.file_name)
-                    size = get_size(files1.file_size)
-                    f_caption = files1.caption
+            for file in files_to_send:
+                # Allfiles file lookup fix: use the file object directly (already have all data
+                # from temp.GETALL) instead of an extra get_file_details() DB query per file
+                f_id = file.file_id  # Conflict से बचने के लिए नाम बदला
+                files1 = file
+                title = clean_filename(files1.file_name)
+                size = get_size(files1.file_size)
+                f_caption = files1.caption
 
-                    if DREAMX_CAPTION:
-                        try:
-                            meta = extract_caption_meta(files1.file_name)
-                            f_caption = DREAMX_CAPTION.format(file_name='' if title is None else title, file_size='' if size is None else size, file_caption='' if f_caption is None else f_caption, **meta)
-                        except Exception:
-                            logger.exception("Send All caption formatting failed")
+                if DREAMX_CAPTION:
+                    try:
+                        meta = extract_caption_meta(files1.file_name)
+                        f_caption = DREAMX_CAPTION.format(file_name='' if title is None else title, file_size='' if size is None else size, file_caption='' if f_caption is None else f_caption, **meta)
+                    except Exception as e:
+                        logger.exception(e)
 
-                    if f_caption is None:
-                        f_caption = f"{clean_filename(files1.file_name)}"
+                if f_caption is None:
+                    f_caption = f"{clean_filename(files1.file_name)}"
 
-                    if STREAM_MODE and not PREMIUM_STREAM_MODE:
-                        btn = [[InlineKeyboardButton('🚀 ꜰᴀsᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️', callback_data=f'generate_stream_link:{f_id}')],
-                               [InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇs ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]]
-                    elif STREAM_MODE and PREMIUM_STREAM_MODE:
-                        if not await db.has_premium_access(message.from_user.id):
-                            btn = [[InlineKeyboardButton('🚀 ꜰᴀsᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️', callback_data=f'prestream')],
-                                   [InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇs ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]]
-                        else:
-                            btn = [[InlineKeyboardButton('🚀 ꜰᴀsᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️', callback_data=f'generate_stream_link:{f_id}')],
-                                   [InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇs ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]]
+                # बटन का हिस्सा (Indented inside for loop)
+                if STREAM_MODE and not PREMIUM_STREAM_MODE:
+                    btn = [[InlineKeyboardButton('🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️', callback_data=f'generate_stream_link:{f_id}')],
+                           [InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]]
+                elif STREAM_MODE and PREMIUM_STREAM_MODE:
+                    if not await db.has_premium_access(message.from_user.id):
+                        btn = [[InlineKeyboardButton('🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️', callback_data=f'prestream')],
+                               [InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]]
                     else:
-                        btn = [[InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇs ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]]
+                        btn = [[InlineKeyboardButton('🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️', callback_data=f'generate_stream_link:{f_id}')],
+                               [InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]]
+                else:
+                    btn = [[InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]]
 
-                    cover_url = getattr(files1, 'cover', None) if COVERX else None
-                    for attempt in range(3):
-                        try:
-                            return await client.send_cached_media(
-                                chat_id=message.from_user.id,
-                                file_id=f_id,
-                                caption=f_caption,
-                                protect_content=settings.get('file_secure', PROTECT_CONTENT),
-                                reply_markup=InlineKeyboardMarkup(btn),
-                                cover=cover_url
-                            )
-                        except FloodWait as e:
-                            await asyncio.sleep(e.value + 1)
-                    return None
+                cover_url = getattr(files1, 'cover', None) if COVERX else None
 
-            sent = await asyncio.gather(*(_send_one(file) for file in files_to_send), return_exceptions=True)
-            filesarr.extend(x for x in sent if x is not None and not isinstance(x, Exception))
+                # FloodWait fix: retry up to 3 times if Telegram asks us to slow down,
+                # instead of letting the whole batch crash out on the first FloodWait.
+                msg = None
+                for attempt in range(3):
+                    try:
+                        msg = await client.send_cached_media(
+                            chat_id=message.from_user.id,
+                            file_id=f_id,
+                            caption=f_caption,
+                            protect_content=settings.get('file_secure', PROTECT_CONTENT),
+                            reply_markup=InlineKeyboardMarkup(btn),
+                            cover=cover_url
+                        )
+                        break
+                    except FloodWait as e:
+                        await asyncio.sleep(e.value + 1)
+
+                if msg is not None:
+                    filesarr.append(msg)
+                await asyncio.sleep(0.3) # यहाँ लूप खत्म हो रहा है
 
             # --- Daily Download Limit System: bulk-increment by files actually sent (free users only) ---
             if not is_premium_user and filesarr:
@@ -1502,7 +1508,7 @@ async def reset_trial(client, message):
     except Exception as e:
         await message.reply_text(f"An error occurred: {e}")
 
-
+from motor.motor_asyncio import AsyncIOMotorClient
 
 @Client.on_message(filters.command("old_cleandb") & filters.user(ADMINS))
 async def clean_db_command(client, message):
