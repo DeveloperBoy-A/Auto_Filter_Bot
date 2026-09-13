@@ -1,4 +1,3 @@
- 
 from datetime import timedelta, datetime
 import pytz
 import string
@@ -37,29 +36,40 @@ async def add_redeem_code(client, message):
             await db.add_redeem_code(code, time)
             codes.append(code)
 
-        codes_text = '\n'.join(f"🎟 <code>{code}</code>" for code in codes)
-        text = f"""🎉 <b><u>Gɪꜰᴛ Cᴏᴅᴇ Gᴇɴᴇʀᴀᴛᴇᴅ!</u></b> ✨
+        codes_text = '\n\n'.join(f"{i}. 🎁 <b>Gɪғᴛ Cᴏᴅᴇ :</b>\n ╰ 👉 <code>/redeem {code}</code>" for i, code in enumerate(codes, 1))
+        
+        text = f"""🎉 <b><u>Gɪꜰᴛ Cᴏᴅᴇꜱ Gᴇɴᴇʀᴀᴛᴇᴅ Sᴜᴄᴄᴇssғᴜʟʟʏ!</u></b> ✨
 
 ┌─────────────────────
 │ 📦 <b>Tᴏᴛᴀʟ Cᴏᴅᴇꜱ</b> : <code>{num_codes}</code>
 │ ⏳ <b>Vᴀʟɪᴅɪᴛʏ</b>    : <code>{time}</code>
 └─────────────────────
 
+👇 <b>Tᴀᴘ ᴀɴʏ ᴄᴏᴍᴍᴀɴᴅ ʙᴇʟᴏᴡ ᴛᴏ ᴄᴏᴘʏ ɪᴛ!</b> 👇
+
 {codes_text}
 
 ━━━━━━━━━━━━━━━━━━━━━━
 📝 <b><u>Hᴏᴡ Tᴏ Rᴇᴅᴇᴇᴍ:</u></b>
 
-1️⃣ Tap a code above to copy it instantly
-2️⃣ Send it to me like this: <code>/redeem CODE</code>
-3️⃣ Boom 💎 — Premium unlocked right away!
+1️⃣ Upar diye gaye kisi bhi code par click karein (wo copy ho jayega).
+2️⃣ Sidhe bot me paste karke send karein.
+3️⃣ Boom 💎 — Premium unlocked instantly!
 ━━━━━━━━━━━━━━━━━━━━━━
 
 ⚠️ <i>Eᴀᴄʜ ᴄᴏᴅᴇ ᴡᴏʀᴋꜱ ᴏɴʟʏ ᴏɴᴄᴇ — sʜᴀʀᴇ ʀᴇꜱᴘᴏɴꜱɪʙʟʏ!</i> 🔥"""
         keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🔑 Redeem Now 🔥", url=f"https://t.me/{temp.U_NAME}")]])
         await message.reply_text(text, reply_markup=keyboard)
     else:
-        await message.reply_text("<b>♻ Usage:\n\n➩ <code>/add_redeem 1min 1</code>,\n➩ <code>/add_redeem 1hour 10</code>,\n➩ <code>/add_redeem 1day 5</code></b>")
+        await message.reply_text(
+            "⚠️ <b>Iɴᴠᴀʟɪᴅ Fᴏʀᴍᴀᴛ!</b>\n\n"
+            "📝 <b><u>Cᴏʀʀᴇᴄᴛ Uꜱᴀɢᴇ:</u></b>\n"
+            "➩ <code>/add_redeem [Time] [Quantity]</code>\n\n"
+            "💡 <b>Exᴀᴍᴘʟᴇꜱ:</b>\n"
+            "╰ 👉 <code>/add_redeem 1min 1</code>\n"
+            "╰ 👉 <code>/add_redeem 1hour 10</code>\n"
+            "╰ 👉 <code>/add_redeem 1day 5</code>"
+        )
 
 
 
@@ -74,25 +84,27 @@ async def redeem_code(client, message):
 
         if not code_data:
             await message.reply_text(
-                "❌ <b>Iɴᴠᴀʟɪᴅ Rᴇᴅᴇᴇᴍ Cᴏᴅᴇ!</b>\n\n"
-                "Yᴇ ᴄᴏᴅᴇ ᴇxɪsᴛ ɴᴀʜɪ ᴋᴀʀᴛᴀ ʏᴀ ᴇxᴘɪʀᴇ ʜᴏ ᴄʜᴜᴋᴀ ʜᴀɪ.\n"
-                "🔎 sᴘᴇʟʟɪɴɢ ᴄʜᴇᴄᴋ ᴋᴀʀᴋᴇ ᴅᴏʙᴀᴀʀᴀ ᴛʀʏ ᴋᴀʀᴇɪɴ."
+                "❌ <b><u>Iɴᴠᴀʟɪᴅ Rᴇᴅᴇᴇᴍ Cᴏᴅᴇ!</u></b> ❌\n\n"
+                "⚠️ Yᴇ ᴄᴏᴅᴇ ᴇxɪsᴛ ɴᴀʜɪ ᴋᴀʀᴛᴀ ʏᴀ ᴇxᴘɪʀᴇ ʜᴏ ᴄʜᴜᴋᴀ ʜᴀɪ.\n\n"
+                "🔎 <i>Sᴘᴇʟʟɪɴɢ ᴄʜᴇᴄᴋ ᴋᴀʀᴋᴇ ᴅᴏʙᴀᴀʀᴀ ᴛʀʏ ᴋᴀʀᴇɪɴ.</i>"
             )
             return
 
         if code_data.get("used"):
             if code_data.get("used_by") == user_id:
                 await message.reply_text(
-                    "♻️ <b>Aᴀᴘ Pᴇʜʟᴇ Hɪ Yᴇ Cᴏᴅᴇ Rᴇᴅᴇᴇᴍ Kᴀʀ Cʜᴜᴋᴇ Hᴏ!</b>\n\n"
-                    f"🎟 <b>Cᴏᴅᴇ:</b> <code>{redeem_code}</code>\n\n"
-                    "<i>Hᴀʀ ᴄᴏᴅᴇ sɪʀғ 1 ʙᴀᴀʀ ʜɪ ɪsᴛᴇᴍᴀʟ ʜᴏ sᴀᴋᴛᴀ ʜᴀɪ, ᴀᴀᴘ ᴋᴀ ᴘʀᴇᴍɪᴜᴍ ᴘᴇʜʟᴇ ʜɪ ᴀᴄᴛɪᴠᴀᴛᴇ ʜᴏ ᴄʜᴜᴋᴀ ʜᴀɪ.</i>\n\n"
-                    "💎 ɴᴀʏᴀ ᴄᴏᴅᴇ ᴄʜᴀʜɪʏᴇ? Oᴡɴᴇʀ sᴇ sᴀᴍᴘᴀʀᴋ ᴋᴀʀᴇɪɴ."
+                    "♻️ <b><u>Aʟʀᴇᴀᴅʏ Rᴇᴅᴇᴇᴍᴇᴅ!</u></b> ♻️\n\n"
+                    "👤 <b>Aᴀᴘ ᴘᴇʜʟᴇ ʜɪ ʏᴇ ᴄᴏᴅᴇ ᴜsᴇ ᴋᴀʀ ᴄʜᴜᴋᴇ ʜᴏ!</b>\n"
+                    "🎟 <b>Cᴏᴅᴇ :</b> <code>{redeem_code}</code>\n\n"
+                    "📌 <i>Hᴀʀ ᴄᴏᴅᴇ sɪʀғ 1 ʙᴀᴀʀ ʜɪ ɪsᴛᴇᴍᴀʟ ʜᴏ sᴀᴋᴛᴀ ʜᴀɪ, ᴀᴀᴘ ᴋᴀ ᴘʀᴇᴍɪᴜᴍ ᴘᴇʜʟᴇ ʜɪ ᴀᴄᴛɪᴠᴀᴛᴇ ʜᴏ ᴄʜᴜᴋᴀ ʜᴀɪ.</i>\n\n"
+                    "💎 <b>Nᴀʏᴀ ᴄᴏᴅᴇ ᴄʜᴀʜɪʏᴇ? Oᴡɴᴇʀ sᴇ sᴀᴍᴘᴀʀᴋ ᴋᴀʀᴇɪɴ.</b>"
                 )
             else:
                 await message.reply_text(
-                    "🚫 <b>Yᴇ Cᴏᴅᴇ Pᴇʜʟᴇ Hɪ Isᴛᴇᴍᴀʟ Hᴏ Cʜᴜᴋᴀ Hᴀɪ!</b>\n\n"
-                    f"🎟 <b>Cᴏᴅᴇ:</b> <code>{redeem_code}</code>\n\n"
-                    "Yᴇ ɢɪғᴛ ᴄᴏᴅᴇ ᴋɪsɪ ᴀᴜʀ ᴜsᴇʀ ᴅᴡᴀʀᴀ ᴘᴇʜʟᴇ ʜɪ ʀᴇᴅᴇᴇᴍ ᴋɪʏᴀ ᴊᴀᴀ ᴄʜᴜᴋᴀ ʜᴀɪ."
+                    "🚫 <b><u>Cᴏᴅᴇ Aʟʀᴇᴀᴅʏ Uꜱᴇᴅ!</u></b> 🚫\n\n"
+                    "🎟 <b>Cᴏᴅᴇ :</b> <code>{redeem_code}</code>\n\n"
+                    "⚠️ <i>Yᴇ ɢɪғᴛ ᴄᴏᴅᴇ ᴋɪsɪ ᴀᴜʀ ᴜsᴇʀ ᴅᴡᴀʀᴀ ᴘᴇʜʟᴇ ʜɪ ʀᴇᴅᴇᴇᴍ ᴋɪʏᴀ ᴊᴀᴀ ᴄʜᴜᴋᴀ ʜᴀɪ.</i>\n\n"
+                    "😔 <b>Bᴇᴛᴛᴇʀ ʟᴜᴄᴋ ɴᴇxᴛ ᴛɪᴍᴇ!</b>"
                 )
             return
 
@@ -117,10 +129,12 @@ async def redeem_code(client, message):
                 if current_expiry and current_expiry > now_aware:
                     expiry_str_in_ist = current_expiry.astimezone(pytz.timezone("Asia/Kolkata")).strftime("%d-%m-%Y\n⏱️ Expiry Time: %I:%M:%S %p")
                     await message.reply_text(
-                        f"🚫 <b>Yᴏᴜ ᴀʟʀᴇᴀᴅʏ ʜᴀᴠᴇ ᴀᴄᴛɪᴠᴇ ᴘʀᴇᴍɪᴜᴍ ᴀᴄᴄᴇss!</b>\n\n"
-                        f"⏳ <b>Cᴜʀʀᴇɴᴛ Pʀᴇᴍɪᴜᴍ Exᴘɪʀʏ:</b> {expiry_str_in_ist}\n\n"
-                        f"<i>Yᴏᴜʀ ᴄᴏᴅᴇ ɪs sᴛɪʟʟ ᴠᴀʟɪᴅ ᴀɴᴅ ᴜɴᴜsᴇᴅ — ᴄᴏᴍᴇ ʙᴀᴄᴋ ᴀɴᴅ ʀᴇᴅᴇᴇᴍ ɪᴛ ᴏɴᴄᴇ ʏᴏᴜʀ ᴄᴜʀʀᴇɴᴛ ᴘʀᴇᴍɪᴜᴍ ᴇxᴘɪʀᴇs.</i>\n\n"
-                        f"<b>Tʜᴀɴᴋ ʏᴏᴜ ғᴏʀ ᴜsɪɴɢ ᴏᴜʀ sᴇʀᴠɪᴄᴇ! 🔥</b>",
+                        f"🛑 <b><u>Aᴄᴛɪᴠᴇ Pʀᴇᴍɪᴜᴍ Exɪꜱᴛꜱ!</u></b> 🛑\n\n"
+                        f"Aᴀᴘᴋᴇ ᴘᴀᴀs ᴘᴇʜʟᴇ sᴇ ʜɪ ᴀᴄᴛɪᴠᴇ ᴘʀᴇᴍɪᴜᴍ ᴘʟᴀɴ ʜᴀɪ!\n\n"
+                        f"⏳ <b>Cᴜʀʀᴇɴᴛ Exᴘɪʀʏ :</b>\n"
+                        f"╰ 👉 {expiry_str_in_ist}\n\n"
+                        f"🎁 <i>Yᴏᴜʀ ᴄᴏᴅᴇ ɪs sᴛɪʟʟ ᴠᴀʟɪᴅ ᴀɴᴅ ᴜɴᴜsᴇᴅ. Aᴘɴᴀ ᴄᴜʀʀᴇɴᴛ ᴘʟᴀɴ ᴇxᴘɪʀᴇ ʜᴏɴᴇ ᴋᴇ ʙᴀᴀᴅ ɪsᴇ ʀᴇᴅᴇᴇᴍ ᴋᴀʀᴇɪɴ!</i>\n\n"
+                        f"💖 <b>Tʜᴀɴᴋ ʏᴏᴜ ғᴏʀ ᴜsɪɴɢ ᴏᴜʀ sᴇʀᴠɪᴄᴇ!</b> 🔥",
                         disable_web_page_preview=True
                     )
                     return
@@ -128,9 +142,9 @@ async def redeem_code(client, message):
                 marked = await db.mark_redeem_code_used(redeem_code, user_id)
                 if not marked:
                     await message.reply_text(
-                        "🚫 <b>Yᴇ Cᴏᴅᴇ Pᴇʜʟᴇ Hɪ Isᴛᴇᴍᴀʟ Hᴏ Cʜᴜᴋᴀ Hᴀɪ!</b>\n\n"
-                        f"🎟 <b>Cᴏᴅᴇ:</b> <code>{redeem_code}</code>\n\n"
-                        "Kɪsɪ ᴀᴜʀ ɴᴇ ᴀᴀᴘsᴇ ᴘᴇʜʟᴇ ʏᴇ ᴄᴏᴅᴇ ʀᴇᴅᴇᴇᴍ ᴋᴀʀ ʟɪʏᴀ."
+                        "🚫 <b><u>Cᴏᴅᴇ Aʟʀᴇᴀᴅʏ Uꜱᴇᴅ!</u></b> 🚫\n\n"
+                        f"🎟 <b>Cᴏᴅᴇ :</b> <code>{redeem_code}</code>\n\n"
+                        "⚠️ <i>Kɪsɪ ᴀᴜʀ ɴᴇ ᴀᴀᴘsᴇ ᴘᴇʜʟᴇ ʏᴇ ᴄᴏᴅᴇ ʀᴇᴅᴇᴇᴍ ᴋᴀʀ ʟɪʏᴀ.</i>"
                     )
                     return
 
@@ -141,26 +155,35 @@ async def redeem_code(client, message):
                 expiry_str_in_ist = expiry_time.astimezone(pytz.timezone("Asia/Kolkata")).strftime("%d-%m-%Y\n⏱️ Expiry Time: %I:%M:%S %p")
                 user_mention = user.mention if user else f"<code>{user_id}</code>"
                 await message.reply_text(
-                    f"🎉✨ <b>Pʀᴇᴍɪᴜᴍ Aᴄᴛɪᴠᴀᴛᴇᴅ Sᴜᴄᴄᴇssғᴜʟʟʏ!</b> ✨🎉\n\n"
-                    f"👤 <b>User:</b> {user_mention}\n"
-                    f"⚡ <b>User ID:</b> <code>{user_id}</code>\n"
-                    f"🎟 <b>Code Used:</b> <code>{redeem_code}</code>\n"
-                    f"⏳ <b>Premium Access Duration:</b> <code>{time}</code>\n"
-                    f"⌛️ <b>Expiry Date:</b> {expiry_str_in_ist}\n\n"
-                    f"💎 <i>Enjoy all premium perks — happy downloading!</i> 🚀",
+                    f"🎉✨ <b><u>Pʀᴇᴍɪᴜᴍ Aᴄᴛɪᴠᴀᴛᴇᴅ Sᴜᴄᴄᴇssғᴜʟʟʏ!</u></b> ✨🎉\n\n"
+                    f"┌───────────────────────\n"
+                    f"├ 👤 <b>Uꜱᴇʀ :</b> {user_mention}\n"
+                    f"├ ⚡ <b>ID :</b> <code>{user_id}</code>\n"
+                    f"├ 🎟 <b>Cᴏᴅᴇ :</b> <code>{redeem_code}</code>\n"
+                    f"├ ⏳ <b>Dᴜʀᴀᴛɪᴏɴ :</b> <code>{time}</code>\n"
+                    f"└───────────────────────\n\n"
+                    f"⌛️ <b><u>Exᴘɪʀʏ Dᴀᴛᴇ & Tɪᴍᴇ:</u></b>\n"
+                    f"╰ 👉 {expiry_str_in_ist}\n\n"
+                    f"💎 <i>Eɴᴊᴏʏ ᴀʟʟ ᴘʀᴇᴍɪᴜᴍ ᴘᴇʀᴋꜱ — ʜᴀᴘᴘʏ ᴅᴏᴡɴʟᴏᴀᴅɪɴɢ!</i> 🚀",
                     disable_web_page_preview=True
                 )
+                
                 log_message = f"""
-                    #Redeem_Premium 🔓
+#Redeem_Premium 🔓
 
-                    👤 <b>User:</b> {user_mention}
-                    ⚡ <b>User ID:</b> <code>{user_id}</code>
-                    🎟 <b>Code Used:</b> <code>{redeem_code}</code>
-                    ⏳ <b>Premium Access Duration:</b> <code>{time}</code>
-                    ⌛️ <b>Expiry Date:</b> {expiry_str_in_ist}
+🎉 <b><u>Nᴇᴡ Pʀᴇᴍɪᴜᴍ Aᴄᴛɪᴠᴀᴛɪᴏɴ</u></b> 🎉
 
-                    🎉 Premium activated successfully! 🚀
-                    """
+┌───────────────────────
+├ 👤 <b>Uꜱᴇʀ :</b> {user_mention}
+├ ⚡ <b>ID :</b> <code>{user_id}</code>
+├ 🎟 <b>Cᴏᴅᴇ :</b> <code>{redeem_code}</code>
+├ ⏳ <b>Dᴜʀᴀᴛɪᴏɴ :</b> <code>{time}</code>
+└───────────────────────
+
+⌛️ <b>Exᴘɪʀʏ :</b> {expiry_str_in_ist}
+
+🚀 <b>Sᴛᴀᴛᴜꜱ :</b> Sᴜᴄᴄᴇꜱꜱғᴜʟʟʏ Rᴇᴅᴇᴇᴍᴇᴅ!
+"""
                 await client.send_message(
                     PREMIUM_LOGS,
                     text=log_message,
@@ -171,4 +194,10 @@ async def redeem_code(client, message):
         except Exception as e:
             await message.reply_text(f"An error occurred while redeeming the code: {e}")
     else:
-        await message.reply_text("Usage: /redeem <code>")
+        await message.reply_text(
+            "⚠️ <b>Iɴᴠᴀʟɪᴅ Fᴏʀᴍᴀᴛ!</b>\n\n"
+            "📝 <b><u>Cᴏʀʀᴇᴄᴛ Uꜱᴀɢᴇ:</u></b>\n"
+            "➩ <code>/redeem [Code]</code>\n\n"
+            "💡 <b>Exᴀᴍᴘʟᴇ:</b>\n"
+            "╰ 👉 <code>/redeem abcdef1234</code>"
+        )
