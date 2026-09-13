@@ -353,7 +353,7 @@ class Database:
     # Bug fix: redeem codes used to live only in an in-memory Python
     # ==========================================================
 
-   async def add_redeem_code(self, code, duration):
+    async def add_redeem_code(self, code, duration):
         """Persist a newly generated redeem code."""
         await self.codes.update_one(
             {"code": code},
