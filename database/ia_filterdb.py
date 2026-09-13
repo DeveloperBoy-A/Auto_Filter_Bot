@@ -576,7 +576,7 @@ def extract_pure_title(original_name):
     clean_name = re.sub(r'\b(web[\s\-]?series|tv[\s\-]?series)\b', '', clean_name, flags=re.IGNORECASE).strip()
 
     # Remove uploader tags
-    uploader_tags = [r'(?:join\s+)?us\s*bobfiles']
+    uploader_tags = [r'(?:join\s+)?us\s*bobfiles', r'tg\s+streamershub']
     uploader_cleanup = r'^(?:(?:' + '|'.join(uploader_tags) + r')[\s]*)+'
     clean_name = re.sub(uploader_cleanup, '', clean_name, flags=re.IGNORECASE).strip()
 
