@@ -315,7 +315,6 @@ Mᴇꜱꜱᴀɢᴇ : <code>{}</code>"""
 
     PREMIUM_TEXT = """<blockquote>🎖️ <b>ᴀᴠᴀɪʟᴀʙʟᴇ ᴘʟᴀɴs</b></blockquote>
 
-
 ◉ 07 ᴅᴀʏꜱ - 10 ₹  / 10 ꜱᴛᴀʀ
 ◉ 15 ᴅᴀʏꜱ - 20 ₹  / 20 ꜱᴛᴀʀ
 ◉ 30 ᴅᴀʏꜱ - 40 ₹  / 40 ꜱᴛᴀʀ
@@ -349,16 +348,30 @@ Mᴇꜱꜱᴀɢᴇ : <code>{}</code>"""
 ‼️ ᴀꜰᴛᴇʀ ꜱᴇɴᴅɪɴɢ ꜱᴄʀᴇᴇɴꜱʜᴏᴛ ᴘʟᴇᴀꜱᴇ ɢɪᴠᴇ ᴜꜱ ꜱᴏᴍᴇᴛɪᴍᴇ ᴛᴏ ᴀᴅᴅ ʏᴏᴜ ɪɴ ᴘʀᴇᴍɪᴜᴍ ʟɪꜱᴛ.</b>"""
 
 
-    PREMIUM_END_TEXT = """<b>ʜᴇʏ {},</b>
+    PREMIUM_END_TEXT = """🛑 <b><u>ᴘʀᴇᴍɪᴜᴍ ᴀᴄᴄᴇꜱꜱ ᴇxᴘɪʀᴇᴅ!</u></b> 🛑
 
-<b>ʏᴏᴜʀ ᴘʀᴇᴍɪᴜᴍ ᴀᴄᴄᴇss ʜᴀs ʙᴇᴇɴ ʀᴇᴍᴏᴠᴇᴅ.</b>  
-<b>ᴛʜᴀɴᴋ ʏᴏᴜ ꜰᴏʀ ᴜsɪɴɢ ᴏᴜʀ sᴇʀᴠɪᴄᴇ 😊</b>  
-<b>ᴄʟɪᴄᴋ ᴏɴ /plan ᴛᴏ ᴄʜᴇᴄᴋ ᴏᴜʀ ᴏᴛʜᴇʀ ᴘʟᴀɴs.</b>
+<b>ʜᴇʏ {},</b>
 
-<blockquote>ᴀᴀᴘᴋᴀ <b>ᴘʀᴇᴍɪᴜᴍ ᴀᴄᴄᴇss</b> ʜᴀᴛᴀ ᴅɪʏᴀ ɢᴀʏᴀ ʜᴀɪ।  
-ʜᴀᴍᴀʀɪ sᴇᴠᴀ ᴋᴀ ᴜᴘʏᴏɢ ᴋᴀʀɴᴇ ᴋᴇ ʟɪʏᴇ ᴅʜᴀɴʏᴀᴠᴀᴀᴅ 🥳  
-ʜᴀᴍᴀʀɪ ᴀɴʏᴀ ʏᴏᴊɴᴀᴏɴ ᴋɪ ᴊᴀᴀɴᴄʜ ᴋᴀʀɴᴇ ᴋᴇ ʟɪʏᴇ <b>/plan</b> ᴘᴀʀ ᴋʟɪᴄᴋ ᴋᴀʀᴇɪɴ।</blockquote>
-"""
+┌───────────────────────
+├ ⏳ <b>Sᴛᴀᴛᴜꜱ :</b> ʏᴏᴜʀ ᴘʀᴇᴍɪᴜᴍ ʜᴀꜱ ʙᴇᴇɴ ᴇxᴘɪʀᴇᴅ/ʀᴇᴍᴏᴠᴇᴅ
+├ 📉 <b>Aᴄᴄᴏᴜɴᴛ :</b> ɴᴏʀᴍᴀʟ ᴜꜱᴇʀ (ʟɪᴍɪᴛꜱ ᴀᴘᴘʟɪᴇᴅ)
+└───────────────────────
+
+⚠️ <b><u>ᴘʀᴇᴍɪᴜᴍ ꜰᴇᴀᴛᴜʀᴇꜱ ʟᴏᴄᴋᴇᴅ :</u></b>
+❌ <i>Uɴʟɪᴍɪᴛᴇᴅ Dᴏᴡɴʟᴏᴀᴅɪɴɢ</i>
+❌ <i>Fᴀꜱᴛ Oɴʟɪɴᴇ Sᴛʀᴇᴀᴍɪɴɢ</i>
+❌ <i>Zᴇʀᴏ Rᴇꜱᴛʀɪᴄᴛɪᴏɴꜱ</i>
+
+💎 <b><u>Cʟɪᴄᴋ Hᴇʀᴇ Tᴏ Cᴏɴᴛɪɴᴜᴇ Pʀᴇᴍɪᴜᴍ :</u></b>
+👉 <b>Jᴜꜱᴛ ᴄʟɪᴄᴋ ᴏɴ /plan ᴛᴏ ʀᴇɴᴇᴡ ɴᴏᴡ!</b>
+
+💖 <b>Tʜᴀɴᴋ ʏᴏᴜ ꜰᴏʀ ᴜꜱɪɴɢ ᴏᴜʀ ᴘʀᴇᴍɪᴜᴍ ꜱᴇʀᴠɪᴄᴇꜱ!</b>
+<b>— [ Tᴏᴋʏᴏ_Uᴘᴅᴀᴛᴇꜱ ]</b>
+
+<blockquote>⚠️ <b>Aapka Premium Access expire ho gaya hai.</b>
+Ab aapke account par limits wapas lag chuki hain. Unlimited downloading aur streaming jaise VIP features ab band hain. 
+
+Bina rukaawat apne features ko <b>continue</b> rakhne ke liye abhi <b>/plan</b> par click karein aur apna plan renew karein! 🥳</blockquote>"""
 
 
     BPREMIUM_TXT = """<blockquote>🎁 <b>ᴘʀᴇᴍɪᴜᴍ ꜰᴇᴀᴛᴜʀᴇꜱ</b> :</blockquote>
