@@ -445,7 +445,7 @@ async def list_chats(bot, message):
                 )
 
             # Number + title
-            out += f"<b>{count}️⃣ {title}</b>\n"
+            out += f"<b>{count}. {title}</b>\n"
 
             # Copy-friendly ID
             out += f"   🆔 <code>{chat_id}</code>\n"
