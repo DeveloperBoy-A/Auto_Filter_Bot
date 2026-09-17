@@ -1467,6 +1467,59 @@ async def set_fsub(client, message):
         logger.error(err_text)
         await client.send_message(LOG_API_CHANNEL, err_text)
 
+@Client.on_message(filters.command('remove_fsub'))
+async def remove_fsub(client, message):
+    try:
+        userid = message.from_user.id if message.from_user else None
+        if not userid:
+            return await message.reply("<b>You are Anonymous admin you can't use this command !</b>")
+        if message.chat.type not in [enums.ChatType.GROUP, enums.ChatType.SUPERGROUP]:
+            return await message.reply_text("ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ᴄᴀɴ ᴏɴʟʏ ʙᴇ ᴜsᴇᴅ ɪɴ ɢʀᴏᴜᴘs")
+        grp_id = message.chat.id
+        title = message.chat.title
+        if not await is_check_admin(client, grp_id, userid):
+            return await message.reply_text(script.NT_ADMIN_ALRT_TXT)
+
+        settings = await get_settings(grp_id)
+        current_fsub = settings.get('fsub', []) if settings else []
+
+        if not current_fsub:
+            return await message.reply_text("ᴛʜɪs ɢʀᴏᴜᴘ ʜᴀs ɴᴏ ᴄᴜsᴛᴏᴍ ꜰsᴜʙ ᴄʜᴀɴɴᴇʟ(s) sᴇᴛ.")
+
+        args = message.text.split(maxsplit=1)
+        if len(args) < 2:
+            # No IDs given -> clear ALL custom fsub channels for this group
+            await save_group_settings(grp_id, 'fsub', AUTH_CHANNELS)
+            await message.reply_text(f"sᴜᴄᴄᴇssғᴜʟʟʏ ʀᴇᴍᴏᴠᴇᴅ ᴀʟʟ ᴄᴜsᴛᴏᴍ ꜰsᴜʙ ᴄʜᴀɴɴᴇʟ(s) ꜰᴏʀ {title}.")
+            log_note = "Aʟʟ ᴄᴜsᴛᴏᴍ ꜰsᴜʙ ᴄʜᴀɴɴᴇʟ(s) ʀᴇᴍᴏᴠᴇᴅ."
+        else:
+            # Specific channel IDs given -> remove only those
+            option = args[1].strip()
+            try:
+                remove_ids = [int(x) for x in option.split()]
+            except ValueError:
+                return await message.reply_text('ᴍᴀᴋᴇ sᴜʀᴇ ᴀʟʟ ɪᴅs ᴀʀᴇ ɪɴᴛᴇɢᴇʀs.')
+            not_found = [i for i in remove_ids if i not in current_fsub]
+            updated_fsub = [i for i in current_fsub if i not in remove_ids]
+            await save_group_settings(grp_id, 'fsub', updated_fsub)
+            msg = f"sᴜᴄᴄᴇssғᴜʟʟʏ ʀᴇᴍᴏᴠᴇᴅ {len(remove_ids) - len(not_found)} ꜰsᴜʙ ᴄʜᴀɴɴᴇʟ(s) ꜰᴏʀ {title}."
+            if not_found:
+                msg += f"\n\n⚠️ ɴᴏᴛ ꜰᴏᴜɴᴅ ɪɴ ʟɪsᴛ: {', '.join(str(i) for i in not_found)}"
+            await message.reply_text(msg)
+            log_note = f"Rᴇᴍᴏᴠᴇᴅ ꜰsᴜʙ ᴄʜᴀɴɴᴇʟ(s): {', '.join(str(i) for i in remove_ids)}"
+
+        mention = message.from_user.mention if message.from_user else "Unknown"
+        await client.send_message(
+            LOG_API_CHANNEL,
+            f"#Fsub_Channel_removed\n\n"
+            f"ᴜꜱᴇʀ - {mention} ᴜᴘᴅᴀᴛᴇᴅ ᴛʜᴇ ꜰᴏʀᴄᴇ ᴄʜᴀɴɴᴇʟ(ꜱ) ꜰᴏʀ {title}:\n\n{log_note}"
+        )
+    except Exception as e:
+        err_text = f"⚠️ Error in remove_fsub :\n{e}"
+        logger.error(err_text)
+        await client.send_message(LOG_API_CHANNEL, err_text)
+
+
 @Client.on_message(filters.private & filters.command("resetallgroup") & filters.user(ADMINS))
 async def reset_all_settings(client, message):
     try:
