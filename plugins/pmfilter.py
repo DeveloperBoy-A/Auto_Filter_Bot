@@ -350,8 +350,11 @@ async def advantage_spoll_choker(bot, query):
     else:
         # Log to BIN_CHANNEL
         reqstr1 = query.from_user.id if query.from_user else 0
-        reqstr = await bot.get_users(reqstr1)
-        if NO_RESULTS_MSG:
+        try:
+            reqstr = await bot.get_users(reqstr1)
+        except Exception:
+            reqstr = None
+        if NO_RESULTS_MSG and reqstr:
             try:
                 await bot.send_message(
                     chat_id=BIN_CHANNEL,
