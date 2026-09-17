@@ -398,54 +398,112 @@ async def list_users(bot, message):
 
 @Client.on_message(filters.command('chats') & filters.user(ADMINS))
 async def list_chats(bot, message):
-    dreamxbotz = await message.reply('Getting List Of chats')
-    chats = await db.get_all_chats()
-    out = "Chats Saved In DB Are:\n\n"
-
-    async for chat in chats:
-        chat_id = chat['id']
-        title = chat.get('title', 'Unknown')
-        username = None
-        invite_link = None
-
-        try:
-            chat_info = await bot.get_chat(chat_id)
-            username = chat_info.username
-
-            if username:
-                invite_link = f"https://t.me/{username}"
-            else:
-                # Private groups/channels: use existing invite link first.
-                invite_link = getattr(chat_info, 'invite_link', None)
-                if not invite_link:
-                    try:
-                        invite = await bot.create_chat_invite_link(chat_id)
-                        invite_link = invite.invite_link
-                    except Exception as e:
-                        logging.warning(f"Could not create invite link for {chat_id}: {e}")
-        except Exception as e:
-            logging.warning(f"Could not fetch chat details for {chat_id}: {e}")
-
-        out += f"**Title:** `{title}`\n**- ID:** `{chat_id}`"
-
-        if username:
-            out += f"\n**- Username:** @{username}"
-
-        if invite_link:
-            out += f"\n**- Link:** {invite_link}"
-        else:
-            out += "\n**- Link:** Not Available"
-
-        if chat['chat_status']['is_disabled']:
-            out += ' ( Disabled Chat )'
-        out += '\n\n'
+    dreamxbotz = await message.reply('Getting List Of Chats...')
 
     try:
-        await dreamxbotz.edit_text(out, disable_web_page_preview=True)
-    except MessageTooLong:
-        with open('chats.txt', 'w+', encoding='utf-8') as outfile:
-            outfile.write(out)
-        await message.reply_document('chats.txt', caption="List Of Chats")
+        chats = await db.get_all_chats()
+        out = "<b>Chats Saved In DB Are:</b>\n\n"
+        count = 0
+
+        async for chat in chats:
+            count += 1
+
+            chat_id = chat.get('id', '')
+            title = chat.get('title', 'Unknown Chat')
+
+            username = None
+            invite_link = None
+
+            # Get latest Telegram chat information
+            try:
+                chat_info = await bot.get_chat(chat_id)
+
+                username = getattr(chat_info, 'username', None)
+
+                # Public chat -> direct username link
+                if username:
+                    invite_link = f"https://t.me/{username}"
+
+                # Private chat/group/channel
+                else:
+                    # Try existing invite link first
+                    invite_link = getattr(chat_info, 'invite_link', None)
+
+                    # Create invite link if possible
+                    if not invite_link:
+                        try:
+                            invite = await bot.create_chat_invite_link(chat_id)
+                            invite_link = invite.invite_link
+                        except Exception as e:
+                            logging.warning(
+                                f"Could not create invite link for {chat_id}: {e}"
+                            )
+
+            except Exception as e:
+                logging.warning(
+                    f"Could not fetch chat details for {chat_id}: {e}"
+                )
+
+            # Number + title
+            out += f"<b>{count}️⃣ {title}</b>\n"
+
+            # Copy-friendly ID
+            out += f"   🆔 <code>{chat_id}</code>\n"
+
+            # Username
+            if username:
+                out += f"   👤 @{username}\n"
+
+            # Invite / public link
+            if invite_link:
+                out += f"   🔗 {invite_link}\n"
+            else:
+                out += "   🔗 <i>Not Available</i>\n"
+
+            # Disabled status
+            if chat.get('chat_status', {}).get('is_disabled', False):
+                out += "   ⚠️ <b>Disabled Chat</b>\n"
+
+            out += "\n"
+
+        # No chats found
+        if count == 0:
+            await dreamxbotz.edit_text(
+                "<b>❌ No chats are saved in DB.</b>"
+            )
+            raise StopPropagation
+
+        # Send result
+        try:
+            await dreamxbotz.edit_text(
+                out,
+                disable_web_page_preview=True
+            )
+
+        except MessageTooLong:
+            with open('chats.txt', 'w', encoding='utf-8') as outfile:
+                outfile.write(out)
+
+            await message.reply_document(
+                'chats.txt',
+                caption="<b>📋 List Of Chats</b>"
+            )
+
+    except StopPropagation:
+        raise
+
+    except Exception as e:
+        logging.exception("Error in /chats command")
+
+        try:
+            await dreamxbotz.edit_text(
+                f"<b>❌ Error while fetching chats:</b>\n"
+                f"<code>{e}</code>"
+            )
+        except Exception:
+            pass
+
+    raise StopPropagation
 
 
 @Client.on_message(filters.command('group_cmd'))
