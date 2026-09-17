@@ -1,3 +1,4 @@
+import pytz
 from aiohttp import web
 from .route import routes
 from asyncio import sleep
@@ -21,7 +22,7 @@ async def web_server():
 async def check_expired_premium(client):
     while True:
         try:
-            data = await db.get_expired(datetime.now())
+            data = await db.get_expired(datetime.now(pytz.utc))
 
             for user in data:
                 user_id = user["id"]
