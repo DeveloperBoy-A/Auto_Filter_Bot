@@ -851,20 +851,11 @@ async def requests(bot, message):
 async def send_msg(bot, message):
     if message.reply_to_message:
         target_id = message.text.split(" ", 1)[1]
-        out = "Users Saved In DB Are:\n\n"
-        success = False
         try:
             user = await bot.get_users(target_id)
-            users = await db.get_all_users()
-            async for usr in users:
-                out += f"{usr['id']}"
-                out += '\n'
-            if str(user.id) in str(out):
+            exists = await db.is_user_exist(user.id)
+            if exists:
                 await message.reply_to_message.copy(int(user.id))
-                success = True
-            else:
-                success = False
-            if success:
                 await message.reply_text(f"<b>ʏᴏᴜʀ ᴍᴇꜱꜱᴀɢᴇ ʜᴀꜱ ʙᴇᴇɴ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ꜱᴇɴᴛ ᴛᴏ {user.mention}.</b>")
             else:
                 await message.reply_text("<b>ᴛʜɪꜱ ᴜꜱᴇʀ ᴅɪᴅɴ'ᴛ ꜱᴛᴀʀᴛᴇᴅ ᴛʜɪꜱ ʙᴏᴛ ʏᴇᴛ !</b>")
@@ -872,6 +863,7 @@ async def send_msg(bot, message):
             await message.reply_text(f"<b>Error: {e}</b>")
     else:
         await message.reply_text("<b>ᴜꜱᴇ ᴛʜɪꜱ ᴄᴏᴍᴍᴀɴᴅ ᴀꜱ ᴀ ʀᴇᴘʟʏ ᴛᴏ ᴀɴʏ ᴍᴇꜱꜱᴀɢᴇ ᴜꜱɪɴɢ ᴛʜᴇ ᴛᴀʀɢᴇᴛ ᴄʜᴀᴛ ɪᴅ. ꜰᴏʀ ᴇɢ:  /send ᴜꜱᴇʀɪᴅ</b>")
+
 
 @Client.on_message(filters.command("deletefiles") & filters.user(ADMINS))
 async def deletemultiplefiles(bot, message):
