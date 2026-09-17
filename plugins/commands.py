@@ -847,22 +847,56 @@ async def requests(bot, message):
 
 
 
+
 @Client.on_message(filters.command("send") & filters.user(ADMINS))
 async def send_msg(bot, message):
-    if message.reply_to_message:
-        target_id = message.text.split(" ", 1)[1]
-        try:
-            user = await bot.get_users(target_id)
-            exists = await db.is_user_exist(user.id)
-            if exists:
-                await message.reply_to_message.copy(int(user.id))
-                await message.reply_text(f"<b>ʏᴏᴜʀ ᴍᴇꜱꜱᴀɢᴇ ʜᴀꜱ ʙᴇᴇɴ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ꜱᴇɴᴛ ᴛᴏ {user.mention}.</b>")
-            else:
-                await message.reply_text("<b>ᴛʜɪꜱ ᴜꜱᴇʀ ᴅɪᴅɴ'ᴛ ꜱᴛᴀʀᴛᴇᴅ ᴛʜɪꜱ ʙᴏᴛ ʏᴇᴛ !</b>")
-        except Exception as e:
-            await message.reply_text(f"<b>Error: {e}</b>")
-    else:
-        await message.reply_text("<b>ᴜꜱᴇ ᴛʜɪꜱ ᴄᴏᴍᴍᴀɴᴅ ᴀꜱ ᴀ ʀᴇᴘʟʏ ᴛᴏ ᴀɴʏ ᴍᴇꜱꜱᴀɢᴇ ᴜꜱɪɴɢ ᴛʜᴇ ᴛᴀʀɢᴇᴛ ᴄʜᴀᴛ ɪᴅ. ꜰᴏʀ ᴇɢ:  /send ᴜꜱᴇʀɪᴅ</b>")
+    # Usage: reply to any message with /send USER_ID
+    if not message.reply_to_message:
+        await message.reply_text(
+            "<b>ᴜꜱᴇ ᴛʜɪꜱ ᴄᴏᴍᴍᴀɴᴅ ᴀꜱ ᴀ ʀᴇᴘʟʏ ᴛᴏ ᴀ ᴍᴇꜱꜱᴀɢᴇ.\n\n"
+            "Example: <code>/send 123456789</code></b>"
+        )
+        raise StopPropagation
+
+    if len(message.command) < 2:
+        await message.reply_text(
+            "<b>❌ ᴜꜱᴇʀ ɪᴅ ᴍɪꜱꜱɪɴɢ.\n\n"
+            "Example: <code>/send 123456789</code></b>"
+        )
+        raise StopPropagation
+
+    try:
+        target_id = int(message.command[1])
+    except (ValueError, TypeError):
+        await message.reply_text("<b>❌ ɪɴᴠᴀʟɪᴅ ᴜꜱᴇʀ ɪᴅ.</b>")
+        raise StopPropagation
+
+    try:
+        user = await bot.get_users(target_id)
+        users = await db.get_all_users()
+        saved_user = False
+
+        async for usr in users:
+            if int(usr.get("id", 0)) == target_id:
+                saved_user = True
+                break
+
+        if not saved_user:
+            await message.reply_text(
+                "<b>ᴛʜɪꜱ ᴜꜱᴇʀ ᴅɪᴅɴ'ᴛ ꜱᴛᴀʀᴛ ᴛʜɪꜱ ʙᴏᴛ ʏᴇᴛ !</b>"
+            )
+            raise StopPropagation
+
+        await message.reply_to_message.copy(chat_id=target_id)
+        await message.reply_text(
+            f"<b>ʏᴏᴜʀ ᴍᴇꜱꜱᴀɢᴇ ʜᴀꜱ ʙᴇᴇɴ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ꜱᴇɴᴛ ᴛᴏ {user.mention}.</b>"
+        )
+    except StopPropagation:
+        raise
+    except Exception as e:
+        await message.reply_text(f"<b>❌ Error: {e}</b>")
+
+    raise StopPropagation
 
 
 @Client.on_message(filters.command("deletefiles") & filters.user(ADMINS))
