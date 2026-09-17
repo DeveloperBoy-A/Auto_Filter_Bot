@@ -123,6 +123,8 @@ class script(object):
     
 Gʀᴏᴜᴘ = {}
 Iᴅ = <code>{}</code>
+Uꜱᴇʀɴᴀᴍᴇ = {}
+Iɴᴠɪᴛᴇ Lɪɴᴋ = {}
 Tᴏᴛᴀʟ Mᴇᴍʙᴇʀs = <code>{}</code>
 Aᴅᴅᴇᴅ Bʏ - {}
 """
