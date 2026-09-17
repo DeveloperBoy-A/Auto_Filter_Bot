@@ -66,13 +66,21 @@ async def broadcast_cancel(bot, query):
         temp.B_GROUPS_CANCEL = True
         await query.message.edit("🛑 Trying to cancel groups broadcasting...")
 
-# ----------------- Send message helper (Optimized for Formatting & Pin) -----------------
+# ----------------- Send message helper (Optimized for Formatting, Pin & Spoiler) -----------------
 async def send_message(bot, chat_id, reply_msg, pin=False):
     try:
-        sent = await reply_msg.copy(
-            chat_id=chat_id,
-            reply_markup=reply_msg.reply_markup
-        )
+        # Basic copy arguments
+        copy_args = {
+            "chat_id": chat_id,
+            "reply_markup": reply_msg.reply_markup
+        }
+        
+        # Check agar message me media hai aur uspar spoiler laga hai
+        if reply_msg.media and getattr(reply_msg, "has_media_spoiler", False):
+            copy_args["has_spoiler"] = True
+
+        # Copy command with dynamic arguments
+        sent = await reply_msg.copy(**copy_args)
 
         if pin:
             try:
@@ -91,7 +99,7 @@ async def send_message(bot, chat_id, reply_msg, pin=False):
                         disable_notification=True,
                         both_sides=True
                     )
-            except Exception as e:
+            except Exception:
                 pass
         return sent, "Success"
 
@@ -103,6 +111,7 @@ async def send_message(bot, chat_id, reply_msg, pin=False):
             return None, "Deleted"
         else:
             return None, "Error"
+
 
 
 # ----------------- User Broadcast -----------------
