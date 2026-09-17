@@ -104,6 +104,31 @@ async def is_subscribed(bot, user_id, fsub_channels):
             pass
     return btn
 
+
+async def get_group_log_details(client, chat_id):
+    """
+    Returns (username_display, invite_link) for a group/chat, for use in
+    log messages (new group added, settings changed, etc).
+    """
+    username_display = "Pʀɪᴠᴀᴛᴇ Gʀᴏᴜᴘ (ɴᴏ ᴜsᴇʀɴᴀᴍᴇ)"
+    invite_link = "N/A"
+    try:
+        chat = await client.get_chat(chat_id)
+        if chat.username:
+            username_display = f"@{chat.username}"
+            invite_link = f"https://t.me/{chat.username}"
+        elif chat.invite_link:
+            invite_link = chat.invite_link
+    except Exception:
+        pass
+    if invite_link == "N/A":
+        try:
+            invite_link = await client.export_chat_invite_link(chat_id)
+        except Exception:
+            pass
+    return username_display, invite_link
+    
+
 async def is_check_admin(bot, chat_id, user_id):
     try:
         member = await bot.get_chat_member(chat_id, user_id)
