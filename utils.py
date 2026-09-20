@@ -1,6 +1,7 @@
 import re
 import os
 import datetime
+import time
 import pytz
 import logging
 from info import  *
@@ -57,22 +58,37 @@ class temp(object):
     VERIFICATIONS = {}
     TEMP_INVITE_LINKS = {}
 
+
+
 async def is_req_subscribed(bot, user_id, rqfsub_channels):
     btn = []
     for ch_id in rqfsub_channels:
         try:
-            # Seedha Telegram API se check karega ki member hai ya nahi
             member = await bot.get_chat_member(ch_id, user_id)
             if member.status in [enums.ChatMemberStatus.BANNED, enums.ChatMemberStatus.LEFT]:
                 raise UserNotParticipant
         except UserNotParticipant:
             try:
                 chat = await bot.get_chat(ch_id)
-                invite = await bot.create_chat_invite_link(
-                    ch_id,
-                    creates_join_request=True
-                )
-                btn.append([InlineKeyboardButton(f"⛔️ Join {chat.title}", url=invite.invite_link)])
+                
+                # 💯 FALLBACK LOGIC: Check agar link exist nahi karta YA 24 hours (86400 sec) se zyada purana ho gaya hai
+                current_time = time.time()
+                cached_data = temp.TEMP_INVITE_LINKS.get(ch_id)
+                
+                if not cached_data or (current_time - cached_data.get('time', 0) > 86400):
+                    invite = await bot.create_chat_invite_link(
+                        chat.id, 
+                        creates_join_request=True
+                    )
+                    # Naya link aur current time dono cache me save karega
+                    temp.TEMP_INVITE_LINKS[ch_id] = {
+                        'link': invite.invite_link,
+                        'time': current_time
+                    }
+                
+                # Button me cached link pass karega
+                btn.append([InlineKeyboardButton(f"⛔️ Join {chat.title}", url=temp.TEMP_INVITE_LINKS[ch_id]['link'])])
+                
             except ChatAdminRequired:
                 logger.warning(f"Bot not admin in {ch_id}")
             except Exception as e:
@@ -81,6 +97,7 @@ async def is_req_subscribed(bot, user_id, rqfsub_channels):
             logger.error(f"Error checking membership in {ch_id}: {e}")
 
     return btn
+
 
 
 
