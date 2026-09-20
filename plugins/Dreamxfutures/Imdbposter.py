@@ -117,23 +117,67 @@ async def get_movie_details(query, id=False, file=None):
 
             movie_list = search_result.titles[:10]
 
+            kind_filter = [
+                'movie',
+                'tv series',
+                'tvSeries',
+                'tvMiniSeries',
+                'tvMovie'
+            ]
+
+            def _apply_kind_filter(lst):
+                fk = [
+                    m for m in lst
+                    if m.kind
+                    and m.kind in kind_filter
+                ]
+                return fk if fk else lst
+
+            # ------------------------------------------------
+            # Year Filter
+            # ------------------------------------------------
+
             if year:
-                filtered = [m for m in movie_list if m.year and str(m.year) == str(year)]
-                if not filtered:
-                    filtered = movie_list
+
+                filtered = [
+                    m for m in movie_list
+                    if m.year
+                    and str(m.year) == str(year)
+                ]
+
             else:
+
                 filtered = movie_list
 
-            kind_filter = ['movie', 'tv series', 'tvSeries', 'tvMiniSeries', 'tvMovie']
-            filtered_kind = [m for m in filtered if m.kind and m.kind in kind_filter]
-            if not filtered_kind:
-                logger.info("No matches found for kind 'movie' or 'tv series', falling back to filtered list.")
-                filtered_kind = filtered
+            # ------------------------------------------------
+            # Title Match (required) - year alone isn't enough,
+            # since the same year can have "Immortal", "Immortal
+            # Combat", "The Immortal", etc. We never blindly grab
+            # the first search result anymore.
+            # ------------------------------------------------
 
-            if not filtered_kind:
+            best = None
+
+            for m in _apply_kind_filter(filtered):
+                if _title_matches(getattr(m, "title", "") or "", title):
+                    best = m
+                    break
+
+            if not best and filtered is not movie_list:
+                for m in _apply_kind_filter(movie_list):
+                    if _title_matches(getattr(m, "title", "") or "", title):
+                        best = m
+                        break
+
+            if not best:
+                logger.info(
+                    f"[IMDb] No title match for '{title}' "
+                    f"({year}) among search results - "
+                    f"skipping poster to avoid a wrong match."
+                )
                 return None
 
-            movieid = filtered_kind[0].imdb_id
+            movieid = best.imdb_id
         else:
             movieid = query
 
@@ -215,6 +259,45 @@ def _release_year_matches(release_date, year) -> bool:
     return str(release_date)[:4] == str(year)
 
 
+# ============================================================
+# Strict Title Match
+# ============================================================
+# Year alone is not enough to pick the right poster: the same year
+# can have "Immortal", "Immortal Combat", "The Immortal", etc. This
+# guards against attaching one movie's poster to a different movie
+# that merely shares part of the name.
+
+def _normalize_title_for_match(t) -> str:
+    if not t:
+        return ""
+
+    t = str(t).lower().strip()
+    t = re.sub(r'[^a-z0-9 ]', '', t)
+    t = re.sub(r'\s+', ' ', t).strip()
+
+    return t
+
+
+def _strip_leading_article(s: str) -> str:
+    return re.sub(r'^(the|a|an)\s+', '', s)
+
+
+def _title_matches(candidate_title, expected_title) -> bool:
+    """
+    Strict (not substring) title comparison. Rejects 'Immortal Combat'
+    or 'The Immortal Man' as a match for 'Immortal', while still
+    tolerating case/punctuation/leading-article differences.
+    """
+
+    c = _normalize_title_for_match(candidate_title)
+    e = _normalize_title_for_match(expected_title)
+
+    if not c or not e:
+        return True
+
+    return _strip_leading_article(c) == _strip_leading_article(e)
+
+
 async def _search_official_tmdb(title: str, year: str | None):
     """Direct TMDB search (accurate, year-filtered). Returns a details dict or None."""
     if not TMDB_API_KEY:
@@ -236,19 +319,68 @@ async def _search_official_tmdb(title: str, year: str | None):
                 return None
 
             chosen = None
-            if year:
+
+            # ------------------------------------------------
+            # Exact Year + Title Match (preferred)
+            # ------------------------------------------------
+
+            for r in results:
+
+                if (
+                    _release_year_matches(r.get("release_date"), year)
+                    and _title_matches(r.get("title"), title)
+                ):
+                    chosen = r
+                    break
+
+            # ------------------------------------------------
+            # Year-only Match (title may have a subtitle, etc.)
+            # ------------------------------------------------
+
+            if not chosen and year:
+
                 for r in results:
-                    if _release_year_matches(r.get("release_date"), year):
+
+                    if _release_year_matches(
+                        r.get("release_date"),
+                        year
+                    ):
                         chosen = r
                         break
+
             if not chosen:
                 chosen = results[0]
-                if year and not _release_year_matches(chosen.get("release_date"), year):
-                    logger.info(
-                        f"[TMDB] No {year} match for '{title}', closest is "
-                        f"'{chosen.get('title')}' ({chosen.get('release_date')}) — skipping"
-                    )
-                    return None
+
+            # ------------------------------------------------
+            # Final Safety Checks - never return a mismatched poster
+            # ------------------------------------------------
+
+            if (
+                year
+                and not _release_year_matches(
+                    chosen.get("release_date"),
+                    year
+                )
+            ):
+
+                logger.info(
+                    f"[TMDB] No {year} match "
+                    f"for '{title}', closest is "
+                    f"'{chosen.get('title')}' "
+                    f"({chosen.get('release_date')})"
+                )
+
+                return None
+
+            if not _title_matches(chosen.get("title"), title):
+
+                logger.info(
+                    f"[TMDB] Title mismatch for '{title}', "
+                    f"closest result was '{chosen.get('title')}' "
+                    f"- rejecting poster to avoid a wrong match"
+                )
+
+                return None
 
         # Fetch full details (genres, cast, plot, etc.) using the correctly-matched movie id
         movie_id = chosen.get("id")
