@@ -367,6 +367,30 @@ async def _cached_imdb_get_movie(movieid_str: str):
     _imdb_cache_set(_IMDB_MOVIE_CACHE, movieid_str, result)
     return result
 
+def _normalize_title_for_match(t) -> str:
+    if not t:
+        return ""
+
+    t = str(t).lower().strip()
+    t = re.sub(r'[^a-z0-9 ]', '', t)
+    t = re.sub(r'\s+', ' ', t).strip()
+
+    return t
+
+
+def _strip_leading_article(s: str) -> str:
+    return re.sub(r'^(the|a|an)\s+', '', s)
+
+
+def _title_matches(candidate_title, expected_title) -> bool:
+    c = _normalize_title_for_match(candidate_title)
+    e = _normalize_title_for_match(expected_title)
+
+    if not c or not e:
+        return True
+
+    return _strip_leading_article(c) == _strip_leading_article(e)
+
 
 async def get_poster(query, bulk=False, id=False, file=None):
     if not id:
@@ -389,25 +413,38 @@ async def get_poster(query, bulk=False, id=False, file=None):
 
         movie_list = search_result.titles[:MAX_LIST_ELM]
 
+        kind_filter = ['movie', 'tv series', 'tvSeries', 'tvMiniSeries', 'tvMovie']
+
+        def _apply_kind_filter(lst):
+            fk = [m for m in lst if m.kind and m.kind in kind_filter]
+            return fk if fk else lst
+
         if year_val:
             filtered = [m for m in movie_list if m.year and str(m.year) == str(year_val)]
-            if not filtered:
-                filtered = movie_list
         else:
             filtered = movie_list
 
-        kind_filter = ['movie', 'tv series', 'tvSeries', 'tvMiniSeries', 'tvMovie']
-        filtered_kind = [m for m in filtered if m.kind and m.kind in kind_filter]
-
-        if not filtered_kind:
-            filtered_kind = filtered
-
         if bulk:
+            filtered_kind = _apply_kind_filter(filtered) if filtered else _apply_kind_filter(movie_list)
             return filtered_kind[:MAX_LIST_ELM]
-        if not filtered_kind:
-            return None   
-        movie_brief = filtered_kind[0]
-        movieid_str = movie_brief.imdb_id 
+
+        movie_brief = None
+
+        for m in _apply_kind_filter(filtered):
+            if _title_matches(getattr(m, "title", "") or "", title):
+                movie_brief = m
+                break
+
+        if not movie_brief and filtered is not movie_list:
+            for m in _apply_kind_filter(movie_list):
+                if _title_matches(getattr(m, "title", "") or "", title):
+                    movie_brief = m
+                    break
+
+        if not movie_brief:
+            return None
+
+        movieid_str = movie_brief.imdb_id
     else:
         movieid_str = query
 
