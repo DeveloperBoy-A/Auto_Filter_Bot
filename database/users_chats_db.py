@@ -50,6 +50,14 @@ class Database:
     async def del_join_req(self):
         await self.req.drop()
 
+    async def remove_join_req(self, user_id: int, channel_id: int):
+    await self.req.update_one(
+        {'user_id': user_id},
+        {'$pull': {'channels': channel_id}}
+    )
+    
+    
+
     def new_user(self, id, name):
         return dict(
             id = id,
