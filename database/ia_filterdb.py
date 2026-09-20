@@ -33,6 +33,25 @@ def _year_matches(candidate_date: str | None, expected_year: str | None) -> bool
         return True
     return str(candidate_date).strip()[:4] == str(expected_year).strip()
 
+def _normalize_title_for_match(t) -> str:
+    if not t:
+        return ""
+    t = str(t).lower().strip()
+    t = re.sub(r'[^a-z0-9 ]', '', t)
+    t = re.sub(r'\s+', ' ', t).strip()
+    return t
+
+
+def _strip_leading_article(s: str) -> str:
+    return re.sub(r'^(the|a|an)\s+', '', s)
+
+
+def _title_matches(candidate_title, expected_title) -> bool:
+    c = _normalize_title_for_match(candidate_title)
+    e = _normalize_title_for_match(expected_title)
+    if not c or not e:
+        return True
+    return _strip_leading_article(c) == _strip_leading_article(e)
 
 async def _fetch_cover_url_official_tmdb(
     title: str,
@@ -83,9 +102,19 @@ async def _fetch_cover_url_official_tmdb(
             date_key = "first_air_date" if is_series else "release_date"
 
             chosen = None
+            result_title_key = "name" if is_series else "title"
 
-            # Exact year match
-            if year:
+            # Exact year + title match (preferred)
+            for result in results:
+                if (
+                    _year_matches(result.get(date_key), year)
+                    and _title_matches(result.get(result_title_key), title)
+                ):
+                    chosen = result
+                    break
+
+            # Year-only match (title may have a subtitle, etc.)
+            if not chosen and year:
                 for result in results:
                     if _year_matches(
                         result.get(date_key),
@@ -103,6 +132,15 @@ async def _fetch_cover_url_official_tmdb(
                 chosen.get(date_key),
                 year
             ):
+                return None
+
+            # Never accept a mismatched title just because the year lined up
+            if not _title_matches(chosen.get(result_title_key), title):
+                logger.debug(
+                    f"[TMDB] Title mismatch for '{title}', "
+                    f"closest result was '{chosen.get(result_title_key)}' "
+                    f"- rejecting poster to avoid a wrong match"
+                )
                 return None
 
             poster_path = chosen.get("poster_path")
