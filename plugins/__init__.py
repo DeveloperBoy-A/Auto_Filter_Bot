@@ -56,7 +56,7 @@ async def check_expired_premium(client):
         except Exception as e:
             logging.error(f"Error in premium check loop: {e}")
 
-        await sleep(7200)
+        await sleep(60)
 
 
 async def keep_alive():
