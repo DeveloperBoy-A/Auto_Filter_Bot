@@ -85,6 +85,7 @@ async def myplan(client, message):
     except Exception as e:
         print(e)
 
+
 @Client.on_message(filters.command("get_premium") & filters.user(ADMINS))
 async def get_premium(client, message):
     if len(message.command) == 2:
@@ -111,48 +112,90 @@ async def get_premium(client, message):
     else:
         await message.reply_text("ᴜꜱᴀɢᴇ : /get_premium user_id")
 
+
 @Client.on_message(filters.command("add_premium") & filters.user(ADMINS))
 async def give_premium_cmd_handler(client, message):
     if len(message.command) == 4:
         time_zone = datetime.datetime.now(pytz.timezone("Asia/Kolkata"))
-        current_time = time_zone.strftime("%d-%m-%Y\n⏱️ ᴊᴏɪɴɪɴɢ ᴛɪᴍᴇ : %I:%M:%S %p") 
-        user_id = int(message.command[1])  
+        current_time = time_zone.strftime("%d-%m-%Y\n⏱️ ᴊᴏɪɴɪɴɢ ᴛɪᴍᴇ : %I:%M:%S %p")
+        user_id = int(message.command[1])
+        
         try:
             user = await client.get_users(user_id)
             user_mention = user.mention
         except Exception:
             user = None
-            user_mention = f"<code>{user_id}</code>"
-        time = message.command[2]+" "+message.command[3]
+            user_mention = f"{user_id}"
+            
+        time = message.command[2] + " " + message.command[3]
         seconds = await get_seconds(time)
+        
         if seconds > 0:
             expiry_time = datetime.datetime.now(pytz.utc) + datetime.timedelta(seconds=seconds)
-            user_data = {"id": user_id, "expiry_time": expiry_time}  
-            await db.update_user(user_data) 
+            user_data = {"id": user_id, "expiry_time": expiry_time}
+            await db.update_user(user_data)
+            
             data = await db.get_user(user_id)
             expiry = to_aware_utc(data.get("expiry_time"))
-            expiry_str_in_ist = expiry.astimezone(pytz.timezone("Asia/Kolkata")).strftime("%d-%m-%Y\n⏱️ ᴇxᴘɪʀʏ ᴛɪᴍᴇ : %I:%M:%S %p")         
-            await message.reply_text(f"ᴘʀᴇᴍɪᴜᴍ ᴀᴅᴅᴇᴅ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ✅\n\n👤 ᴜꜱᴇʀ : {user_mention}\n⚡ ᴜꜱᴇʀ ɪᴅ : <code>{user_id}</code>\n⏰ ᴘʀᴇᴍɪᴜᴍ ᴀᴄᴄᴇꜱꜱ : <code>{time}</code>\n\n⏳ ᴊᴏɪɴɪɴɢ ᴅᴀᴛᴇ : {current_time}\n\n⌛️ ᴇxᴘɪʀʏ ᴅᴀᴛᴇ : {expiry_str_in_ist}", disable_web_page_preview=True)
+            expiry_str_in_ist = expiry.astimezone(pytz.timezone("Asia/Kolkata")).strftime("%d-%m-%Y\n⏱️ ᴇxᴘɪʀʏ ᴛɪᴍᴇ : %I:%M:%S %p")
+            
+            # Admin confirmation message
+            await message.reply_text(
+                f"ᴘʀᴇᴍɪᴜᴍ ᴀᴅᴅᴇᴅ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ✅\n\n👤 ᴜꜱᴇʀ : {user_mention}\n⚡ ᴜꜱᴇʀ ɪᴅ : {user_id}\n⏰ ᴘʀᴇᴍɪᴜᴍ ᴀᴄᴄᴇꜱꜱ : {time}\n\n⏳ ᴊᴏɪɴɪɴɢ ᴅᴀᴛᴇ : {current_time}\n\n⌛️ ᴇxᴘɪʀʏ ᴅᴀᴛᴇ : {expiry_str_in_ist}", 
+                disable_web_page_preview=True
+            )
+            
+            # New Clean User Message
             try:
                 await client.send_message(
                     chat_id=user_id,
-                    text=f"👋 ʜᴇʏ {user_mention},\nᴛʜᴀɴᴋ ʏᴏᴜ ꜰᴏʀ ᴘᴜʀᴄʜᴀꜱɪɴɢ ᴘʀᴇᴍɪᴜᴍ.\nᴇɴᴊᴏʏ !! ✨🎉\n\n⏰ ᴘʀᴇᴍɪᴜᴍ ᴀᴄᴄᴇꜱꜱ : <code>{time}</code>\n⏳ ᴊᴏɪɴɪɴɢ ᴅᴀᴛᴇ : {current_time}\n\n⌛️ ᴇxᴘɪʀʏ ᴅᴀᴛᴇ : {expiry_str_in_ist}", disable_web_page_preview=True              
+                    text=f"""👑 <b>ᴘʀᴇᴍɪᴜᴍ ᴀᴄᴄᴇꜱꜱ ᴀᴄᴛɪᴠᴀᴛᴇᴅ!</b> ✨
+
+ʜᴇʏ {user_mention} 👋
+
+💎 ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ ᴛᴏᴋʏᴏ ᴘʀᴇᴍɪᴜᴍ!
+ᴛʜᴀɴᴋ ʏᴏᴜ ꜰᴏʀ ᴄʜᴏᴏꜱɪɴɢ ᴏᴜʀ ᴘʀᴇᴍɪᴜᴍ ꜱᴇʀᴠɪᴄᴇ. ❤️
+
+╭━━━━━━━━━━━━━━━━━━╮
+ 💠<b>ᴘʀᴇᴍɪᴜᴍ ᴅᴇᴛᴀɪʟꜱ</b>💠
+╰━━━━━━━━━━━━━━━━━━╯
+
+⏰ ᴅᴜʀᴀᴛɪᴏɴ : <code>{time}</code>
+
+📅 ᴀᴄᴛɪᴠᴀᴛᴇᴅ : {current_time}
+
+⌛ ᴇxᴘɪʀᴇꜱ : {expiry_str_in_ist}
+
+━━━━━━━━━━━━━━━━━━━━
+
+🎬 ᴇɴᴊᴏʏ ʏᴏᴜʀ ᴘʀᴇᴍɪᴜᴍ ᴇxᴘᴇʀɪᴇɴᴄᴇ! 🍿
+
+💫 ᴛʜᴀɴᴋ ʏᴏᴜ ꜰᴏʀ ʙᴇɪɴɢ ᴘᴀʀᴛ ᴏꜰ ᴛᴏᴋʏᴏ ᴘʀɪɴᴄᴇꜱꜱ. 👑""",
+                    disable_web_page_preview=True
                 )
             except Exception:
                 pass
-            await client.send_message(PREMIUM_LOGS, text=f"#Added_Premium\n\n👤 ᴜꜱᴇʀ : {user_mention}\n⚡ ᴜꜱᴇʀ ɪᴅ : <code>{user_id}</code>\n⏰ ᴘʀᴇᴍɪᴜᴍ ᴀᴄᴄᴇꜱꜱ : <code>{time}</code>\n\n⏳ ᴊᴏɪɴɪɴɢ ᴅᴀᴛᴇ : {current_time}\n\n⌛️ ᴇxᴘɪʀʏ ᴅᴀᴛᴇ : {expiry_str_in_ist}", disable_web_page_preview=True)
-                    
-        else:
-            await message.reply_text(
-                "❌ ɪɴᴠᴀʟɪᴅ ᴛɪᴍᴇ ꜰᴏʀᴍᴀᴛ ❗\n"
-                "🕒 ᴘʟᴇᴀsᴇ ᴜsᴇ: <code>1 day</code>, <code>1 hour</code>, <code>1 min</code>, <code>1 month</code>, or <code>1 year</code>"
+                
+            # Log Channel Message
+            await client.send_message(
+                PREMIUM_LOGS, 
+                text=f"#Added_Premium\n\n👤 ᴜꜱᴇʀ : {user_mention}\n⚡ ᴜꜱᴇʀ ɪᴅ : {user_id}\n⏰ ᴘʀᴇᴍɪᴜᴍ ᴀᴄᴄᴇꜱꜱ : {time}\n\n⏳ ᴊᴏɪɴɪɴɢ ᴅᴀᴛᴇ : {current_time}\n\n⌛️ ᴇxᴘɪʀʏ ᴅᴀᴛᴇ : {expiry_str_in_ist}", 
+                disable_web_page_preview=True
             )
-    else:
-        await message.reply_text(
-            "📌 ᴜsᴀɢᴇ: <code>/add_premium user_id time</code>\n"
-            "📅 ᴇxᴀᴍᴘʟᴇ: <code>/add_premium 123456 1 month</code>\n"
-            "🧭 ᴀᴄᴄᴇᴘᴛᴇᴅ ꜰᴏʀᴍᴀᴛs: <code>1 day</code>, <code>1 hour</code>, <code>1 min</code>, <code>1 month</code>, <code>1 year</code>"
-            )
+            
+        else: 
+            await message.reply_text( 
+                "❌ ɪɴᴠᴀʟɪᴅ ᴛɪᴍᴇ ꜰᴏʀᴍᴀᴛ ❗\n" 
+                "🕒 ᴘʟᴇᴀsᴇ ᴜsᴇ: <code>1 day</code>, <code>1 hour</code>, <code>1 min</code>, <code>1 month</code>, or <code>1 year</code>" 
+            ) 
+    else: 
+        await message.reply_text( 
+            "📌 ᴜsᴀɢᴇ: <code>/add_premium user_id time</code>\n" 
+            "📅 ᴇxᴀᴍᴘʟᴇ: <code>/add_premium 123456 1 month</code>\n" 
+            "🧭 ᴀᴄᴄᴇᴘᴛᴇᴅ ꜰᴏʀᴍᴀᴛs: <code>1 day</code>, <code>1 hour</code>, <code>1 min</code>, <code>1 month</code>, <code>1 year</code>" 
+        )
+
+
 
 @Client.on_message(filters.command("premium_users") & filters.user(ADMINS))
 async def premium_user(client, message):
