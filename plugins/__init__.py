@@ -34,9 +34,7 @@ async def check_expired_premium(client):
 
                     await client.send_message(
                         chat_id=user_id,
-                        text=script.PREMIUM_END_TEXT.format(
-    mention=user_obj.mention
-)
+                        text=script.PREMIUM_END_TEXT.format(user_obj.mention)
                     )
 
                     await client.send_message(
