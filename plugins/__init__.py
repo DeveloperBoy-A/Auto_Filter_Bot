@@ -5,7 +5,7 @@ from asyncio import sleep
 from datetime import datetime
 from database.users_chats_db import db
 from info import LOG_CHANNEL, URL, PREMIUM_LOGS
-from script import PREMIUM_END_TEXT
+from Script import script
 import aiohttp
 import asyncio
 import logging
