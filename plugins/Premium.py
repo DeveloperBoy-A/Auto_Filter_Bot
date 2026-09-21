@@ -149,7 +149,8 @@ async def give_premium_cmd_handler(client, message):
             try:
                 await client.send_message(
                     chat_id=user_id,
-                    text=f"""👑 <b>ᴘʀᴇᴍɪᴜᴍ ᴀᴄᴄᴇꜱꜱ ᴀᴄᴛɪᴠᴀᴛᴇᴅ!</b> ✨
+                    text=f"""🎉 <b>ᴄᴏɴɢʀᴀᴛᴜʟᴀᴛɪᴏɴꜱ!</b> 🎉
+👑 <b>ᴘʀᴇᴍɪᴜᴍ ᴀᴄᴄᴇꜱꜱ ᴀᴄᴛɪᴠᴀᴛᴇᴅ!</b> ✨
 
 ʜᴇʏ {user_mention} 👋
 
@@ -157,7 +158,7 @@ async def give_premium_cmd_handler(client, message):
 ᴛʜᴀɴᴋ ʏᴏᴜ ꜰᴏʀ ᴄʜᴏᴏꜱɪɴɢ ᴏᴜʀ ᴘʀᴇᴍɪᴜᴍ ꜱᴇʀᴠɪᴄᴇ. ❤️
 
 ╭━━━━━━━━━━━━━━━━━━╮
- 💠<b>ᴘʀᴇᴍɪᴜᴍ ᴅᴇᴛᴀɪʟꜱ</b>💠
+   💠 <b>ᴘʀᴇᴍɪᴜᴍ ᴅᴇᴛᴀɪʟꜱ</b> 💠
 ╰━━━━━━━━━━━━━━━━━━╯
 
 ⏰ ᴅᴜʀᴀᴛɪᴏɴ : <code>{time}</code>
@@ -165,11 +166,8 @@ async def give_premium_cmd_handler(client, message):
 📅 ᴀᴄᴛɪᴠᴀᴛᴇᴅ : {current_time}
 
 ⌛ ᴇxᴘɪʀᴇꜱ : {expiry_str_in_ist}
-
 ━━━━━━━━━━━━━━━━━━━━
-
 🎬 ᴇɴᴊᴏʏ ʏᴏᴜʀ ᴘʀᴇᴍɪᴜᴍ ᴇxᴘᴇʀɪᴇɴᴄᴇ! 🍿
-
 💫 ᴛʜᴀɴᴋ ʏᴏᴜ ꜰᴏʀ ʙᴇɪɴɢ ᴘᴀʀᴛ ᴏꜰ ᴛᴏᴋʏᴏ ᴘʀɪɴᴄᴇꜱꜱ. 👑""",
                     disable_web_page_preview=True
                 )
