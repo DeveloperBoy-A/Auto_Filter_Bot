@@ -5,6 +5,7 @@ from asyncio import sleep
 from datetime import datetime
 from database.users_chats_db import db
 from info import LOG_CHANNEL, URL, PREMIUM_LOGS
+from script import PREMIUM_END_TEXT
 import aiohttp
 import asyncio
 import logging
@@ -33,11 +34,9 @@ async def check_expired_premium(client):
 
                     await client.send_message(
                         chat_id=user_id,
-                        text=(
-                            f"<b>ʜᴇʏ {user_obj.mention},\n\n"
-                            "𝑌𝑜𝑢𝑟 𝑃𝑟𝑒𝑚𝑖𝑢𝑚 𝐴𝑐𝑐𝑒𝑠𝑠 𝐻𝑎𝑠 𝐸𝑥𝑝𝑖𝑟𝑒𝑑.\n"
-                            "Thank you for using our service 😊</b>"
-                        )
+                        text=PREMIUM_END_TEXT.format(
+    mention=user_obj.mention
+)
                     )
 
                     await client.send_message(
