@@ -483,17 +483,17 @@ class Database:
     async def get_expired(self, current_time):
         expired_users = []
 
-    data = self.users.find({
-        "expiry_time": {
-            "$ne": None,
-            "$lt": current_time
-        }
-    })
+        data = self.users.find({
+            "expiry_time": {
+                "$ne": None,
+                "$lt": current_time
+            }
+        })
 
         async for user in data:
             expired_users.append(user)
 
-            return expired_users
+        return expired_users
     
     async def remove_premium_access(self, user_id):
         return await self.update_one(
