@@ -33,10 +33,11 @@ async def build_codes_list_text(num_codes, time, codes):
 
     lines = []
     for i, c in enumerate(codes, 1):
-        line = f"{i}. 🎁 <b>Pʀᴇᴍɪᴜᴍ Cᴏᴅᴇ :</b>\n ╰ 👉 <code>/redeem {c['code']}</code>"
         if c.get("used"):
             who = display_name(c.get("used_by"), c.get("used_by_name"))
-            line += f" ✅ <i>Redeemed by</i> {who}"
+            line = f"{i}. 🎁 <b>Pʀᴇᴍɪᴜᴍ Cᴏᴅᴇ :</b>\n ╰ 👉 <s><code>/redeem {c['code']}</code></s> ✅ <i>Redeemed by</i> {who}"
+        else:
+            line = f"{i}. 🎁 <b>Pʀᴇᴍɪᴜᴍ Cᴏᴅᴇ :</b>\n ╰ 👉 <code>/redeem {c['code']}</code>"
         lines.append(line)
     codes_text = '\n\n'.join(lines)
 
@@ -44,18 +45,15 @@ async def build_codes_list_text(num_codes, time, codes):
 
 Ye codes users ko <b>Premium Benefits</b> dene ke liye hain, jaise:
 🚀 <i>Unlimited Downloads, Online Streaming & No Restrictions!</i>
-
-┌─────────────────────
+┌──────────────────────
 │ 📦 <b>Tᴏᴛᴀʟ Cᴏᴅᴇꜱ</b> : <code>{num_codes}</code>
 │ ⏳ <b>Vᴀʟɪᴅɪᴛʏ</b>    : <code>{time}</code>
 │ ✅ <b>Rᴇᴅᴇᴇᴍᴇᴅ</b>    : <code>{redeemed}</code>
 │ 🟢 <b>Aᴠᴀɪʟᴀʙʟᴇ</b>   : <code>{available}</code>
-└─────────────────────
-
+└──────────────────────
 👇 <b>Tᴀᴘ ᴀɴʏ ᴄᴏᴍᴍᴀɴᴅ ʙᴇʟᴏᴡ ᴛᴏ ᴄᴏᴘʏ ɪᴛ!</b> 👇
 
 {codes_text}
-
 ━━━━━━━━━━━━━━━━━━━━━━
 📝 <b><u>Hᴏᴡ Tᴏ Rᴇᴅᴇᴇᴍ (Kaise Use Karein):</u></b>
 
@@ -213,14 +211,14 @@ async def redeem_code(client, message):
                 user_mention = user.mention if user else f"<code>{user_id}</code>"
 
                 await message.reply_text(
-                    f"🎉✨ <b><u>Pʀᴇᴍɪᴜᴍ Aᴄᴛɪᴠᴀᴛᴇᴅ Sᴜᴄᴄᴇssғᴜʟʟʏ!</u></b> ✨🎉\n\n"
-                    f"Badhaai ho! Aapke account mein <b>Premium Features</b> activate ho gaye hain! 🥳\n\n"
-                    f"┌───────────────────────\n"
+                    f"🎉✨ <b><u>Pʀᴇᴍɪᴜᴍ Aᴄᴛɪᴠᴀᴛᴇᴅ Gɪꜰᴛ Cᴏᴅᴇ Sᴜᴄᴄᴇssғᴜʟʟʏ Rᴇᴅᴇᴇᴍᴇᴅ!</u></b> ✨🎉\n\n"
+                    f"Badhaai ho! Aapke account mein <b>Premium Features</b> activate ho gaye hain! 🥳\n"
+                    f"┌─────────────────────\n"
                     f"├ 👤 <b>Uꜱᴇʀ :</b> {user_mention}\n"
                     f"├ ⚡ <b>ID :</b> <code>{user_id}</code>\n"
                     f"├ 🎟 <b>Cᴏᴅᴇ :</b> <code>{redeem_code}</code>\n"
                     f"├ ⏳ <b>Dᴜʀᴀᴛɪᴏɴ :</b> <code>{time}</code>\n"
-                    f"└───────────────────────\n\n"
+                    f"└─────────────────────\n"
                     f"⌛️ <b><u>Exᴘɪʀʏ Dᴀᴛᴇ & Tɪᴍᴇ:</u></b>\n"
                     f"╰ 👉 {expiry_str_in_ist}\n\n"
                     f"💎 <b><u>Pʀᴇᴍɪᴜᴍ Bᴇɴᴇғɪᴛꜱ Uɴʟᴏᴄᴋᴇᴅ:</u></b>\n"
