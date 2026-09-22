@@ -32,13 +32,14 @@ async def build_codes_list_text(num_codes, time, codes):
     available = num_codes - redeemed
 
     lines = []
-for i, c in enumerate(codes, 1):
-    if c.get("used"):
-        who = display_name(c.get("used_by"), c.get("used_by_name"))
-        line = f"{i}. 🎁 <b>Pʀᴇᴍɪᴜᴍ Cᴏᴅᴇ :</b>\n ╰ 👉 <s>/redeem {c['code']}</s> ✅ <i>Redeemed by</i> {who}"
-    else:
-        line = f"{i}. 🎁 <b>Pʀᴇᴍɪᴜᴍ Cᴏᴅᴇ :</b>\n ╰ 👉 <code>/redeem {c['code']}</code>"
-    lines.append(line)
+    for i, c in enumerate(codes, 1):
+        if c.get("used"):
+            who = display_name(c.get("used_by"), c.get("used_by_name"))
+            line = f"{i}. 🎁 <b>Pʀᴇᴍɪᴜᴍ Cᴏᴅᴇ :</b>\n ╰ 👉 <s>/redeem {c['code']}</s> ✅ <i>Redeemed by</i> {who}"
+        else:
+            line = f"{i}. 🎁 <b>Pʀᴇᴍɪᴜᴍ Cᴏᴅᴇ :</b>\n ╰ 👉 <code>/redeem {c['code']}</code>"
+        lines.append(line)
+    codes_text = '\n\n'.join(lines)
 
     return f"""🎉 <b><u>Pʀᴇᴍɪᴜᴍ Gɪꜰᴛ Cᴏᴅᴇꜱ Gᴇɴᴇʀᴀᴛᴇᴅ!</u></b> ✨
 Ye codes users ko <b>Premium Benefits</b> dene ke liye hain, jaise:
