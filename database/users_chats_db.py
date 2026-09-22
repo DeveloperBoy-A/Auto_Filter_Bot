@@ -17,6 +17,7 @@ class Database:
         self.misc = self.db.misc
         self.verify_id = self.db.verify_id 
         self.codes = self.db.codes
+        self.redeem_batches = self.db.redeem_batches
         self.filename_col = self.db.filename
         self.movie_updates = self.db.movie_updates
         self.connection = self.db.connections
@@ -359,16 +360,18 @@ class Database:
     # Bug fix: redeem codes used to live only in an in-memory Python
     # ==========================================================
 
-    async def add_redeem_code(self, code, duration):
+    async def add_redeem_code(self, code, duration, batch_id=None):
         """Persist a newly generated redeem code."""
         await self.codes.update_one(
             {"code": code},
             {"$set": {
                 "code": code,
                 "duration": duration,
+                "batch_id": batch_id,
                 "created_at": datetime.datetime.now(pytz.utc),
                 "used": False,
                 "used_by": None,
+                "used_by_name": None,
                 "used_at": None
             }},
             upsert=True
@@ -378,7 +381,7 @@ class Database:
         """Read-only lookup — does NOT consume the code. Returns None if it never existed."""
         return await self.codes.find_one({"code": code})
 
-    async def mark_redeem_code_used(self, code, user_id):
+    async def mark_redeem_code_used(self, code, user_id, user_name=None):
         """
         Atomically marks a code as used by `user_id`, but ONLY if it
         hasn't already been used by anyone (prevents two people redeeming
@@ -387,9 +390,47 @@ class Database:
         """
         return await self.codes.find_one_and_update(
             {"code": code, "used": {"$ne": True}},
-            {"$set": {"used": True, "used_by": user_id, "used_at": datetime.datetime.now(pytz.utc)}},
+            {"$set": {
+                "used": True,
+                "used_by": user_id,
+                "used_by_name": user_name,
+                "used_at": datetime.datetime.now(pytz.utc)
+            }},
             return_document=True
         )
+
+    # ----------------------------------------------------------
+    # Redeem batches — groups of codes generated together by one
+    # /add_redeem call, so the admin's "codes generated" message can
+    # be auto-edited (✅ + redeemer name, live total/available count)
+    # every time someone redeems a code from that batch.
+    # ----------------------------------------------------------
+
+    async def create_redeem_batch(self, batch_id, duration, chat_id=None, message_id=None):
+        await self.redeem_batches.update_one(
+            {"batch_id": batch_id},
+            {"$set": {
+                "batch_id": batch_id,
+                "duration": duration,
+                "chat_id": chat_id,
+                "message_id": message_id,
+                "created_at": datetime.datetime.now(pytz.utc),
+            }},
+            upsert=True
+        )
+
+    async def set_redeem_batch_message(self, batch_id, chat_id, message_id):
+        await self.redeem_batches.update_one(
+            {"batch_id": batch_id},
+            {"$set": {"chat_id": chat_id, "message_id": message_id}}
+        )
+
+    async def get_redeem_batch(self, batch_id):
+        return await self.redeem_batches.find_one({"batch_id": batch_id})
+
+    async def get_codes_by_batch(self, batch_id):
+        cursor = self.codes.find({"batch_id": batch_id}).sort("created_at", 1)
+        return await cursor.to_list(length=None)
 
     # ==========================================================
     # Daily Download Limit System function start
