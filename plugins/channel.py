@@ -39,19 +39,173 @@ IGNORE_WORDS = {
 
 # Constants
 CAPTION_LANGUAGES = {
-    r"\bhin\b": "Hindi", r"\bhindi\b": "Hindi",
-    r"\btam\b": "Tamil", r"\btamil\b": "Tamil",
-    r"\bkan\b": "Kannada", r"\bkannada\b": "Kannada",
-    r"\btel\b": "Telugu", r"\btelugu\b": "Telugu",
-    r"\bmal\b": "Malayalam", r"\bmalayalam\b": "Malayalam",
-    r"\beng\b": "English", r"\benglish\b": "English",
-    r"\bpun\b": "Punjabi", r"\bpunjabi\b": "Punjabi",
-    r"\bben\b": "Bengali", r"\bbengali\b": "Bengali",
-    r"\bmar\b": "Marathi", r"\bmarathi\b": "Marathi",
-    r"\bguj\b": "Gujarati", r"\bgujarati\b": "Gujarati",
-    r"\burd\b": "Urdu", r"\burdu\b": "Urdu",
-    r"\bkor\b": "Korean", r"\bkorean\b": "Korean",
-    r"\bjpn\b": "Japanese", r"\bjapanese\b": "Japanese",
+    # Indian Languages
+    r"\bhin\b": "Hindi",
+    r"\bhindi\b": "Hindi",
+
+    r"\btam\b": "Tamil",
+    r"\btamil\b": "Tamil",
+
+    r"\bkan\b": "Kannada",
+    r"\bkannada\b": "Kannada",
+
+    r"\btel\b": "Telugu",
+    r"\btelugu\b": "Telugu",
+
+    r"\bmal\b": "Malayalam",
+    r"\bmalayalam\b": "Malayalam",
+
+    r"\beng\b": "English",
+    r"\benglish\b": "English",
+
+    r"\bpun\b": "Punjabi",
+    r"\bpan\b": "Punjabi",
+    r"\bpbi\b": "Punjabi",
+    r"\bpunjabi\b": "Punjabi",
+
+    r"\bben\b": "Bengali",
+    r"\bbengali\b": "Bengali",
+
+    r"\bmar\b": "Marathi",
+    r"\bmarathi\b": "Marathi",
+
+    r"\bguj\b": "Gujarati",
+    r"\bgujarati\b": "Gujarati",
+    r"\bgujrat\b": "Gujarati",
+    r"\bgujrati\b": "Gujarati",
+
+    r"\burd\b": "Urdu",
+    r"\burdu\b": "Urdu",
+
+    r"\bbho\b": "Bhojpuri",
+    r"\bbhojpuri\b": "Bhojpuri",
+
+    r"\bhry\b": "Haryanvi",
+    r"\bharyanvi\b": "Haryanvi",
+    r"\bharyanavi\b": "Haryanvi",
+    r"\bharyanwi\b": "Haryanvi",
+
+    r"\basm\b": "Assamese",
+    r"\bassamese\b": "Assamese",
+    r"\baxomiya\b": "Assamese",
+
+    r"\bodi\b": "Odia",
+    r"\bodia\b": "Odia",
+    r"\boriya\b": "Odia",
+
+    r"\bkas\b": "Kashmiri",
+    r"\bkashmiri\b": "Kashmiri",
+
+    r"\bsnd\b": "Sindhi",
+    r"\bsindhi\b": "Sindhi",
+
+    r"\bnep\b": "Nepali",
+    r"\bnepali\b": "Nepali",
+
+    r"\bkok\b": "Konkani",
+    r"\bkonkani\b": "Konkani",
+
+    r"\bmai\b": "Maithili",
+    r"\bmaithili\b": "Maithili",
+
+    r"\braj\b": "Rajasthani",
+    r"\brajasthani\b": "Rajasthani",
+
+    r"\bman\b": "Manipuri",
+    r"\bmanipuri\b": "Manipuri",
+    r"\bmeitei\b": "Manipuri",
+
+    r"\bsan\b": "Sanskrit",
+    r"\bsanskrit\b": "Sanskrit",
+
+    # International Languages
+    r"\bkor\b": "Korean",
+    r"\bkorean\b": "Korean",
+    r"\bk-drama\b": "Korean",
+    r"\bkdrama\b": "Korean",
+
+    r"\bjpn\b": "Japanese",
+    r"\bjapanese\b": "Japanese",
+    r"\bjap\b": "Japanese",
+
+    r"\bchi\b": "Chinese",
+    r"\bchn\b": "Chinese",
+    r"\bchinese\b": "Chinese",
+    r"\bmandarin\b": "Chinese",
+
+    r"\besp\b": "Spanish",
+    r"\bspa\b": "Spanish",
+    r"\bspanish\b": "Spanish",
+
+    r"\brus\b": "Russian",
+    r"\brussian\b": "Russian",
+
+    r"\bfre\b": "French",
+    r"\bfra\b": "French",
+    r"\bfrench\b": "French",
+
+    r"\bger\b": "German",
+    r"\bdeu\b": "German",
+    r"\bgerman\b": "German",
+
+    r"\bita\b": "Italian",
+    r"\bitalian\b": "Italian",
+
+    r"\bpor\b": "Portuguese",
+    r"\bportuguese\b": "Portuguese",
+
+    r"\bara\b": "Arabic",
+    r"\barabic\b": "Arabic",
+
+    r"\btur\b": "Turkish",
+    r"\bturkish\b": "Turkish",
+
+    r"\bper\b": "Persian",
+    r"\bpersian\b": "Persian",
+    r"\bfarsi\b": "Persian",
+
+    r"\btha\b": "Thai",
+    r"\bthai\b": "Thai",
+
+    r"\bind\b": "Indonesian",
+    r"\bindonesian\b": "Indonesian",
+
+    r"\bmsa\b": "Malay",
+    r"\bmalay\b": "Malay",
+
+    r"\bvie\b": "Vietnamese",
+    r"\bvietnamese\b": "Vietnamese",
+
+    r"\bfil\b": "Filipino",
+    r"\bfilipino\b": "Filipino",
+    r"\btagalog\b": "Filipino",
+
+    r"\bnld\b": "Dutch",
+    r"\bdutch\b": "Dutch",
+
+    r"\bpol\b": "Polish",
+    r"\bpolish\b": "Polish",
+
+    r"\bswe\b": "Swedish",
+    r"\bswedish\b": "Swedish",
+
+    r"\bdan\b": "Danish",
+    r"\bdanish\b": "Danish",
+
+    r"\bfin\b": "Finnish",
+    r"\bfinnish\b": "Finnish",
+
+    r"\bnor\b": "Norwegian",
+    r"\bnorwegian\b": "Norwegian",
+
+    r"\bgre\b": "Greek",
+    r"\bgreek\b": "Greek",
+
+    r"\bheb\b": "Hebrew",
+    r"\bhebrew\b": "Hebrew",
+
+    r"\bukr\b": "Ukrainian",
+    r"\bukrainian\b": "Ukrainian",
 }
 
 OTT_PLATFORMS = {
