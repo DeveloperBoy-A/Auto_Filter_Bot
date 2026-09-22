@@ -1,7 +1,7 @@
 <h1 align="center"><b>🚩 ᴊᴀɪ ꜱʜʀɪ ʀᴀᴍ 🚩</b></h1>
 
 <p align="center">
-  <img src="https://iili.io/2wp3N9f.jpg" alt="Tokyo Princess Bot">
+  <img src="https://i.ibb.co/pBY1vBsp/photo-2026-09-22-13-48-40-7688356222822514712.jpg" alt="Tokyo Princess Bot">
 </p>
 
 <h1 align="center">Tokyo Princess Bot</h1>
