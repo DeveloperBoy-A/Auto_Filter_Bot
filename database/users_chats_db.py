@@ -428,6 +428,11 @@ class Database:
     async def get_redeem_batch(self, batch_id):
         return await self.redeem_batches.find_one({"batch_id": batch_id})
 
+    async def get_latest_redeem_batch(self):
+        """Most recently created batch — used by /codes_status when the
+        admin doesn't name a specific code."""
+        return await self.redeem_batches.find_one(sort=[("created_at", -1)])
+
     async def get_codes_by_batch(self, batch_id):
         cursor = self.codes.find({"batch_id": batch_id}).sort("created_at", 1)
         return await cursor.to_list(length=None)
