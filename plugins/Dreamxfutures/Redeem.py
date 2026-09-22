@@ -32,24 +32,22 @@ async def build_codes_list_text(num_codes, time, codes):
     available = num_codes - redeemed
 
     lines = []
-    for i, c in enumerate(codes, 1):
-        if c.get("used"):
-            who = display_name(c.get("used_by"), c.get("used_by_name"))
-            line = f"{i}. 🎁 <b>Pʀᴇᴍɪᴜᴍ Cᴏᴅᴇ :</b>\n ╰ 👉 <s><code>/redeem {c['code']}</code></s> ✅ <i>Redeemed by</i> {who}"
-        else:
-            line = f"{i}. 🎁 <b>Pʀᴇᴍɪᴜᴍ Cᴏᴅᴇ :</b>\n ╰ 👉 <code>/redeem {c['code']}</code>"
-        lines.append(line)
-    codes_text = '\n\n'.join(lines)
+for i, c in enumerate(codes, 1):
+    if c.get("used"):
+        who = display_name(c.get("used_by"), c.get("used_by_name"))
+        line = f"{i}. 🎁 <b>Pʀᴇᴍɪᴜᴍ Cᴏᴅᴇ :</b>\n ╰ 👉 <s>/redeem {c['code']}</s> ✅ <i>Redeemed by</i> {who}"
+    else:
+        line = f"{i}. 🎁 <b>Pʀᴇᴍɪᴜᴍ Cᴏᴅᴇ :</b>\n ╰ 👉 <code>/redeem {c['code']}</code>"
+    lines.append(line)
 
     return f"""🎉 <b><u>Pʀᴇᴍɪᴜᴍ Gɪꜰᴛ Cᴏᴅᴇꜱ Gᴇɴᴇʀᴀᴛᴇᴅ!</u></b> ✨
-
 Ye codes users ko <b>Premium Benefits</b> dene ke liye hain, jaise:
-🚀 <i>Unlimited Downloads, Online Streaming & No Restrictions!</i>
+🚀 <i>Unlimited Downloads, Online Streaming,Shortlink Bypass & No Restrictions!</i>
 ┌──────────────────────
-│ 📦 <b>Tᴏᴛᴀʟ Cᴏᴅᴇꜱ</b> : <code>{num_codes}</code>
-│ ⏳ <b>Vᴀʟɪᴅɪᴛʏ</b>    : <code>{time}</code>
-│ ✅ <b>Rᴇᴅᴇᴇᴍᴇᴅ</b>    : <code>{redeemed}</code>
-│ 🟢 <b>Aᴠᴀɪʟᴀʙʟᴇ</b>   : <code>{available}</code>
+│ 🎁 <b>Tᴏᴛᴀʟ Gɪꜰᴛ Cᴏᴅᴇꜱ</b> : <code>{num_codes}</code>
+│ ⏳ <b>Vᴀʟɪᴅɪᴛʏ</b>    :  <code>{time}</code>
+│ ✅ <b>Rᴇᴅᴇᴇᴍᴇᴅ</b>    :  <code>{redeemed}</code>
+│ 🟢 <b>Aᴠᴀɪʟᴀʙʟᴇ</b>   :  <code>{available}</code>
 └──────────────────────
 👇 <b>Tᴀᴘ ᴀɴʏ ᴄᴏᴍᴍᴀɴᴅ ʙᴇʟᴏᴡ ᴛᴏ ᴄᴏᴘʏ ɪᴛ!</b> 👇
 
