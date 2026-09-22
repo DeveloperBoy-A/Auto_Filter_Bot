@@ -124,7 +124,44 @@ async def add_redeem_code(client, message):
             "<i>(Is command se aap Premium unlock karne wale special Gift Codes bana sakte ho)</i>"
         )
 
+@Client.on_message(
+    filters.command("codes_status")
+    & (filters.user(ADMINS) | filters.channel)
+)
+async def codes_status(client, message):
+    """On-demand: post the current live gift-code list (✅ + strikethrough
+    + redeemer names + counts) anywhere the admin wants — group, DM, or a
+    channel — without needing to run /add_redeem again.
 
+    Usage:
+      /codes_status              -> latest batch generated
+      /codes_status <any_code>   -> the batch that code belongs to
+    """
+    if len(message.command) == 2:
+        code_doc = await db.get_redeem_code(message.command[1])
+        if not code_doc or not code_doc.get("batch_id"):
+            await message.reply_text("❌ <b>Ye code kisi batch se match nahi hua.</b>")
+            return
+        batch = await db.get_redeem_batch(code_doc["batch_id"])
+    else:
+        batch = await db.get_latest_redeem_batch()
+
+    if not batch:
+        await message.reply_text("❌ <b>Abhi tak koi redeem code batch generate nahi hua.</b>")
+        return
+
+    codes = await db.get_codes_by_batch(batch["batch_id"])
+    if not codes:
+        await message.reply_text("❌ <b>Is batch me koi code nahi mila.</b>")
+        return
+
+    text = await build_codes_list_text(len(codes), batch.get("duration"), codes)
+    keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🔑 Redeem Now 🔥", url=f"https://t.me/{temp.U_NAME}")]])
+    sent = await message.reply_text(text, reply_markup=keyboard)
+
+    # Point this batch's auto-update at the freshest posted copy, so future
+    # redeems keep this new message (e.g. in the channel) live too.
+    await db.set_redeem_batch_message(batch["batch_id"], sent.chat.id, sent.id)
 
 @Client.on_message(filters.command("redeem"))
 async def redeem_code(client, message):
