@@ -353,12 +353,10 @@ Mᴇꜱꜱᴀɢᴇ : <code>{}</code>"""
     PREMIUM_END_TEXT = """🛑 <b><u>ᴘʀᴇᴍɪᴜᴍ ᴀᴄᴄᴇꜱꜱ ᴇxᴘɪʀᴇᴅ!</u></b> 🛑
 
 <b>ʜᴇʏ {},</b>
-
-┌───────────────────────
+┌──────────────────────
 ├ ⏳ <b>Sᴛᴀᴛᴜꜱ :</b> ʏᴏᴜʀ ᴘʀᴇᴍɪᴜᴍ ʜᴀꜱ ʙᴇᴇɴ ᴇxᴘɪʀᴇᴅ/ʀᴇᴍᴏᴠᴇᴅ
 ├ 📉 <b>Aᴄᴄᴏᴜɴᴛ :</b> ɴᴏʀᴍᴀʟ ᴜꜱᴇʀ (ʟɪᴍɪᴛꜱ ᴀᴘᴘʟɪᴇᴅ)
-└───────────────────────
-
+└──────────────────────
 ⚠️ <b><u>ᴘʀᴇᴍɪᴜᴍ ꜰᴇᴀᴛᴜʀᴇꜱ ʟᴏᴄᴋᴇᴅ :</u></b>
 ❌ <i>Uɴʟɪᴍɪᴛᴇᴅ Dᴏᴡɴʟᴏᴀᴅɪɴɢ</i>
 ❌ <i>Fᴀꜱᴛ Oɴʟɪɴᴇ Sᴛʀᴇᴀᴍɪɴɢ</i>
@@ -369,7 +367,6 @@ Mᴇꜱꜱᴀɢᴇ : <code>{}</code>"""
 
 💖 <b>Tʜᴀɴᴋ ʏᴏᴜ ꜰᴏʀ ᴜꜱɪɴɢ ᴏᴜʀ ᴘʀᴇᴍɪᴜᴍ ꜱᴇʀᴠɪᴄᴇꜱ!</b>
 <b>— [ Tᴏᴋʏᴏ_Uᴘᴅᴀᴛᴇꜱ ]</b>
-
 <blockquote>⚠️ <b>Aapka Premium Access expire ho gaya hai.</b>
 Ab aapke account par limits wapas lag chuki hain. Unlimited downloading aur streaming jaise VIP features ab band hain. 
 
