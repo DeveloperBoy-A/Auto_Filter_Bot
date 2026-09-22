@@ -909,21 +909,63 @@ def get_size(size):
 # sakte hain, bilkul {file_name} aur {file_size} ki tarah.
 
 _CAPTION_LANG_PATTERNS = {
+    # Indian Languages
     "Hindi": r"\bhindi\b|\bhin\b",
     "English": r"\benglish\b|\beng\b",
+
     "Tamil": r"\btamil\b|\btam\b",
     "Telugu": r"\btelugu\b|\btel\b",
     "Malayalam": r"\bmalayalam\b|\bmal\b",
     "Kannada": r"\bkannada\b|\bkan\b",
-    "Punjabi": r"\bpunjabi\b|\bpbi\b|\bpunj\b",
+
+    "Punjabi": r"\bpunjabi\b|\bpun\b|\bpan\b|\bpbi\b",
     "Bengali": r"\bbengali\b|\bbangla\b|\bben\b",
     "Marathi": r"\bmarathi\b|\bmar\b",
-    "Gujarati": r"\bgujarati\b|\bguj\b",
-    "Urdu": r"\burdu\b",
-    "Korean": r"\bkorean\b|\bkor\b",
-    "Japanese": r"\bjapanese\b|\bjap\b",
-    "Chinese": r"\bchinese\b|\bchi\b",
-    "Spanish": r"\bspanish\b|\bspa\b",
+    "Gujarati": r"\bgujarati\b|\bguj\b|\bgujrat\b|\bgujrati\b",
+    "Urdu": r"\burdu\b|\burd\b",
+
+    "Bhojpuri": r"\bbhojpuri\b|\bbho\b",
+    "Haryanvi": r"\bharyanvi\b|\bharyanavi\b|\bharyanwi\b|\bhry\b",
+
+    "Assamese": r"\bassamese\b|\basm\b|\baxomiya\b",
+    "Odia": r"\bodia\b|\boriya\b|\bodi\b",
+    "Kashmiri": r"\bkashmiri\b|\bkas\b",
+    "Sindhi": r"\bsindhi\b|\bsnd\b",
+    "Nepali": r"\bnepali\b|\bnep\b",
+    "Konkani": r"\bkonkani\b|\bkok\b",
+    "Maithili": r"\bmaithili\b|\bmai\b",
+    "Rajasthani": r"\brajasthani\b|\braj\b",
+    "Manipuri": r"\bmanipuri\b|\bmeitei\b|\bman\b",
+    "Sanskrit": r"\bsanskrit\b|\bsan\b",
+
+    # International Languages
+    "Korean": r"\bkorean\b|\bkor\b|\bk-drama\b|\bkdrama\b",
+    "Japanese": r"\bjapanese\b|\bjap\b|\bjpn\b",
+    "Chinese": r"\bchinese\b|\bmandarin\b|\bchi\b|\bchn\b",
+
+    "Spanish": r"\bspanish\b|\besp\b|\bspa\b",
+    "Russian": r"\brussian\b|\brus\b",
+    "French": r"\bfrench\b|\bfre\b|\bfra\b",
+    "German": r"\bgerman\b|\bger\b|\bdeu\b",
+    "Italian": r"\bitalian\b|\bita\b",
+    "Portuguese": r"\bportuguese\b|\bpor\b",
+    "Arabic": r"\barabic\b|\bara\b",
+    "Turkish": r"\bturkish\b|\btur\b",
+    "Persian": r"\bpersian\b|\bper\b|\bfarsi\b",
+    "Thai": r"\bthai\b|\btha\b",
+    "Indonesian": r"\bindonesian\b|\bind\b",
+    "Malay": r"\bmalay\b|\bmsa\b",
+    "Vietnamese": r"\bvietnamese\b|\bvie\b",
+    "Filipino": r"\bfilipino\b|\btagalog\b|\bfil\b",
+    "Dutch": r"\bdutch\b|\bnld\b",
+    "Polish": r"\bpolish\b|\bpol\b",
+    "Swedish": r"\bswedish\b|\bswe\b",
+    "Danish": r"\bdanish\b|\bdan\b",
+    "Finnish": r"\bfinnish\b|\bfin\b",
+    "Norwegian": r"\bnorwegian\b|\bnor\b",
+    "Greek": r"\bgreek\b|\bgre\b",
+    "Hebrew": r"\bhebrew\b|\bheb\b",
+    "Ukrainian": r"\bukrainian\b|\bukr\b",
 }
 
 _CAPTION_QUALITY_TOKENS = [
