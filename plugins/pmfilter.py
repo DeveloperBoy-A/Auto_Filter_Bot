@@ -1709,7 +1709,6 @@ async def cb_handler(client: Client, query: CallbackQuery):
             await query.answer("No permission ❌", show_alert=True)
 
     elif DreamxData.startswith("audio_subs_info:"):
-
         # Keep the existing Premium Stream system.
         # If streaming is Premium-only, this feature is Premium-only too.
         if PREMIUM_STREAM_MODE:
@@ -1722,10 +1721,13 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
         _, file_id = DreamxData.split(":", 1)
 
-        await query.answer(
-            "🔍 Scanning audio & subtitle tracks...",
-            show_alert=False
-        )
+        try:
+            await query.answer(
+                "🔍 Scanning audio & subtitle tracks...",
+                show_alert=False
+            )
+        except Exception:
+            pass
 
         try:
             result = await scan_audio_subtitle_tracks(client, file_id)
@@ -1750,27 +1752,12 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 f"💬 Subs: {subs_text}"
             )
 
-            # Telegram callback alerts have a size limit.
-            # If the complete result is too long, send the full
-            # information to the user instead of losing tracks.
-            if len(result_text) <= 190:
-                await query.answer(
-                    result_text,
-                    show_alert=True
-                )
-            else:
-                await query.message.reply_text(
-                    result_text
-                )
-                await query.answer(
-                    "ℹ️ Complete Audio & Subs info sent below.",
-                    show_alert=True
-                )
+            await query.message.reply_text(result_text)
 
         except FileNotFoundError:
-            await query.answer(
-                "❌ ffprobe is not installed on the server.",
-                show_alert=True
+            logger.error("ffprobe is not installed on the server.")
+            await query.message.reply_text(
+                "❌ ffprobe is not installed on the server."
             )
 
         except Exception as e:
@@ -1779,13 +1766,11 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 e
             )
 
-            await query.answer(
-                "❌ Could not scan Audio/Subs information.",
-                show_alert=True
+            await query.message.reply_text(
+                "❌ Could not scan Audio/Subs information."
             )
 
         return
-
     
     elif DreamxData.startswith("generate_stream_link"):
         _, file_id = DreamxData.split(":")
