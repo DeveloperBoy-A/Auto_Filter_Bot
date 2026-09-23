@@ -1403,20 +1403,21 @@ async def save_file(media, bot=None, extracted_info=None):
                 audio_tags.append("AAC")
             extracted["extra_tags"] = audio_tags
 
-        # Prefer the caption for the title (captions usually carry the clean,
-        # human-written title). Fall back to the file name only if there's
-        # no caption or it yields nothing usable.
-        cleaned_title = ""
-
-        raw_caption = getattr(media, "caption", None)
-        caption_text = getattr(raw_caption, "html", None) or str(raw_caption or "")
-        if caption_text.strip():
-            caption_plain = re.sub(r'<[^>]+>', ' ', caption_text)   # strip html tags
-            caption_plain = re.sub(r'[\U0001F000-\U0001FFFF\u2600-\u27BF]+', ' ', caption_plain)  # strip emoji
-            cleaned_title = await asyncio.to_thread(extract_pure_title, caption_plain)
+        # Offload title extraction
+        cleaned_title = await asyncio.to_thread(extract_pure_title, base_name)
+        # FALLBACK: many channel files are named like "S01E05.1080p.WEB-DL.x264.mkv"
+        # with no real title in the filename at all — the title only exists in the
+        # caption (e.g. "🎬 Movie Name (2023)"). If the filename gave us nothing
+        # usable, try pulling the title out of the caption instead.
 
         if not cleaned_title.strip():
-            cleaned_title = await asyncio.to_thread(extract_pure_title, base_name)
+            raw_caption = getattr(media, "caption", None)
+            caption_text = getattr(raw_caption, "html", None) or str(raw_caption or "")
+            if caption_text:
+                caption_plain = re.sub(r'<[^>]+>', ' ', caption_text)   # strip html tags
+                caption_plain = re.sub(r'[\U0001F000-\U0001FFFF\u2600-\u27BF]+', ' ', caption_plain)  # strip emoji
+                caption_plain = caption_plain.splitlines()[0] if caption_plain.strip() else caption_plain
+                cleaned_title = await asyncio.to_thread(extract_pure_title, caption_plain)
 
         formatted_words = []
         for word in cleaned_title.split():
