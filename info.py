@@ -37,7 +37,7 @@ COVER_WATERMARK = bool(environ.get('COVER_WATERMARK', True)) # Watermark [@Tokyo
 
 PICS = (environ.get('PICS', 'https://graph.org/file/56b5deb73f3b132e2bb73.jpg https://graph.org/file/5303692652d91d52180c2.jpg https://graph.org/file/425b6f46efc7c6d64105f.jpg https://graph.org/file/876867e761c6c7a29855b.jpg')).split()  # Sample pic
 NOR_IMG = environ.get("NOR_IMG", "https://graph.org/file/e20b5fdaf217252964202.jpg")
-MELCOW_PHOTO = environ.get("MELCOW_PHOTO", "https://imglink.cc/i/-1yJLiGPJ1")
+MELCOW_PHOTO = environ.get("MELCOW_PHOTO", "https://imglink.cc/cdn/aihJNAM_EN.png")
 SPELL_IMG = environ.get("SPELL_IMG", "https://graph.org/file/13702ae26fb05df52667c.jpg")
 SUBSCRIPTION = (environ.get('SUBSCRIPTION', 'https://graph.org/file/242b7f1b52743938d81f1.jpg'))
 FSUB_PICS = (environ.get('FSUB_PICS', 'https://i.ibb.co/cXrcfZPN/photo-2026-04-20-04-40-07-7630696664830836752.jpg https://i.ibb.co/spMZ83Cq/photo-2026-04-20-04-05-53-7630687855852912664.jpg https://i.ibb.co/cXrcfZPN/photo-2026-04-20-04-40-07-7630696664830836752.jpg')).split()  # Fsub pic
