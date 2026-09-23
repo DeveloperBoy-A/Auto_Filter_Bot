@@ -145,7 +145,7 @@ def get_stream_language(tags):
     return LANGUAGE_NAMES.get(language, language.upper())
 
 
-async def scan_audio_subtitle_tracks(file_id):
+async def scan_audio_subtitle_tracks(client, file_id):
     """
     Scan the actual Telegram media through the existing HTTP streaming route.
     Filename/caption is NOT used for language detection.
@@ -169,8 +169,11 @@ async def scan_audio_subtitle_tracks(file_id):
             file_id=file_id
         )
 
+        # NOTE: "/watch/..." serves an HTML player page, not raw media bytes,
+        # so ffprobe can't read it. The raw byte-stream is served at the root
+        # path ("/{id}/{filename}?hash=...", same as file_url in render_template.py).
         stream_url = (
-            f"{URL}watch/{log_msg.id}/"
+            f"{URL}{log_msg.id}/"
             f"{quote_plus(get_name(log_msg))}"
             f"?hash={get_hash(log_msg)}"
         )
@@ -1725,7 +1728,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         )
 
         try:
-            result = await scan_audio_subtitle_tracks(file_id)
+            result = await scan_audio_subtitle_tracks(client, file_id)
 
             audio_tracks = result.get("audio", [])
             subtitle_tracks = result.get("subs", [])
