@@ -61,7 +61,7 @@ async def save_group(bot, message):
                         photo=MELCOW_PHOTO,
                         caption=script.MELCOW_ENG.format(u.mention, message.chat.title, SUPPORT_CHAT),
                         reply_markup=InlineKeyboardMarkup([
-                            [InlineKeyboardButton("📢 🆕 ᴍᴏᴠɪᴇ ɴᴏᴛɪꜰɪᴄᴀᴛɪᴏɴ 📢", url="MOVIE_UPDATE_CHANNEL_LINK")],
+                            [InlineKeyboardButton("📢 🆕 ᴍᴏᴠɪᴇ ɴᴏᴛɪꜰɪᴄᴀᴛɪᴏɴ 📢", url=MOVIE_UPDATE_CHANNEL_LINK)],
                             [InlineKeyboardButton("📸 डाउनलोड कैसे करें video", url="https://t.me/newmovieswebseries_group/231661")],
                             [InlineKeyboardButton("❣️ ᴜᴘᴅᴀᴛᴇ / ʙᴀᴄᴋᴜᴘ ᴄʜᴀɴɴᴇʟ ❣️", url="https://t.me/+MINAQiQyVq8wMWRl")]
                         ]),
