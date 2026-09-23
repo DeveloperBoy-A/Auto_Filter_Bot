@@ -21,6 +21,9 @@ import asyncio
 import re
 import math
 import random
+import json
+import subprocess
+import time
 import pytz
 from datetime import datetime, timedelta
 lock = asyncio.Lock()
@@ -40,6 +43,218 @@ BUTTONS1 = {}
 BUTTONS2 = {}
 SPELL_CHECK = {}
 MEDIA_TYPE = {}  # key -> "movie" | "series"  (Movie/Series filter selection)
+
+
+
+# ============================
+# AUDIO / SUBTITLE LANGUAGE SCANNER
+# ============================
+AUDIO_SUBS_CACHE = {}
+AUDIO_SUBS_CACHE_TTL = 900  # 15 minutes
+AUDIO_SUBS_CACHE_MAX = 500
+
+LANGUAGE_NAMES = {
+    "ab": "Abkhazian",
+    "af": "Afrikaans",
+    "ar": "Arabic",
+    "az": "Azerbaijani",
+    "be": "Belarusian",
+    "bg": "Bulgarian",
+    "bn": "Bengali",
+    "bs": "Bosnian",
+    "ca": "Catalan",
+    "cs": "Czech",
+    "cy": "Welsh",
+    "da": "Danish",
+    "de": "German",
+    "el": "Greek",
+    "en": "English",
+    "eng": "English",
+    "es": "Spanish",
+    "et": "Estonian",
+    "eu": "Basque",
+    "fa": "Persian",
+    "fi": "Finnish",
+    "fr": "French",
+    "ga": "Irish",
+    "gl": "Galician",
+    "gu": "Gujarati",
+    "he": "Hebrew",
+    "hi": "Hindi",
+    "hin": "Hindi",
+    "hr": "Croatian",
+    "hu": "Hungarian",
+    "hy": "Armenian",
+    "id": "Indonesian",
+    "is": "Icelandic",
+    "it": "Italian",
+    "ja": "Japanese",
+    "jpn": "Japanese",
+    "ka": "Georgian",
+    "kk": "Kazakh",
+    "kn": "Kannada",
+    "kan": "Kannada",
+    "ko": "Korean",
+    "kor": "Korean",
+    "lt": "Lithuanian",
+    "lv": "Latvian",
+    "ml": "Malayalam",
+    "mal": "Malayalam",
+    "mr": "Marathi",
+    "ms": "Malay",
+    "ne": "Nepali",
+    "nl": "Dutch",
+    "no": "Norwegian",
+    "pa": "Punjabi",
+    "pan": "Punjabi",
+    "pl": "Polish",
+    "pt": "Portuguese",
+    "ro": "Romanian",
+    "ru": "Russian",
+    "rus": "Russian",
+    "sk": "Slovak",
+    "sl": "Slovenian",
+    "sr": "Serbian",
+    "sv": "Swedish",
+    "sw": "Swahili",
+    "ta": "Tamil",
+    "tam": "Tamil",
+    "te": "Telugu",
+    "tel": "Telugu",
+    "th": "Thai",
+    "tr": "Turkish",
+    "uk": "Ukrainian",
+    "urd": "Urdu",
+    "ur": "Urdu",
+    "uz": "Uzbek",
+    "vi": "Vietnamese",
+    "zh": "Chinese",
+    "zho": "Chinese",
+    "chi": "Chinese",
+    "zu": "Zulu",
+}
+
+def get_stream_language(tags):
+    language = (tags or {}).get("language")
+
+    if not language:
+        return "Unknown"
+
+    language = str(language).strip().lower()
+
+    return LANGUAGE_NAMES.get(language, language.upper())
+
+
+async def scan_audio_subtitle_tracks(file_id):
+    """
+    Scan the actual Telegram media through the existing HTTP streaming route.
+    Filename/caption is NOT used for language detection.
+    """
+
+    cached = AUDIO_SUBS_CACHE.get(file_id)
+
+    if cached:
+        cached_time, cached_result = cached
+        if time.time() - cached_time < AUDIO_SUBS_CACHE_TTL:
+            return cached_result
+        else:
+            AUDIO_SUBS_CACHE.pop(file_id, None)
+
+    log_msg = None
+
+    try:
+        # Send the real Telegram media to BIN_CHANNEL temporarily.
+        log_msg = await client.send_cached_media(
+            chat_id=BIN_CHANNEL,
+            file_id=file_id
+        )
+
+        stream_url = (
+            f"{URL}watch/{log_msg.id}/"
+            f"{quote_plus(get_name(log_msg))}"
+            f"?hash={get_hash(log_msg)}"
+        )
+
+        process = await asyncio.create_subprocess_exec(
+            "ffprobe",
+            "-v", "error",
+            "-show_entries",
+            "stream=index,codec_type:stream_tags=language,title",
+            "-of", "json",
+            stream_url,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+
+        try:
+            stdout, stderr = await asyncio.wait_for(
+                process.communicate(),
+                timeout=120
+            )
+        except asyncio.TimeoutError:
+            process.kill()
+            await process.wait()
+            raise RuntimeError("ffprobe scan timed out.")
+
+        if process.returncode != 0:
+            error_text = stderr.decode(
+                "utf-8",
+                errors="ignore"
+            ).strip()
+
+            raise RuntimeError(
+                error_text or "ffprobe failed to scan the media."
+            )
+
+        data = json.loads(
+            stdout.decode("utf-8", errors="ignore")
+        )
+
+        audio_tracks = []
+        subtitle_tracks = []
+
+        for stream in data.get("streams", []):
+            codec_type = stream.get("codec_type")
+            tags = stream.get("tags") or {}
+
+            if codec_type == "audio":
+                audio_tracks.append(
+                    get_stream_language(tags)
+                )
+
+            elif codec_type == "subtitle":
+                subtitle_tracks.append(
+                    get_stream_language(tags)
+                )
+
+        result = {
+            "audio": audio_tracks,
+            "subs": subtitle_tracks
+        }
+
+        # Small in-memory cache.
+        AUDIO_SUBS_CACHE[file_id] = (
+            time.time(),
+            result
+        )
+
+        # Prevent unlimited memory growth.
+        if len(AUDIO_SUBS_CACHE) > AUDIO_SUBS_CACHE_MAX:
+            oldest_key = min(
+                AUDIO_SUBS_CACHE,
+                key=lambda k: AUDIO_SUBS_CACHE[k][0]
+            )
+            AUDIO_SUBS_CACHE.pop(oldest_key, None)
+
+        return result
+
+    finally:
+        # Temporary BIN_CHANNEL message is only needed for scanning.
+        if log_msg:
+            try:
+                await log_msg.delete()
+            except Exception:
+                pass
 
 
 def movie_series_row(key):
@@ -1490,6 +1705,85 @@ async def cb_handler(client: Client, query: CallbackQuery):
         else:
             await query.answer("No permission ❌", show_alert=True)
 
+    elif DreamxData.startswith("audio_subs_info:"):
+
+        # Keep the existing Premium Stream system.
+        # If streaming is Premium-only, this feature is Premium-only too.
+        if PREMIUM_STREAM_MODE:
+            if not await db.has_premium_access(query.from_user.id):
+                await query.answer(
+                    text=script.PRE_STREAM_ALERT,
+                    show_alert=True
+                )
+                return
+
+        _, file_id = DreamxData.split(":", 1)
+
+        await query.answer(
+            "🔍 Scanning audio & subtitle tracks...",
+            show_alert=False
+        )
+
+        try:
+            result = await scan_audio_subtitle_tracks(file_id)
+
+            audio_tracks = result.get("audio", [])
+            subtitle_tracks = result.get("subs", [])
+
+            audio_text = (
+                ", ".join(audio_tracks)
+                if audio_tracks
+                else "None"
+            )
+
+            subs_text = (
+                ", ".join(subtitle_tracks)
+                if subtitle_tracks
+                else "None"
+            )
+
+            result_text = (
+                f"🔊 Audio: {audio_text}\n"
+                f"💬 Subs: {subs_text}"
+            )
+
+            # Telegram callback alerts have a size limit.
+            # If the complete result is too long, send the full
+            # information to the user instead of losing tracks.
+            if len(result_text) <= 190:
+                await query.answer(
+                    result_text,
+                    show_alert=True
+                )
+            else:
+                await query.message.reply_text(
+                    result_text
+                )
+                await query.answer(
+                    "ℹ️ Complete Audio & Subs info sent below.",
+                    show_alert=True
+                )
+
+        except FileNotFoundError:
+            await query.answer(
+                "❌ ffprobe is not installed on the server.",
+                show_alert=True
+            )
+
+        except Exception as e:
+            logger.exception(
+                "Audio/Subs scan failed: %s",
+                e
+            )
+
+            await query.answer(
+                "❌ Could not scan Audio/Subs information.",
+                show_alert=True
+            )
+
+        return
+
+    
     elif DreamxData.startswith("generate_stream_link"):
         _, file_id = DreamxData.split(":")
         try:
