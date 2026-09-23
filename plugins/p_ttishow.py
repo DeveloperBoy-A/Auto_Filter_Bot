@@ -1,7 +1,7 @@
 from pyrogram import Client, filters, enums
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from pyrogram.errors.exceptions.bad_request_400 import MessageTooLong, PeerIdInvalid
-from info import ADMINS,MULTIPLE_DB, LOG_CHANNEL, OWNER_LNK, MELCOW_PHOTO
+from info import ADMINS,MULTIPLE_DB, LOG_CHANNEL, OWNER_LNK, MELCOW_PHOTO, SUPPORT_CHAT, MOVIE_UPDATE_CHANNEL_LINK
 from database.users_chats_db import db, db2
 from database.ia_filterdb import Media, Media2, MEDIA_DBS, db as db_stats, client
 from utils import get_size, temp, get_settings, get_readable_time
@@ -59,11 +59,14 @@ async def save_group(bot, message):
                 try:
                     temp.MELCOW['welcome'] = await message.reply_photo(
                         photo=MELCOW_PHOTO,
-                        caption=script.MELCOW_ENG.format(u.mention, message.chat.title),
+                        caption=script.MELCOW_ENG.format(u.mention, message.chat.title, SUPPORT_CHAT),
                         reply_markup=InlineKeyboardMarkup([
-                                [
-                                    InlineKeyboardButton("📌 ᴄᴏɴᴛᴀᴄᴛ ꜱᴜᴘᴘᴏʀᴛ 📌", url=OWNER_LNK)
-                                ]]),parse_mode=enums.ParseMode.HTML)
+                            [InlineKeyboardButton("📢 🆕 ᴍᴏᴠɪᴇ ɴᴏᴛɪꜰɪᴄᴀᴛɪᴏɴ 📢", url="MOVIE_UPDATE_CHANNEL_LINK")],
+                            [InlineKeyboardButton("📸 डाउनलोड कैसे करें video", url="https://t.me/newmovieswebseries_group/231661")],
+                            [InlineKeyboardButton("❣️ ᴜᴘᴅᴀᴛᴇ / ʙᴀᴄᴋᴜᴘ ᴄʜᴀɴɴᴇʟ ❣️", url="https://t.me/+MINAQiQyVq8wMWRl")]
+                        ]),
+                        parse_mode=enums.ParseMode.HTML
+                    )
                 except Exception as e:
                     print(f"Welcome photo send failed: {e}")
         if settings.get("auto_delete"):
@@ -74,6 +77,7 @@ async def save_group(bot, message):
                     temp.MELCOW['welcome'] = None 
             except:
                 pass
+
 
 @Client.on_message(filters.command('leave') & filters.user(ADMINS))
 async def leave_a_chat(bot, message):
