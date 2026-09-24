@@ -45,7 +45,6 @@ SPELL_CHECK = {}
 MEDIA_TYPE = {}  # key -> "movie" | "series"  (Movie/Series filter selection)
 
 
-
 # ============================
 # AUDIO / SUBTITLE LANGUAGE SCANNER
 # ============================
@@ -57,81 +56,140 @@ LANGUAGE_NAMES = {
     "ab": "Abkhazian",
     "af": "Afrikaans",
     "ar": "Arabic",
+    "ara": "Arabic",
     "az": "Azerbaijani",
     "be": "Belarusian",
     "bg": "Bulgarian",
+    "bul": "Bulgarian",
     "bn": "Bengali",
     "bs": "Bosnian",
     "ca": "Catalan",
+    "cat": "Catalan",
     "cs": "Czech",
+    "cze": "Czech",
     "cy": "Welsh",
+    "wel": "Welsh",
     "da": "Danish",
+    "dan": "Danish",
     "de": "German",
+    "ger": "German",
     "el": "Greek",
+    "gre": "Greek",
     "en": "English",
     "eng": "English",
     "es": "Spanish",
+    "spa": "Spanish",
     "et": "Estonian",
+    "est": "Estonian",
     "eu": "Basque",
+    "baq": "Basque",
     "fa": "Persian",
+    "per": "Persian",
     "fi": "Finnish",
+    "fin": "Finnish",
+    "fil": "Filipino",
+    "tgl": "Filipino",
     "fr": "French",
+    "fre": "French",
     "ga": "Irish",
+    "gle": "Irish",
     "gl": "Galician",
+    "glg": "Galician",
     "gu": "Gujarati",
+    "guj": "Gujarati",
     "he": "Hebrew",
+    "heb": "Hebrew",
     "hi": "Hindi",
     "hin": "Hindi",
     "hr": "Croatian",
+    "hrv": "Croatian",
     "hu": "Hungarian",
+    "hun": "Hungarian",
     "hy": "Armenian",
+    "arm": "Armenian",
     "id": "Indonesian",
+    "ind": "Indonesian",
     "is": "Icelandic",
+    "ice": "Icelandic",
     "it": "Italian",
+    "ita": "Italian",
     "ja": "Japanese",
     "jpn": "Japanese",
     "ka": "Georgian",
+    "geo": "Georgian",
     "kk": "Kazakh",
+    "kaz": "Kazakh",
+    "km": "Khmer",
+    "khm": "Khmer",
     "kn": "Kannada",
     "kan": "Kannada",
     "ko": "Korean",
     "kor": "Korean",
     "lt": "Lithuanian",
+    "lit": "Lithuanian",
     "lv": "Latvian",
+    "lav": "Latvian",
+    "mk": "Macedonian",
+    "mac": "Macedonian",
     "ml": "Malayalam",
     "mal": "Malayalam",
     "mr": "Marathi",
+    "mar": "Marathi",
     "ms": "Malay",
+    "may": "Malay",
+    "msa": "Malay",
+    "mt": "Maltese",
+    "mlt": "Maltese",
     "ne": "Nepali",
+    "nep": "Nepali",
     "nl": "Dutch",
+    "dut": "Dutch",
     "no": "Norwegian",
+    "nor": "Norwegian",
     "pa": "Punjabi",
     "pan": "Punjabi",
     "pl": "Polish",
+    "pol": "Polish",
     "pt": "Portuguese",
+    "por": "Portuguese",
     "ro": "Romanian",
+    "rum": "Romanian",
+    "ron": "Romanian",
     "ru": "Russian",
     "rus": "Russian",
     "sk": "Slovak",
+    "slo": "Slovak",
     "sl": "Slovenian",
+    "slv": "Slovenian",
     "sr": "Serbian",
+    "srp": "Serbian",
+    "scc": "Serbian",
     "sv": "Swedish",
+    "swe": "Swedish",
     "sw": "Swahili",
+    "swa": "Swahili",
     "ta": "Tamil",
     "tam": "Tamil",
     "te": "Telugu",
     "tel": "Telugu",
     "th": "Thai",
+    "tha": "Thai",
     "tr": "Turkish",
+    "tur": "Turkish",
     "uk": "Ukrainian",
+    "ukr": "Ukrainian",
     "urd": "Urdu",
     "ur": "Urdu",
     "uz": "Uzbek",
+    "uzb": "Uzbek",
     "vi": "Vietnamese",
+    "vie": "Vietnamese",
     "zh": "Chinese",
     "zho": "Chinese",
     "chi": "Chinese",
     "zu": "Zulu",
+    "zul": "Zulu",
+    "und": "Unknown",
 }
 
 def get_stream_language(tags):
@@ -143,6 +201,16 @@ def get_stream_language(tags):
     language = str(language).strip().lower()
 
     return LANGUAGE_NAMES.get(language, language.upper())
+
+
+def dedupe_preserve_order(items):
+    seen = set()
+    result = []
+    for item in items:
+        if item not in seen:
+            seen.add(item)
+            result.append(item)
+    return result
 
 
 async def scan_audio_subtitle_tracks(client, file_id):
@@ -182,7 +250,7 @@ async def scan_audio_subtitle_tracks(client, file_id):
             "ffprobe",
             "-v", "error",
             "-show_entries",
-            "stream=index,codec_type:stream_tags=language,title",
+            "stream=index,codec_type,codec_name,width,height:stream_tags=language,title",
             "-of", "json",
             stream_url,
             stdout=asyncio.subprocess.PIPE,
@@ -213,6 +281,7 @@ async def scan_audio_subtitle_tracks(client, file_id):
             stdout.decode("utf-8", errors="ignore")
         )
 
+        video_tracks = []
         audio_tracks = []
         subtitle_tracks = []
 
@@ -220,7 +289,17 @@ async def scan_audio_subtitle_tracks(client, file_id):
             codec_type = stream.get("codec_type")
             tags = stream.get("tags") or {}
 
-            if codec_type == "audio":
+            if codec_type == "video":
+                codec_name = (stream.get("codec_name") or "Unknown").upper()
+                width = stream.get("width")
+                height = stream.get("height")
+
+                if width and height:
+                    video_tracks.append(f"{codec_name} {width}x{height}")
+                else:
+                    video_tracks.append(codec_name)
+
+            elif codec_type == "audio":
                 audio_tracks.append(
                     get_stream_language(tags)
                 )
@@ -231,8 +310,9 @@ async def scan_audio_subtitle_tracks(client, file_id):
                 )
 
         result = {
-            "audio": audio_tracks,
-            "subs": subtitle_tracks
+            "video": dedupe_preserve_order(video_tracks),
+            "audio": dedupe_preserve_order(audio_tracks),
+            "subs": dedupe_preserve_order(subtitle_tracks)
         }
 
         # Small in-memory cache.
@@ -1708,7 +1788,9 @@ async def cb_handler(client: Client, query: CallbackQuery):
         else:
             await query.answer("No permission ❌", show_alert=True)
 
+
     elif DreamxData.startswith("audio_subs_info:"):
+
         # Keep the existing Premium Stream system.
         # If streaming is Premium-only, this feature is Premium-only too.
         if PREMIUM_STREAM_MODE:
@@ -1721,44 +1803,97 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
         _, file_id = DreamxData.split(":", 1)
 
+        # Swap just the clicked button's label to a "please wait" state so the
+        # user gets visible feedback, then restore the original label once the
+        # scan finishes (success or failure).
+        original_markup = query.message.reply_markup
+        waiting_markup = None
+
+        if original_markup:
+            new_rows = []
+            for row in original_markup.inline_keyboard:
+                new_row = []
+                for btn in row:
+                    if btn.callback_data == DreamxData:
+                        new_row.append(
+                            InlineKeyboardButton(
+                                "⏳ ᴘʟᴇᴀꜱᴇ ᴡᴀɪᴛ...",
+                                callback_data="please_wait_noop"
+                            )
+                        )
+                    else:
+                        new_row.append(btn)
+                new_rows.append(new_row)
+            waiting_markup = InlineKeyboardMarkup(new_rows)
+
         try:
-            await query.answer(
-                "🔍 Scanning audio & subtitle tracks...",
-                show_alert=False
-            )
+            if waiting_markup:
+                await query.edit_message_reply_markup(reply_markup=waiting_markup)
         except Exception:
             pass
 
+        # NOTE: a callback query can be answered with query.answer() only
+        # ONCE. We deliberately do NOT answer here — the single answer is
+        # used at the very end below, as the result popup. Until then the
+        # button just shows "please wait" (edited above) and Telegram shows
+        # its own small loading spinner on the button, which is fine.
         try:
             result = await scan_audio_subtitle_tracks(client, file_id)
 
+            video_tracks = result.get("video", [])
             audio_tracks = result.get("audio", [])
             subtitle_tracks = result.get("subs", [])
 
-            audio_text = (
-                ", ".join(audio_tracks)
-                if audio_tracks
-                else "None"
+            lines = ["🎬 Available Tracks"]
+
+            if video_tracks:
+                lines.append("")
+                lines.append("📹 Video")
+                for v in video_tracks:
+                    lines.append(f"• {v}")
+
+            lines.append("")
+            lines.append(f"🔊 Audio Tracks ({len(audio_tracks)})")
+            if audio_tracks:
+                for a in audio_tracks:
+                    lines.append(f"• {a}")
+            else:
+                lines.append("• None")
+
+            lines.append("")
+            lines.append(f"💬 Subtitle Tracks ({len(subtitle_tracks)})")
+            if subtitle_tracks:
+                for s in subtitle_tracks:
+                    lines.append(f"• {s}")
+            else:
+                lines.append("• None")
+
+            result_text = "\n".join(lines)
+
+            # Telegram callback alerts are capped at 200 characters.
+            popup_text = (
+                result_text
+                if len(result_text) <= 200
+                else result_text[:197].rstrip() + "..."
             )
 
-            subs_text = (
-                ", ".join(subtitle_tracks)
-                if subtitle_tracks
-                else "None"
-            )
-
-            result_text = (
-                f"🔊 Audio: {audio_text}\n"
-                f"💬 Subs: {subs_text}"
-            )
-
-            await query.message.reply_text(result_text)
+            try:
+                await query.answer(popup_text, show_alert=True)
+            except Exception:
+                # Query likely expired (long scan) - fall back to a message.
+                await query.message.reply_text(result_text)
 
         except FileNotFoundError:
             logger.error("ffprobe is not installed on the server.")
-            await query.message.reply_text(
-                "❌ ffprobe is not installed on the server."
-            )
+            try:
+                await query.answer(
+                    "❌ ffprobe is not installed on the server.",
+                    show_alert=True
+                )
+            except Exception:
+                await query.message.reply_text(
+                    "❌ ffprobe is not installed on the server."
+                )
 
         except Exception as e:
             logger.exception(
@@ -1766,11 +1901,30 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 e
             )
 
-            await query.message.reply_text(
-                "❌ Could not scan Audio/Subs information."
-            )
+            try:
+                await query.answer(
+                    "❌ Could not scan Audio/Subs information.",
+                    show_alert=True
+                )
+            except Exception:
+                await query.message.reply_text(
+                    "❌ Could not scan Audio/Subs information."
+                )
+
+        finally:
+            # Always put the button back to how it was, even if the scan failed.
+            try:
+                if original_markup:
+                    await query.edit_message_reply_markup(reply_markup=original_markup)
+            except Exception:
+                pass
 
         return
+
+    elif DreamxData == "please_wait_noop":
+        await query.answer("🔍 Already scanning, please wait...", show_alert=False)
+        return
+
     
     elif DreamxData.startswith("generate_stream_link"):
         _, file_id = DreamxData.split(":")
