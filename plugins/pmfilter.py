@@ -24,6 +24,9 @@ import random
 import json
 import subprocess
 import time
+import os
+import tempfile
+import uuid
 import pytz
 from datetime import datetime, timedelta
 lock = asyncio.Lock()
@@ -215,8 +218,18 @@ def dedupe_preserve_order(items):
 
 async def scan_audio_subtitle_tracks(client, file_id):
     """
-    Scan the actual Telegram media through the existing HTTP streaming route.
-    Filename/caption is NOT used for language detection.
+    Download only the FRONT part of the real Telegram media directly
+    (straight from Telegram's servers, using the file_id - no BIN_CHANNEL
+    copy needed) and run ffprobe on that local partial file. This reads
+    real embedded stream/language tags from real media bytes - filename
+    and caption are never used.
+
+    NOTE: this only reads the front of the file. Properly muxed files
+    (MKV, and "faststart" MP4) keep their track index near the start, so
+    this works for the vast majority of files. A small number of non-
+    "faststart" MP4s keep their index at the very end of the file and may
+    report 0 streams here - that's a limitation of downloading only the
+    front chunk, not a language-detection bug.
     """
 
     cached = AUDIO_SUBS_CACHE.get(file_id)
@@ -228,23 +241,24 @@ async def scan_audio_subtitle_tracks(client, file_id):
         else:
             AUDIO_SUBS_CACHE.pop(file_id, None)
 
-    log_msg = None
+    # ~8 MB from the front. stream_media() hands out 1 MB chunks, so
+    # limit=8 caps it there. This is enough to reach the track index on
+    # the vast majority of properly muxed files (MKV, "faststart" MP4)
+    # while keeping the download - and the scan - fast.
+    FRONT_CHUNKS = 8
+
+    temp_path = os.path.join(
+        tempfile.gettempdir(),
+        f"avscan_{uuid.uuid4().hex}.tmp"
+    )
 
     try:
-        # Send the real Telegram media to BIN_CHANNEL temporarily.
-        log_msg = await client.send_cached_media(
-            chat_id=BIN_CHANNEL,
-            file_id=file_id
-        )
+        with open(temp_path, "wb") as f:
+            async for chunk in client.stream_media(file_id, limit=FRONT_CHUNKS):
+                f.write(chunk)
 
-        # NOTE: "/watch/..." serves an HTML player page, not raw media bytes,
-        # so ffprobe can't read it. The raw byte-stream is served at the root
-        # path ("/{id}/{filename}?hash=...", same as file_url in render_template.py).
-        stream_url = (
-            f"{URL}{log_msg.id}/"
-            f"{quote_plus(get_name(log_msg))}"
-            f"?hash={get_hash(log_msg)}"
-        )
+        if os.path.getsize(temp_path) == 0:
+            raise RuntimeError("Could not download any data for this file.")
 
         process = await asyncio.create_subprocess_exec(
             "ffprobe",
@@ -252,7 +266,7 @@ async def scan_audio_subtitle_tracks(client, file_id):
             "-show_entries",
             "stream=index,codec_type,codec_name,width,height:stream_tags=language,title",
             "-of", "json",
-            stream_url,
+            temp_path,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
@@ -260,7 +274,7 @@ async def scan_audio_subtitle_tracks(client, file_id):
         try:
             stdout, stderr = await asyncio.wait_for(
                 process.communicate(),
-                timeout=120
+                timeout=20
             )
         except asyncio.TimeoutError:
             process.kill()
@@ -332,12 +346,12 @@ async def scan_audio_subtitle_tracks(client, file_id):
         return result
 
     finally:
-        # Temporary BIN_CHANNEL message is only needed for scanning.
-        if log_msg:
-            try:
-                await log_msg.delete()
-            except Exception:
-                pass
+        # Local temp file is only needed for the scan - always clean it up.
+        try:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+        except Exception:
+            pass
 
 
 def movie_series_row(key):
@@ -1880,8 +1894,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
             try:
                 await query.answer(popup_text, show_alert=True)
             except Exception:
-                # Query likely expired (long scan) - fall back to a message.
-                await query.message.reply_text(result_text)
+                pass
 
         except FileNotFoundError:
             logger.error("ffprobe is not installed on the server.")
@@ -1891,9 +1904,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
                     show_alert=True
                 )
             except Exception:
-                await query.message.reply_text(
-                    "❌ ffprobe is not installed on the server."
-                )
+                pass
 
         except Exception as e:
             logger.exception(
@@ -1907,9 +1918,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
                     show_alert=True
                 )
             except Exception:
-                await query.message.reply_text(
-                    "❌ Could not scan Audio/Subs information."
-                )
+                pass
 
         finally:
             # Always put the button back to how it was, even if the scan failed.
