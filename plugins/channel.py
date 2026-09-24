@@ -797,31 +797,3 @@ def generate_movie_message(movie_doc, base_name):
     )
 
 
-# Channel button handler
-CHANNEL_ID = -1002413838031
-
-@Client.on_message(filters.channel & filters.media)
-async def add_button(client, message):
-    if message.chat.id == CHANNEL_ID:
-        button = InlineKeyboardMarkup(
-            [
-                [
-                    InlineKeyboardButton(
-                        "🔰 ᴍᴏᴠɪᴇ ꜱᴇᴀʀᴄʜ ɢʀᴏᴜᴘ 🔰",
-                        url="https://t.me/newmovieswebseries_group"
-                    )
-                ],
-                [
-                    InlineKeyboardButton(
-                        "📢 ɴᴇᴡ ᴍᴏᴠɪᴇ ɴᴏᴛɪꜰɪᴄᴀᴛɪᴏɴ ᴄʜᴀɴɴᴇʟ 📢",
-                        url="https://t.me/new_movie_update_2026"
-                    )
-                ]
-            ]
-        )
-
-        try:
-            await message.edit_reply_markup(reply_markup=button)
-            await asyncio.sleep(0.5)
-        except Exception as e:
-            print(f"Failed to add button: {e}")
