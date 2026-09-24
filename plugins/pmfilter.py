@@ -48,6 +48,7 @@ SPELL_CHECK = {}
 MEDIA_TYPE = {}  # key -> "movie" | "series"  (Movie/Series filter selection)
 
 
+
 # ============================
 # AUDIO / SUBTITLE LANGUAGE SCANNER
 # ============================
@@ -218,18 +219,25 @@ def dedupe_preserve_order(items):
 
 async def scan_audio_subtitle_tracks(client, file_id):
     """
-    Download only the FRONT part of the real Telegram media directly
-    (straight from Telegram's servers, using the file_id - no BIN_CHANNEL
-    copy needed) and run ffprobe on that local partial file. This reads
-    real embedded stream/language tags from real media bytes - filename
-    and caption are never used.
+    Download only PART of the real Telegram media directly (straight from
+    Telegram's servers, using the file_id - no BIN_CHANNEL copy needed) and
+    run ffprobe on that local partial file. This reads real embedded
+    stream/language tags from real media bytes - filename and caption are
+    never used.
 
-    NOTE: this only reads the front of the file. Properly muxed files
-    (MKV, and "faststart" MP4) keep their track index near the start, so
-    this works for the vast majority of files. A small number of non-
-    "faststart" MP4s keep their index at the very end of the file and may
-    report 0 streams here - that's a limitation of downloading only the
-    front chunk, not a language-detection bug.
+    Two attempts:
+      1. FRONT scan (fast): grab the first ~16 MB. Works for MKV and
+         "faststart" MP4 - the large majority of files - since their track
+         index sits near the start.
+      2. TAIL fallback (only if attempt 1 found no audio/subtitle streams):
+         some MP4s keep their index ("moov" atom) at the very END of the
+         file instead. Rather than downloading the whole file, we rebuild
+         a local sparse file that is the file's real full size, and fill
+         in only the front chunk AND the tail chunk at their correct byte
+         offsets. ffprobe only needs the header/index structure to list
+         tracks (not the actual audio/video sample data in between), so
+         this finds an end-of-file index too, at a fraction of the cost
+         of a full download.
     """
 
     cached = AUDIO_SUBS_CACHE.get(file_id)
@@ -241,32 +249,23 @@ async def scan_audio_subtitle_tracks(client, file_id):
         else:
             AUDIO_SUBS_CACHE.pop(file_id, None)
 
-    # ~8 MB from the front. stream_media() hands out 1 MB chunks, so
-    # limit=8 caps it there. This is enough to reach the track index on
-    # the vast majority of properly muxed files (MKV, "faststart" MP4)
-    # while keeping the download - and the scan - fast.
-    FRONT_CHUNKS = 8
+    CHUNK_SIZE = 1024 * 1024  # pyrogram/Telegram file chunk size
+    FRONT_CHUNKS = 10
+    TAIL_CHUNKS = 4
 
     temp_path = os.path.join(
         tempfile.gettempdir(),
         f"avscan_{uuid.uuid4().hex}.tmp"
     )
 
-    try:
-        with open(temp_path, "wb") as f:
-            async for chunk in client.stream_media(file_id, limit=FRONT_CHUNKS):
-                f.write(chunk)
-
-        if os.path.getsize(temp_path) == 0:
-            raise RuntimeError("Could not download any data for this file.")
-
+    async def run_ffprobe(path):
         process = await asyncio.create_subprocess_exec(
             "ffprobe",
             "-v", "error",
             "-show_entries",
             "stream=index,codec_type,codec_name,width,height:stream_tags=language,title",
             "-of", "json",
-            temp_path,
+            path,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
@@ -279,27 +278,85 @@ async def scan_audio_subtitle_tracks(client, file_id):
         except asyncio.TimeoutError:
             process.kill()
             await process.wait()
-            raise RuntimeError("ffprobe scan timed out.")
+            return None, "ffprobe scan timed out."
 
         if process.returncode != 0:
-            error_text = stderr.decode(
-                "utf-8",
-                errors="ignore"
-            ).strip()
+            return None, stderr.decode("utf-8", errors="ignore").strip()
 
-            raise RuntimeError(
-                error_text or "ffprobe failed to scan the media."
-            )
+        try:
+            return json.loads(stdout.decode("utf-8", errors="ignore")), None
+        except Exception:
+            return None, "ffprobe returned invalid output."
 
-        data = json.loads(
-            stdout.decode("utf-8", errors="ignore")
+    try:
+        # Start the DB lookup (only actually needed if the fallback below
+        # triggers) at the same time as the front download, so we don't
+        # pay for it sequentially later if it does end up being needed.
+        file_details_task = asyncio.create_task(get_file_details(file_id))
+
+        # ---- Attempt 1: front of the file (fast path) ----
+        with open(temp_path, "wb") as f:
+            async for chunk in client.stream_media(file_id, limit=FRONT_CHUNKS):
+                f.write(chunk)
+
+        if os.path.getsize(temp_path) == 0:
+            file_details_task.cancel()
+            raise RuntimeError("Could not download any data for this file.")
+
+        data, err = await run_ffprobe(temp_path)
+        streams = data.get("streams", []) if data else []
+
+        has_tracks = any(
+            s.get("codec_type") in ("audio", "subtitle")
+            for s in streams
         )
+
+        # ---- Attempt 2: tail fallback (only if attempt 1 found nothing) ----
+        if not has_tracks:
+            try:
+                details = await file_details_task
+                file_size = details[0].get("file_size") if details else None
+            except Exception:
+                file_size = None
+
+            if file_size and file_size > (FRONT_CHUNKS * CHUNK_SIZE):
+                total_chunks = math.ceil(file_size / CHUNK_SIZE)
+                tail_chunks = min(TAIL_CHUNKS, total_chunks - FRONT_CHUNKS)
+
+                if tail_chunks > 0:
+                    tail_offset_chunks = total_chunks - tail_chunks
+
+                    try:
+                        with open(temp_path, "r+b") as f:
+                            f.truncate(file_size)  # sparse-extend to real size
+                            f.seek(tail_offset_chunks * CHUNK_SIZE)
+                            async for chunk in client.stream_media(
+                                file_id,
+                                offset=tail_offset_chunks,
+                                limit=tail_chunks
+                            ):
+                                f.write(chunk)
+
+                        data2, err2 = await run_ffprobe(temp_path)
+                        if data2 and data2.get("streams"):
+                            data, err = data2, None
+                            streams = data.get("streams", [])
+                    except Exception:
+                        # Tail fallback is best-effort - keep whatever the
+                        # front-only scan already found (even if empty).
+                        pass
+        else:
+            # Fast path succeeded - the prefetched DB lookup wasn't needed.
+            file_details_task.cancel()
+
+        if data is None:
+            raise RuntimeError(err or "ffprobe failed to scan the media.")
 
         video_tracks = []
         audio_tracks = []
         subtitle_tracks = []
 
-        for stream in data.get("streams", []):
+        for stream in streams:
             codec_type = stream.get("codec_type")
             tags = stream.get("tags") or {}
 
