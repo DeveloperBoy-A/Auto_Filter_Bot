@@ -1714,3 +1714,64 @@ async def clean_db_command(client, message):
             "❌ <b>Error while cleaning DB:</b>\n"
             f"<code>{e}</code>"
         )
+
+
+
+# =========================================
+# CHANNEL BUTTON HANDLER (ON/OFF FEATURE)
+# =========================================
+
+TARGET_CHANNEL_ID = -1002413838031
+BUTTON_ENABLED = True  # Default status ON rahega
+
+@Client.on_message(filters.command("button") & filters.user(ADMINS))
+async def toggle_button(client, message):
+    global BUTTON_ENABLED
+    
+    if len(message.command) > 1:
+        state = message.command[1].lower()
+        if state == "on":
+            BUTTON_ENABLED = True
+            await message.reply_text("✅ **Channel button addition is now ON.**")
+        elif state == "off":
+            BUTTON_ENABLED = False
+            await message.reply_text("❌ **Channel button addition is now OFF.**")
+        else:
+            await message.reply_text("⚠️ **Galat format!** Use: `/button on` or `/button off`")
+    else:
+        current_state = "ON" if BUTTON_ENABLED else "OFF"
+        await message.reply_text(f"🔘 **Current button status is: {current_state}**\n\nChange karne ke liye `/button on` ya `/button off` bhejein.")
+
+@Client.on_message(filters.channel & filters.media)
+async def add_channel_button(client, message):
+    global BUTTON_ENABLED
+    
+    # Agar variable False (off) hai, toh aage execute nahi hoga
+    if not BUTTON_ENABLED:
+        return
+
+    # Check agar message usi channel ka hai
+    if message.chat.id == TARGET_CHANNEL_ID:
+        button = InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton(
+                        "🔰 ᴍᴏᴠɪᴇ ꜱᴇᴀʀᴄʜ ɢʀᴏᴜᴘ 🔰",
+                        url="https://t.me/newmovieswebseries_group"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        "📢 ɴᴇᴡ ᴍᴏᴠɪᴇ ɴᴏᴛɪꜰɪᴄᴀᴛɪᴏɴ ᴄʜᴀɴɴᴇʟ 📢",
+                        url="https://t.me/new_movie_update_2026"
+                    )
+                ]
+            ]
+        )
+
+        try: 
+            await message.edit_reply_markup(reply_markup=button) 
+            await asyncio.sleep(0.5) 
+        except Exception as e: 
+            logger.error(f"Failed to add channel button: {e}")
+
