@@ -371,6 +371,7 @@ async def start(client, message):
                 # बटन का हिस्सा (Indented inside for loop)
                 if STREAM_MODE and not PREMIUM_STREAM_MODE:
                     btn = [[InlineKeyboardButton('🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️', callback_data=f'generate_stream_link:{f_id}')],
+                           [InlineKeyboardButton('ℹ️ ᴠɪᴇᴡ ᴀᴜᴅɪᴏ & ꜱᴜʙꜱ ɪɴꜰᴏ ℹ️', callback_data=f'audio_subs_info:{f_id}')],
                            [InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]]
                 elif STREAM_MODE and PREMIUM_STREAM_MODE:
                     if not await db.has_premium_access(message.from_user.id):
@@ -456,7 +457,7 @@ async def start(client, message):
             elif STREAM_MODE and PREMIUM_STREAM_MODE:
                 if not await db.has_premium_access(message.from_user.id):
                    btn = [
-                        [InlineKeyboardButton('🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️', callback_data=f'prestream')],
+                        [InlineKeyboardButton('🚀 ꜰᴀꜱᴛ ᴅᴏᴡɴʟᴏᴀᴅ / ᴡᴀᴛᴄʜ ᴏɴʟɪɴᴇ 🖥️', callback_data=f'prestream')], 
                         [InlineKeyboardButton('ℹ️ ᴠɪᴇᴡ ᴀᴜᴅɪᴏ & ꜱᴜʙꜱ ɪɴꜰᴏ ℹ️', callback_data=f'prestream')],
                         [InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]  # Keep this line unchanged  
                     ]
@@ -852,8 +853,6 @@ async def requests(bot, message):
             await message.delete()
         except:
             pass
-
-
 
 
 @Client.on_message(filters.command("send") & filters.user(ADMINS))
@@ -1715,8 +1714,6 @@ async def clean_db_command(client, message):
             f"<code>{e}</code>"
         )
 
-
-
 # =========================================
 # CHANNEL BUTTON HANDLER (ON/OFF FEATURE)
 # =========================================
@@ -1774,4 +1771,3 @@ async def add_channel_button(client, message):
             await asyncio.sleep(0.5) 
         except Exception as e: 
             logger.error(f"Failed to add channel button: {e}")
-
