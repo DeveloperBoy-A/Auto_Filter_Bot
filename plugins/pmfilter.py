@@ -53,7 +53,7 @@ MEDIA_TYPE = {}  # key -> "movie" | "series"  (Movie/Series filter selection)
 # AUDIO / SUBTITLE LANGUAGE SCANNER
 # ============================
 AUDIO_SUBS_CACHE = {}
-AUDIO_SUBS_CACHE_TTL = 900  # 15 minutes
+AUDIO_SUBS_CACHE_TTL = 86400  # 24 hours
 AUDIO_SUBS_CACHE_MAX = 500
 
 LANGUAGE_NAMES = {
@@ -250,8 +250,8 @@ async def scan_audio_subtitle_tracks(client, file_id):
             AUDIO_SUBS_CACHE.pop(file_id, None)
 
     CHUNK_SIZE = 1024 * 1024  # pyrogram/Telegram file chunk size
-    FRONT_CHUNKS = 10
-    TAIL_CHUNKS = 4
+    FRONT_CHUNKS = 3
+    TAIL_CHUNKS = 2
 
     temp_path = os.path.join(
         tempfile.gettempdir(),
@@ -261,6 +261,9 @@ async def scan_audio_subtitle_tracks(client, file_id):
     async def run_ffprobe(path):
         process = await asyncio.create_subprocess_exec(
             "ffprobe",
+            "-probesize", "2000000",
+            "-analyzeduration",
+            "2000000",
             "-v", "error",
             "-show_entries",
             "stream=index,codec_type,codec_name,width,height:stream_tags=language,title",
