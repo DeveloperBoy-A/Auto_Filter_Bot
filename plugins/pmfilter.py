@@ -1891,7 +1891,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
                     if btn.callback_data == DreamxData:
                         new_row.append(
                             InlineKeyboardButton(
-                                "⏳ ᴘʟᴇᴀꜱᴇ ᴡᴀɪᴛ...",
+                                "ᴘʟᴇᴀꜱᴇ ᴡᴀɪᴛ...⏳",
                                 callback_data="please_wait_noop"
                             )
                         )
