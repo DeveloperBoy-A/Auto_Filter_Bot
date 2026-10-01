@@ -250,8 +250,8 @@ async def scan_audio_subtitle_tracks(client, file_id):
             AUDIO_SUBS_CACHE.pop(file_id, None)
 
     CHUNK_SIZE = 1024 * 1024  # pyrogram/Telegram file chunk size
-    FRONT_CHUNKS = 3
-    TAIL_CHUNKS = 2
+    FRONT_CHUNKS = 2
+    TAIL_CHUNKS = 1
 
     temp_path = os.path.join(
         tempfile.gettempdir(),
