@@ -243,6 +243,12 @@ NAMED_REGEX = re.compile(r'Season[\s_.-]*0*(\d{1,2})[\s_.-]*Ep(?:isode)?[\s_.-]*
 EP_ONLY_RANGE = re.compile(r'\b(?:EP|Episode)[\s_.-]*0*(\d{1,3})[\s_.-]*(?:to|-|_)[\s_.-]*(?:EP|Episode)?[\s_.-]*0*(\d{1,3})\b', re.IGNORECASE)
 
 
+# 🎯 Season pack (episode number nahi): "S01 COMBINED", "Season 1", "S01-S03" -> series maano
+SEASON_ONLY = re.compile(
+    r'(?<![A-Za-z0-9])(?:S|Season[\s_.-]*)0*(\d{1,2})(?![A-Za-z0-9])',
+    re.IGNORECASE
+)
+
 MEDIA_FILTER = filters.document | filters.video | filters.audio
 locks = defaultdict(asyncio.Lock)
 pending_updates = {}
@@ -280,6 +286,9 @@ def extract_season_episode(filename: str) -> Tuple[Optional[int], Optional[str]]
             else:
                 ep = f"{int(m.group(2)):02d}"
             return season, ep
+    # Season pack: sirf season number (title ke beech/shuru me nahi, isliye start > 0)
+    if (m := SEASON_ONLY.search(filename)) and m.start() > 0:
+        return int(m.group(1)), None
     return None, None
 
 def extract_language(filename: str, caption: str = "") -> str:
@@ -331,7 +340,8 @@ def extract_media_info(filename: str, caption: str):
         tag = "#SERIES"
         # Cut-off point raw string me dhundho (jisme abhi underscores/hyphens safe hain)
         if m := (RANGE_REGEX.search(clean_raw) or SINGLE_REGEX.search(clean_raw) or 
-                 NAMED_REGEX.search(clean_raw) or EP_ONLY_RANGE.search(clean_raw)):
+                 NAMED_REGEX.search(clean_raw) or EP_ONLY_RANGE.search(clean_raw) or
+                 SEASON_ONLY.search(clean_raw)):
             match_str = m.group(0)
             end_idx = clean_raw.lower().find(match_str.lower()) + len(match_str)
 
@@ -662,6 +672,16 @@ async def send_movie_update(bot, base_name):
     return None
 
 
+async def _reset_and_resend(bot, base_name):
+    """Purana post channel me nahi mila -> DB se message_id hata ke naya post bhejo."""
+    logger.info(f"Update post missing in channel for '{base_name}', naya post bhej raha hu")
+    await db.movie_updates.update_one(
+        {"_id": base_name},
+        {"$set": {"message_id": None, "is_photo": False}}
+    )
+    await send_movie_update(bot, base_name)
+
+
 async def update_movie_message(bot, base_name):
     try:
         movie_doc = await db.movie_updates.find_one({"_id": base_name})
@@ -689,9 +709,15 @@ async def update_movie_message(bot, base_name):
             except BotApiError as e:
                 if e.not_modified:
                     return
-                logger.warning(f"Coloured edit failed ({e}), pyrogram se try kar raha hu")
+                # NOTE: Bot API ka "not found" yahan bharosemand nahi hai (post maujood hote
+                # hue bhi aa chuka hai), isliye naya post yahan nahi banate. Pyrogram edit
+                # neeche final faisla karega: wo bhi "not found" de tabhi naya post banega.
+                logger.warning(
+                    f"Coloured edit failed for '{base_name}' (msg_id={message_id}, "
+                    f"photo={is_photo}, chat={MOVIE_UPDATE_CHANNEL}): {e} - pyrogram se try kar raha hu"
+                )
             except Exception as e:
-                logger.warning(f"Coloured edit error ({e}), pyrogram se try kar raha hu")
+                logger.warning(f"Coloured edit error for '{base_name}' ({e}), pyrogram se try kar raha hu")
 
         # 2) Fallback: pyrogram edit + purana recovery logic
         buttons = _pyro_markup(rows)
@@ -716,9 +742,11 @@ async def update_movie_message(bot, base_name):
                     disable_web_page_preview=not LINK_PREVIEW
                 )
             return
-        except (MessageIdInvalid, MessageNotModified) as e:
+        except MessageNotModified as e:
             logger.warning(f"Message update skipped due to error: {e}")
             pass
+        except MessageIdInvalid:
+            await _reset_and_resend(bot, base_name)
         except Exception:
             try:
                 await bot.delete_messages(
@@ -780,6 +808,7 @@ def generate_movie_message(movie_doc, base_name):
     all_ott_platforms = set()
     all_tags = set()
     episodes_by_season = defaultdict(set)
+    season_packs = set()   # sirf season wali files (episode number nahi)
 
     for file in movie_doc["files"]:
         if file["quality"] != "N/A":
@@ -795,17 +824,19 @@ def generate_movie_message(movie_doc, base_name):
             season = file["season"]
             episode = file["episode"]
             episodes_by_season[season].add(episode)
+        elif file.get("season"):
+            season_packs.add(file["season"])
 
     primary_tag = "#SERIES" if "#SERIES" in all_tags else "#MOVIE"
 
     # ===== SEASON & EPISODE DISPLAY (WITH BETTER FORMATTING) =====
     epi_block = ""
-    if episodes_by_season:
+    if episodes_by_season or season_packs:
         episode_lines = []
-        for season in sorted(episodes_by_season.keys(), key=lambda x: int(x)):
-            episodes = sorted(list(episodes_by_season[season]), 
+        for season in sorted(set(episodes_by_season.keys()) | season_packs, key=lambda x: int(x)):
+            episodes = sorted(list(episodes_by_season.get(season, [])), 
                             key=lambda x: int(x.split('-')[0]) if '-' in x else int(x))
-            ep_list = ", ".join(episodes)
+            ep_list = ", ".join(episodes) if episodes else "Complete Season"
 
             line = (
                 f"<b>┇ 💠 Season {int(season):02d}</b>\n"
