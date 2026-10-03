@@ -12,6 +12,7 @@ from info import CHANNELS, MOVIE_UPDATE_CHANNEL, LINK_PREVIEW, ABOVE_PREVIEW, BA
 from Script import script
 from database.ia_filterdb import save_file, Media, Media2, MEDIA_DBS
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from plugins.Dreamxfutures.button_style import COLORS_ENABLED, BotApiError, api_send, api_edit
 from utils import temp
 from pymongo.errors import PyMongoError, DuplicateKeyError
 from pyrogram.errors import MessageIdInvalid, MessageNotModified, FloodWait
@@ -495,14 +496,16 @@ async def _process_with_lock(bot, filename, caption, media_info, base_name, proc
 
     if not movie_doc:
         # Fetch movie details
+        # kind => series ko series ka hi poster mile (movie ka nahi), aur movie ko movie ka
+        kind = "series" if media_info["tag"] == "#SERIES" else "movie"
         if TMDB_POSTER:
-            details = await get_movie_detailsx(base_name)
+            details = await get_movie_detailsx(base_name, kind=kind)
             if not details or details.get("error") or (not details.get("poster_url") and not details.get("backdrop_url")):
                 error_tmdb = True
                 logger.info("TMDB error switching to IMDB")
-                details = await get_movie_details(base_name) or {}
+                details = await get_movie_details(base_name, kind=kind) or {}
         else:
-            details = await get_movie_details(base_name) or {}
+            details = await get_movie_details(base_name, kind=kind) or {}
 
         raw_genres = details.get("genres", "N/A")
         if isinstance(raw_genres, str):
@@ -559,9 +562,35 @@ async def _process_with_lock(bot, filename, caption, media_info, base_name, proc
         movie_doc["files"].append(file_data)
         schedule_update(bot, base_name)
 
+def _button_rows(base_name):
+    """Buttons ek hi jagah define: colour yahin se badlo (success=hara, primary=neela, danger=laal)."""
+    return [
+        [{
+            "text": '🗃️ ✦ 𝗚𝗘𝗧 𝗙𝗜𝗟𝗘 ✦ 🗃️',
+            "url": f"https://t.me/{temp.U_NAME}?start=getfile-{base_name.replace(' ', '-')}",
+            "style": "success",
+        }],
+        [{
+            "text": '♻️ Hᴏᴡ Tᴏ Dᴏᴡɴʟᴏᴀᴅ ♻️',
+            "url": "https://t.me/newmovies_support/1236?single",
+            "style": "primary",
+        }],
+    ]
+
+
+def _pyro_markup(rows):
+    """Fallback markup (bina colour) - purana pyrogram tareeka."""
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(b["text"], url=b["url"]) for b in row] for row in rows
+    ])
+
+
+def _colors_on(bot):
+    return COLORS_ENABLED and bool(getattr(bot, "bot_token", None))
+
+
 async def send_movie_update(bot, base_name):
     max_retries = 3
-    base_delay = 5
     for attempt in range(max_retries):
         try:
             movie_doc = await db.movie_updates.find_one({"_id": base_name})
@@ -569,54 +598,69 @@ async def send_movie_update(bot, base_name):
                 return None
 
             text = generate_movie_message(movie_doc, base_name)
+            rows = _button_rows(base_name)
 
-            buttons = InlineKeyboardMarkup([
-                [
-                    InlineKeyboardButton(
-                        '🗃️ ✦ 𝗚𝗘𝗧 𝗙𝗜𝗟𝗘 ✦ 🗃️',
-                        url=f"https://t.me/{temp.U_NAME}?start=getfile-{base_name.replace(' ', '-')}"
-                    )
-                ],
-                [
-                    InlineKeyboardButton('♻️ Hᴏᴡ Tᴏ Dᴏᴡɴʟᴏᴀᴅ ♻️', url="https://t.me/newmovies_support/1236?single")
-                ]
-            ])
-
+            # Poster fetch fail ho jaye to pehle post hi nahi jaata tha - ab text post jayega.
+            poster = None
             if movie_doc.get("poster_url") and not LINK_PREVIEW:
-                resized_poster = await fetch_image(movie_doc["poster_url"], (860,1200))
-                msg = await bot.send_photo(
-                    chat_id=MOVIE_UPDATE_CHANNEL,
-                    photo=resized_poster,
-                    caption=text,
-                    reply_markup=buttons,
-                    parse_mode=enums.ParseMode.HTML,
-                    has_spoiler=True
-                )
-                is_photo = True
-            else:
-                send_params = {
-                    "chat_id": MOVIE_UPDATE_CHANNEL,
-                    "text": text,
-                    "reply_markup": buttons,
-                    "parse_mode": enums.ParseMode.HTML
-                }
-                if movie_doc.get("poster_url") and LINK_PREVIEW:
-                    send_params["invert_media"] = ABOVE_PREVIEW
-                msg = await bot.send_message(**send_params)
-                is_photo = False
+                poster = await fetch_image(movie_doc["poster_url"], (860, 1200))
+            is_photo = poster is not None
+
+            msg_id = None
+
+            # 1) Coloured buttons: Telegram Bot API (HTTP)
+            if _colors_on(bot):
+                try:
+                    link_preview = None
+                    if not is_photo and movie_doc.get("poster_url") and LINK_PREVIEW:
+                        link_preview = {"show_above_text": bool(ABOVE_PREVIEW)}
+                    msg_id = await api_send(
+                        bot, MOVIE_UPDATE_CHANNEL, rows,
+                        text=text, photo=poster if is_photo else None,
+                        spoiler=True, link_preview=link_preview,
+                    )
+                except BotApiError as e:
+                    if e.retry_after:
+                        await asyncio.sleep(e.retry_after + 2)
+                        continue
+                    logger.warning(f"Coloured send failed ({e}), plain buttons se bhej raha hu")
+                    msg_id = None
+                except Exception as e:
+                    logger.warning(f"Coloured send error ({e}), plain buttons se bhej raha hu")
+                    msg_id = None
+
+            # 2) Fallback: pyrogram (bina colour)
+            if msg_id is None:
+                markup = _pyro_markup(rows)
+                if is_photo:
+                    if hasattr(poster, "seek"):
+                        poster.seek(0)
+                    msg = await bot.send_photo(
+                        chat_id=MOVIE_UPDATE_CHANNEL, photo=poster, caption=text,
+                        reply_markup=markup, parse_mode=enums.ParseMode.HTML, has_spoiler=True
+                    )
+                else:
+                    send_params = {
+                        "chat_id": MOVIE_UPDATE_CHANNEL, "text": text,
+                        "reply_markup": markup, "parse_mode": enums.ParseMode.HTML
+                    }
+                    if movie_doc.get("poster_url") and LINK_PREVIEW:
+                        send_params["invert_media"] = ABOVE_PREVIEW
+                    msg = await bot.send_message(**send_params)
+                msg_id = msg.id
 
             await db.movie_updates.update_one(
                 {"_id": base_name},
-                {"$set": {"message_id": msg.id, "is_photo": is_photo}}
+                {"$set": {"message_id": msg_id, "is_photo": is_photo}}
             )
-            return msg
+            return msg_id
         except FloodWait as e:
-            wait_time = e.value + 2
-            await asyncio.sleep(wait_time)
+            await asyncio.sleep(e.value + 2)
         except Exception as e:
             logger.error(f"Failed to send movie update: {e}")
             break
     return None
+
 
 async def update_movie_message(bot, base_name):
     try:
@@ -625,18 +669,7 @@ async def update_movie_message(bot, base_name):
             return
 
         text = generate_movie_message(movie_doc, base_name)
-
-        buttons = InlineKeyboardMarkup([
-            [
-                InlineKeyboardButton(
-                    '🗃️ ✦ 𝗚𝗘𝗧 𝗙𝗜𝗟𝗘 ✦ 🗃️',
-                    url=f"https://t.me/{temp.U_NAME}?start=getfile-{base_name.replace(' ', '-')}"
-                )
-            ],
-            [
-                InlineKeyboardButton('♻️ Hᴏᴡ Tᴏ Dᴏᴡɴʟᴏᴀᴅ ♻️', url="https://t.me/newmovies_support/1236?single")
-            ]
-        ])
+        rows = _button_rows(base_name)
 
         message_id = movie_doc.get("message_id")
         is_photo = movie_doc.get("is_photo", False)
@@ -645,6 +678,23 @@ async def update_movie_message(bot, base_name):
             await send_movie_update(bot, base_name)
             return
 
+        # 1) Coloured buttons: Bot API edit
+        if _colors_on(bot):
+            try:
+                await api_edit(
+                    bot, MOVIE_UPDATE_CHANNEL, message_id, rows, text=text, is_photo=is_photo,
+                    link_preview={"is_disabled": not LINK_PREVIEW, "show_above_text": bool(ABOVE_PREVIEW)},
+                )
+                return
+            except BotApiError as e:
+                if e.not_modified:
+                    return
+                logger.warning(f"Coloured edit failed ({e}), pyrogram se try kar raha hu")
+            except Exception as e:
+                logger.warning(f"Coloured edit error ({e}), pyrogram se try kar raha hu")
+
+        # 2) Fallback: pyrogram edit + purana recovery logic
+        buttons = _pyro_markup(rows)
         try:
             if is_photo:
                 await bot.edit_message_caption(
