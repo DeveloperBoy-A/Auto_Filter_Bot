@@ -6,6 +6,8 @@ from dreamxbotz.util.file_properties import get_name, get_hash
 from urllib.parse import quote_plus
 import logging
 from database.ia_filterdb import Media, Media2, MEDIA_DBS, delete_file_by_id, get_file_details, get_search_results, get_bad_files,normalize_for_search
+from html import escape as _html_escape
+from plugins.Dreamxfutures.button_style import reply_styled
 
 from database.config_db import mdb
 from pyrogram.errors import FloodWait, UserIsBlocked, MessageNotModified, PeerIdInvalid, ChatAdminRequired, UserNotParticipant
@@ -3130,14 +3132,17 @@ async def advantage_spell_chok(client, message):
 
     if not movies:
         google = quote_plus(search)
-        button = [[InlineKeyboardButton(
-            "🔍 ᴄʜᴇᴄᴋ sᴘᴇʟʟɪɴɢ ᴏɴ ɢᴏᴏɢʟᴇ 🔍",
-            url=f"https://www.google.com/search?q={google}"
-        )]]
+        button = [[{
+            "text": "🔍 ᴄʜᴇᴄᴋ sᴘᴇʟʟɪɴɢ ᴏɴ ɢᴏᴏɢʟᴇ 🔍",
+            "url": f"https://www.google.com/search?q={google}",
+            "style": "primary",     # neela
+        }]]
 
-        k = await message.reply_text(
-            text=script.I_CUDNT.format(search),
-            reply_markup=InlineKeyboardMarkup(button)
+        k = await reply_styled(
+            client, message,
+            text=script.I_CUDNT.format(_html_escape(search)),
+            rows=button,
+            plain_text=script.I_CUDNT.format(search),
         )
 
         await asyncio.sleep(60)
@@ -3172,26 +3177,24 @@ async def advantage_spell_chok(client, message):
     movies = (relevant_movies or scored_movies)[:8]
 
     buttons = [
-        [
-            InlineKeyboardButton(
-                text=movie.title,
-                callback_data=f"spol#{movie.imdb_id}#{user}"
-            )
-        ]
+        [{
+            "text": movie.title,
+            "callback_data": f"spol#{movie.imdb_id}#{user}",
+            "style": "success",     # hara
+        }]
         for movie in movies
     ]
 
-    buttons.append([
-        InlineKeyboardButton(
-            text="🚫 ᴄʟᴏsᴇ 🚫",
-            callback_data='close_data'
-        )
-    ])
+    buttons.append([{
+        "text": "🚫 ᴄʟᴏsᴇ 🚫",
+        "callback_data": "close_data",
+        "style": "danger",          # laal
+    }])
 
-    d = await message.reply_text(
+    d = await reply_styled(
+        client, message,
         text=script.CUDNT_FND.format(message.from_user.mention),
-        reply_markup=InlineKeyboardMarkup(buttons),
-        reply_to_message_id=message.id
+        rows=buttons,
     )
 
     await asyncio.sleep(60)
