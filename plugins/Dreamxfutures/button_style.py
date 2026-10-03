@@ -39,6 +39,11 @@ class BotApiError(Exception):
     def not_modified(self):
         return "not modified" in self.description.lower()
 
+    @property
+    def not_found(self):
+        d = self.description.lower()
+        return "message to edit not found" in d or "message_id_invalid" in d or "message not found" in d
+
 
 # ---------------------------------------------------------------- pyrogram side
 def StyledButton(text, style=None, **kwargs):
@@ -119,17 +124,19 @@ async def _call(bot, method, fields, photo=None):
     return js["result"]
 
 
-async def api_send(bot, chat_id, rows, *, text=None, photo=None, spoiler=False, link_preview=None):
+async def api_send(bot, chat_id, rows, *, text=None, photo=None, spoiler=False, link_preview=None, reply_to=None):
     """Post bhejta hai (photo+caption ya text). Return: message_id."""
     if photo is not None:
         res = await _call(bot, "sendPhoto", {
             "chat_id": chat_id, "caption": text, "parse_mode": "HTML",
             "reply_markup": markup_json(rows), "has_spoiler": spoiler or None,
+            "reply_parameters": {"message_id": reply_to} if reply_to else None,
         }, photo=photo)
     else:
         res = await _call(bot, "sendMessage", {
             "chat_id": chat_id, "text": text, "parse_mode": "HTML",
             "reply_markup": markup_json(rows), "link_preview_options": link_preview,
+            "reply_parameters": {"message_id": reply_to} if reply_to else None,
         })
     return res["message_id"]
 
