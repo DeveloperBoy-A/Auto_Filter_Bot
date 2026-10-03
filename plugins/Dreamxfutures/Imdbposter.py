@@ -90,7 +90,21 @@ def list_to_str(value):
     # Anything else
     return str(value)
 
-async def get_movie_details(query, id=False, file=None):
+def _kind_bucket(k):
+    """Maps IMDb 'kind' strings to 'series' / 'movie' / None."""
+    k = str(k or "").lower().replace(" ", "").replace("_", "")
+    if k in ("tvseries", "tvminiseries"):
+        return "series"
+    if k in ("movie", "tvmovie", "video"):
+        return "movie"
+    return None
+
+
+async def get_movie_details(query, id=False, file=None, kind=None):
+    """
+    kind: "series" | "movie" | None.
+    Pass kind so a web series never gets a same-named movie's poster (and vice versa).
+    """
     try:
         if not id:
             query = query.strip().lower()
@@ -117,62 +131,37 @@ async def get_movie_details(query, id=False, file=None):
 
             movie_list = search_result.titles[:10]
 
-            kind_filter = [
-                'movie',
-                'tv series',
-                'tvSeries',
-                'tvMiniSeries',
-                'tvMovie'
-            ]
+            def _ordered(lst):
+                # Preferred kind first (series for series, movie for movie), then the rest.
+                pref = [m for m in lst if kind and _kind_bucket(getattr(m, "kind", None)) == kind]
+                other = [m for m in lst if m not in pref and _kind_bucket(getattr(m, "kind", None))]
+                rest = [m for m in lst if m not in pref and m not in other]
+                return pref + other + rest
 
-            def _apply_kind_filter(lst):
-                fk = [
-                    m for m in lst
-                    if m.kind
-                    and m.kind in kind_filter
-                ]
-                return fk if fk else lst
-
-            # ------------------------------------------------
-            # Year Filter
-            # ------------------------------------------------
-
-            if year:
-
-                filtered = [
-                    m for m in movie_list
-                    if m.year
-                    and str(m.year) == str(year)
-                ]
-
-            else:
-
-                filtered = movie_list
-
-            # ------------------------------------------------
-            # Title Match (required) - year alone isn't enough,
-            # since the same year can have "Immortal", "Immortal
-            # Combat", "The Immortal", etc. We never blindly grab
-            # the first search result anymore.
-            # ------------------------------------------------
-
-            best = None
-
-            for m in _apply_kind_filter(filtered):
-                if _title_matches(getattr(m, "title", "") or "", title):
-                    best = m
-                    break
-
-            if not best and filtered is not movie_list:
-                for m in _apply_kind_filter(movie_list):
+            def _pick(cands):
+                for m in _ordered(cands):
                     if _title_matches(getattr(m, "title", "") or "", title):
-                        best = m
-                        break
+                        return m
+                return None
+
+            def _year_ok(m, tol):
+                try:
+                    return abs(int(m.year) - int(year)) <= tol
+                except Exception:
+                    return False
+
+            # Title match is mandatory. Year is enforced for movies (exact, then +-1).
+            # For series the year in the filename is the SEASON year, not the show's
+            # first-air year, so we don't reject on year there.
+            if year and kind != "series":
+                best = (_pick([m for m in movie_list if _year_ok(m, 0)])
+                        or _pick([m for m in movie_list if _year_ok(m, 1)]))
+            else:
+                best = _pick(movie_list)
 
             if not best:
                 logger.info(
-                    f"[IMDb] No title match for '{title}' "
-                    f"({year}) among search results - "
+                    f"[IMDb] No title match for '{title}' ({year}) among search results - "
                     f"skipping poster to avoid a wrong match."
                 )
                 return None
@@ -251,12 +240,15 @@ def _split_title_year(query: str):
     return q, None
 
 
-def _release_year_matches(release_date, year) -> bool:
-    if not year:
+def _year_close(date, year, tol=0) -> bool:
+    """True if `date` ('YYYY-MM-DD' or 'YYYY') is within `tol` years of `year`.
+    Unknown year / missing date => True (nothing to compare)."""
+    if not year or not date:
         return True
-    if not release_date:
+    try:
+        return abs(int(str(date)[:4]) - int(year)) <= tol
+    except ValueError:
         return True
-    return str(release_date)[:4] == str(year)
 
 
 # ============================================================
@@ -264,7 +256,7 @@ def _release_year_matches(release_date, year) -> bool:
 # ============================================================
 # Year alone is not enough to pick the right poster: the same year
 # can have "Immortal", "Immortal Combat", "The Immortal", etc. This
-# guards against attaching one movie's poster to a different movie
+# guards against attaching one title's poster to a different title
 # that merely shares part of the name.
 
 def _normalize_title_for_match(t) -> str:
@@ -272,6 +264,7 @@ def _normalize_title_for_match(t) -> str:
         return ""
 
     t = str(t).lower().strip()
+    t = t.replace("&", " and ")
     t = re.sub(r'[^a-z0-9 ]', '', t)
     t = re.sub(r'\s+', ' ', t).strip()
 
@@ -285,165 +278,184 @@ def _strip_leading_article(s: str) -> str:
 def _title_matches(candidate_title, expected_title) -> bool:
     """
     Strict (not substring) title comparison. Rejects 'Immortal Combat'
-    or 'The Immortal Man' as a match for 'Immortal', while still
-    tolerating case/punctuation/leading-article differences.
+    or 'The Immortal Man' as a match for 'Immortal', while tolerating
+    case / punctuation / leading-article / spacing differences
+    ('Spider-Man' == 'Spider Man' == 'Spiderman').
     """
-
     c = _normalize_title_for_match(candidate_title)
     e = _normalize_title_for_match(expected_title)
 
-    if not c or not e:
-        return True
+    if not e:
+        return True      # nothing to compare against
+    if not c:
+        return False     # candidate has no title -> can't verify -> reject
 
-    return _strip_leading_article(c) == _strip_leading_article(e)
+    c = _strip_leading_article(c).replace(" ", "")
+    e = _strip_leading_article(e).replace(" ", "")
+    return c == e
 
 
-async def _search_official_tmdb(title: str, year: str | None):
-    """Direct TMDB search (accurate, year-filtered). Returns a details dict or None."""
+_TMDB_GENRE_FIX = {"Science Fiction": "Sci-Fi"}
+
+
+async def _tmdb_search_best(session, media_type, title, year, strict_year):
+    """
+    Search TMDB (media_type: 'movie' | 'tv') and return the single best result that
+    actually matches the title (and year when it makes sense). Returns None otherwise.
+    """
+    params = {"api_key": TMDB_API_KEY, "query": title, "include_adult": "false"}
+    async with session.get(f"https://api.themoviedb.org/3/search/{media_type}", params=params) as resp:
+        if resp.status != 200:
+            return None
+        data = await resp.json()
+
+    results = data.get("results") or []
+    name_key = "title" if media_type == "movie" else "name"
+    date_key = "release_date" if media_type == "movie" else "first_air_date"
+
+    matches = [
+        r for r in results
+        if _title_matches(r.get(name_key), title)
+        or _title_matches(r.get("original_" + name_key), title)
+    ]
+    if not matches:
+        return None
+
+    # Movies (and any cross-type fallback): year must match, exact first then +-1.
+    if year and (media_type == "movie" or strict_year):
+        for tol in (0, 1):
+            for r in matches:
+                if _year_close(r.get(date_key), year, tol):
+                    return r
+        return None
+
+    # Series: the year in the filename is the season's year. A show can't have
+    # started AFTER that, so prefer a show whose first_air_date <= that year.
+    if year:
+        for r in matches:
+            fa = (r.get(date_key) or "")[:4]
+            if not fa or (fa.isdigit() and int(fa) <= int(year)):
+                return r
+
+    return matches[0]
+
+
+async def _tmdb_full_details(session, media_type, tmdb_id):
+    params = {"api_key": TMDB_API_KEY, "append_to_response": "credits,external_ids"}
+    async with session.get(f"https://api.themoviedb.org/3/{media_type}/{tmdb_id}", params=params) as resp:
+        if resp.status != 200:
+            return None
+        full = await resp.json()
+
+    is_tv = media_type == "tv"
+    credits = full.get("credits", {}) or {}
+    crew = credits.get("crew", []) or []
+    cast = credits.get("cast", []) or []
+
+    def crew_names(job):
+        return ", ".join(c["name"] for c in crew if c.get("job") == job) or None
+
+    genres = []
+    for g in full.get("genres", []) or []:
+        for part in g["name"].split("&"):   # TV: "Action & Adventure" -> Action, Adventure
+            part = part.strip()
+            genres.append(_TMDB_GENRE_FIX.get(part, part))
+
+    date = full.get("first_air_date") if is_tv else full.get("release_date")
+    if is_tv:
+        ep_rt = full.get("episode_run_time") or []
+        runtime = ep_rt[0] if ep_rt else None
+        director = ", ".join(c["name"] for c in (full.get("created_by") or [])) or crew_names("Director")
+        imdb_id = (full.get("external_ids") or {}).get("imdb_id")
+    else:
+        runtime = full.get("runtime")
+        director = crew_names("Director")
+        imdb_id = full.get("imdb_id")
+
+    poster_path = full.get("poster_path")
+    backdrop_path = full.get("backdrop_path")
+
+    return {
+        "title": full.get("name") if is_tv else full.get("title"),
+        "kind": "tv series" if is_tv else "movie",
+        "year": (date or "")[:4] or None,
+        "release_date": date,
+        "rating": round(full.get("vote_average") or 0, 1),
+        "votes": int(full.get("vote_count") or 0),
+        "runtime": runtime,
+        "seasons": full.get("number_of_seasons") if is_tv else None,
+        "certificates": None,
+        "tmdb_url": f"https://www.themoviedb.org/{media_type}/{tmdb_id}",
+        "genres": genres,
+        "languages": [full.get("original_language")] if full.get("original_language") else [],
+        "countries": [c["name"] for c in full.get("production_countries", []) or []],
+        "director": director,
+        "writer": crew_names("Writer") or crew_names("Screenplay"),
+        "producer": crew_names("Producer"),
+        "composer": crew_names("Original Music Composer"),
+        "cinematographer": crew_names("Director of Photography"),
+        "cast": ", ".join(c["name"] for c in cast[:6]) or None,
+        "plot": full.get("overview"),
+        "tagline": full.get("tagline"),
+        "box_office": None,
+        "distributors": [],
+        "imdb_id": imdb_id,
+        "tmdb_id": tmdb_id,
+        "poster_url": f"https://image.tmdb.org/t/p/w1280{poster_path}" if poster_path else None,
+        "backdrop_url": f"https://image.tmdb.org/t/p/w1280{backdrop_path}" if backdrop_path else None,
+    }
+
+
+async def _search_official_tmdb(title: str, year: str | None, kind: str | None = None):
+    """
+    Official TMDB search. Searches /tv first for series and /movie first for movies
+    (previously only /movie was searched, so web series got a random movie's poster).
+    Returns a details dict, or None if nothing matches the title (+year).
+    """
     if not TMDB_API_KEY:
         return None
     try:
         session = await get_session()
-        params = {"api_key": TMDB_API_KEY, "query": title, "include_adult": "false"}
-        if year:
-            params["year"] = year
+        order = ["tv", "movie"] if kind == "series" else ["movie", "tv"]
 
-        async with session.get(
-            "https://api.themoviedb.org/3/search/movie", params=params
-        ) as resp:
-            if resp.status != 200:
-                return None
-            data = await resp.json()
-            results = data.get("results") or []
-            if not results:
-                return None
-
-            chosen = None
-
-            # ------------------------------------------------
-            # Exact Year + Title Match (preferred)
-            # ------------------------------------------------
-
-            for r in results:
-
-                if (
-                    _release_year_matches(r.get("release_date"), year)
-                    and _title_matches(r.get("title"), title)
-                ):
-                    chosen = r
-                    break
-
-            # ------------------------------------------------
-            # Year-only Match (title may have a subtitle, etc.)
-            # ------------------------------------------------
-
-            if not chosen and year:
-
-                for r in results:
-
-                    if _release_year_matches(
-                        r.get("release_date"),
-                        year
-                    ):
-                        chosen = r
-                        break
-
+        for i, media_type in enumerate(order):
+            # Primary type: movie => strict year, tv => lenient year (season year).
+            # Fallback type: always strict so we never attach a loosely-related poster.
+            strict_year = (i > 0) or (media_type == "movie")
+            chosen = await _tmdb_search_best(session, media_type, title, year, strict_year)
             if not chosen:
-                chosen = results[0]
+                continue
+            details = await _tmdb_full_details(session, media_type, chosen.get("id"))
+            if details and (details.get("poster_url") or details.get("backdrop_url")):
+                return details
 
-            # ------------------------------------------------
-            # Final Safety Checks - never return a mismatched poster
-            # ------------------------------------------------
-
-            if (
-                year
-                and not _release_year_matches(
-                    chosen.get("release_date"),
-                    year
-                )
-            ):
-
-                logger.info(
-                    f"[TMDB] No {year} match "
-                    f"for '{title}', closest is "
-                    f"'{chosen.get('title')}' "
-                    f"({chosen.get('release_date')})"
-                )
-
-                return None
-
-            if not _title_matches(chosen.get("title"), title):
-
-                logger.info(
-                    f"[TMDB] Title mismatch for '{title}', "
-                    f"closest result was '{chosen.get('title')}' "
-                    f"- rejecting poster to avoid a wrong match"
-                )
-
-                return None
-
-        # Fetch full details (genres, cast, plot, etc.) using the correctly-matched movie id
-        movie_id = chosen.get("id")
-        async with session.get(
-            f"https://api.themoviedb.org/3/movie/{movie_id}",
-            params={"api_key": TMDB_API_KEY, "append_to_response": "credits"},
-        ) as resp:
-            if resp.status != 200:
-                return None
-            full = await resp.json()
-
-        credits = full.get("credits", {})
-        crew = credits.get("crew", []) or []
-        cast = credits.get("cast", []) or []
-
-        def crew_names(job):
-            return ", ".join(c["name"] for c in crew if c.get("job") == job) or None
-
-        poster_path = full.get("poster_path")
-        backdrop_path = full.get("backdrop_path")
-
-        return {
-            "title": full.get("title"),
-            "year": (full.get("release_date") or "")[:4] or None,
-            "release_date": full.get("release_date"),
-            "rating": round(full.get("vote_average") or 0, 1),
-            "votes": int(full.get("vote_count") or 0),
-            "runtime": full.get("runtime"),
-            "certificates": None,
-            "tmdb_url": f"https://www.themoviedb.org/movie/{movie_id}",
-            "genres": [g["name"] for g in full.get("genres", [])],
-            "languages": [full.get("original_language")] if full.get("original_language") else [],
-            "countries": [c["name"] for c in full.get("production_countries", [])],
-            "director": crew_names("Director"),
-            "writer": crew_names("Writer") or crew_names("Screenplay"),
-            "producer": crew_names("Producer"),
-            "composer": crew_names("Original Music Composer"),
-            "cinematographer": crew_names("Director of Photography"),
-            "cast": ", ".join(c["name"] for c in cast[:6]) or None,
-            "plot": full.get("overview"),
-            "tagline": full.get("tagline"),
-            "box_office": None,
-            "distributors": [],
-            "imdb_id": full.get("imdb_id"),
-            "tmdb_id": movie_id,
-            "poster_url": f"https://image.tmdb.org/t/p/w1280{poster_path}" if poster_path else None,
-            "backdrop_url": f"https://image.tmdb.org/t/p/w1280{backdrop_path}" if backdrop_path else None,
-        }
+        logger.info(f"[TMDB] No exact title/year match for '{title}' ({year}, kind={kind})")
+        return None
     except Exception as e:
         logger.warning(f"[TMDB] Official API error for '{title}' ({year}): {e}")
         return None
 
 
-async def get_movie_detailsx(query, id=False, file=None):
+async def get_movie_detailsx(query, id=False, file=None, kind=None):
+    """
+    kind: "series" | "movie" | None (see get_movie_details).
+    Order: official TMDB (strict) -> proxy (movies only, now validated) -> IMDb (strict).
+    A missing poster is preferred over a wrong poster.
+    """
     # base_url = "https://bharath-boy-api.vercel.app/api/movie-posters" Monthly limit reached
     base_url = "https://tmdb.blazeposters.workers.dev/api/movie-posters"
     q = str(query).strip()
     title, year = _split_title_year(q)
 
-    # --- Step 0: Official TMDB search (accurate, year-filtered) ---
-    official = await _search_official_tmdb(title, year)
+    # --- Step 0: Official TMDB search (accurate, title + year checked) ---
+    official = await _search_official_tmdb(title, year, kind)
     if official and (official.get("poster_url") or official.get("backdrop_url")):
         return official
+
+    # The proxy does a plain name search with no title/year checks of its own and is
+    # movie-oriented, so for series go straight to the (strict) IMDb fallback.
+    if kind == "series":
+        return await get_movie_details(q, kind=kind)
 
     try:
         session = await get_session()
@@ -452,26 +464,30 @@ async def get_movie_detailsx(query, id=False, file=None):
         async with session.get(base_url, params=params) as resp:
             if resp.status != 200:
                 logger.error(f"API failed [{resp.status}] → switching to IMDb fallback")
-                return await get_movie_details(q)
+                return await get_movie_details(q, kind=kind)
 
             data = await resp.json()
     except Exception as e:
         logger.error(f"API down → fallback IMDb: {e}")
-        return await get_movie_details(q)
+        return await get_movie_details(q, kind=kind)
 
-    # Reject a same-named-but-wrong-year match from the proxy (it has no year filter of its own)
-    if year and not _release_year_matches(data.get("release_date"), year):
+    # ✅ Validate the proxy answer. Before, whatever the proxy returned was trusted when
+    # the filename had no year (typical for series) -> wrong poster on the post.
+    proxy_titles = [data.get('title'), data.get('localized_title'), data.get('original_title')]
+    if not any(_title_matches(t, title) for t in proxy_titles if t):
+        logger.info(
+            f"[TMDB proxy] Title mismatch for '{title}': got '{data.get('title')}' "
+            f"— falling back to IMDb"
+        )
+        return await get_movie_details(q, kind=kind)
+
+    if year and not _year_close(data.get("release_date") or data.get("year"), year, 1):
         logger.info(
             f"[TMDB proxy] Year mismatch for '{title}' ({year}): got "
             f"'{data.get('title')}' ({data.get('release_date')}) — falling back to IMDb"
         )
-        return await get_movie_details(q)
+        return await get_movie_details(q, kind=kind)
 
-    # ✅ FIX: Ab poori normalization try/except ke andar hai. Pehle 'votes' field
-    # crash kar sakta tha (agar API "votes": null bheje), aur crash try/except ke
-    # BAHAR hone ki wajah se IMDb fallback tak kabhi pahunchta hi nahi tha — isliye
-    # kai baar poster hi missing aata tha. Ab koi bhi parsing error ho, IMDb fallback
-    # zaroor try hoga.
     try:
         # Normalize fields
         details = {}
@@ -479,7 +495,6 @@ async def get_movie_detailsx(query, id=False, file=None):
         details['year'] = data.get('year') or None
         details['release_date'] = data.get('release_date')
         details['rating'] = round(float(data.get('rating') or 0), 1) if data.get('rating') is not None else None
-        # ✅ FIX: 'votes' None hone par crash nahi hoga ab
         details['votes'] = int(data.get('votes') or 0)
         details['runtime'] = data.get('runtime')
         details['certificates'] = data.get('certificates')
@@ -511,25 +526,21 @@ async def get_movie_detailsx(query, id=False, file=None):
         details['poster_url'] = poster_url.replace("/original/", "/w1280/") if poster_url else None
     except Exception as e:
         logger.error(f"Failed to parse TMDB response for '{q}', falling back to IMDb: {e}")
-        return await get_movie_details(q)
+        return await get_movie_details(q, kind=kind)
 
     backdrops = data.get('images', {}).get('backdrops', {})
     original_language = data.get('images', {}).get('original_language')
     backdrop_url = None
-    # ✅ FIX: 'xx' or 'no_lang' hamesha 'xx' hi banta tha (dead code) — clean kar diya
     for key in ('en', original_language, 'xx'):
         if key and backdrops.get(key):
             backdrop_url = backdrops[key][0]
             break
     details['backdrop_url'] = backdrop_url.replace("/original/", "/w1280/") if backdrop_url else None
 
-    # ✅ FIX: "real poster aana hi chahiye" — agar TMDB se poster/backdrop dono nahi
-    # mile (API success hui par data khaali tha), to IMDb se poster try karo aur
-    # sirf poster_url (aur zaroorat pade to backdrop) us par se le lo, baaki saari
-    # rich TMDB details (cast, genres, plot, etc.) waisi hi rakho.
+    # Proxy matched the title but had no image -> take the poster from (strict) IMDb.
     if not details.get('poster_url') and not details.get('backdrop_url'):
         try:
-            imdb_details = await get_movie_details(q)
+            imdb_details = await get_movie_details(q, kind=kind)
             if imdb_details and imdb_details.get('poster_url'):
                 details['poster_url'] = imdb_details['poster_url']
                 logger.info(f"[POSTER] TMDB se poster nahi mila, IMDb se liya: '{q}'")
