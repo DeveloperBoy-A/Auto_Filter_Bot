@@ -973,7 +973,8 @@ def extract_languages_quality(text_to_scan):
     scan_text = re.sub(r'[._]+', ' ', text_to_scan)
     scan_lower = scan_text.lower()
 
-    year_match = re.search(r'\b(19\d{2}|20[0-2]\d)\b', text_to_scan)
+    # scan_text (underscore/dot -> space) par search: raw naam me '_2026_' me \b kaam nahi karta tha
+    year_match = re.search(r'\b(19\d{2}|20[0-2]\d)\b', scan_text)
     year = year_match.group(1) if year_match else None
 
     # Parse Season and Episode
