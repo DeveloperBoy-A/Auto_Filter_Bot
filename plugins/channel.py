@@ -1,3 +1,4 @@
+import os
 import re
 import logging
 import asyncio
@@ -19,6 +20,14 @@ from pyrogram.errors import MessageIdInvalid, MessageNotModified, FloodWait
 from typing import Optional, Tuple
 
 logger = logging.getLogger(__name__)
+
+def _env_flag(name, default=True):
+    return os.environ.get(name, str(default)).strip().lower() not in ("false", "0", "off", "no", "")
+
+# Naye file aane par: edit ki jagah NAYA post bhejo (users ko notification milta hai)
+UPDATE_AS_NEW_POST = _env_flag("UPDATE_AS_NEW_POST", True)
+# Naya post jaane ke baad purana post delete karo (channel me duplicate na rahe)
+DELETE_OLD_UPDATE_POST = _env_flag("DELETE_OLD_UPDATE_POST", True)
 
 # Precomputed sets for faster lookups
 IGNORE_WORDS = {
@@ -356,17 +365,20 @@ def extract_media_info(filename: str, caption: str):
                     processed_raw = clean_raw[:year_idx + 4]
     else:
         # Movie mode: find year or quality cutoff
+        cut_done = False
         if year_match := YEAR_PATTERN.search(unified):
             year = year_match.group(0)
             year_idx = filename_norm.lower().find(year.lower())
             if year_idx != -1:
                 processed_raw = filename_norm[:year_idx + 4]
                 base_raw = processed_raw
-        else:
-            if qual_match := QUALITY_PATTERN.search(unified):
-                qual_str = qual_match.group(0)
-                qual_idx = filename_norm.lower().find(qual_str.lower())
-                if qual_idx != -1:
+                cut_done = True
+        if not cut_done:
+            # Year filename me nahi (sirf caption me tha) ya hai hi nahi -> quality tag par kaato,
+            # warna naam me "Org Avc X264 Esubs ~ Tokyo Updates" jaisa junk reh jata tha
+            if qual_match := QUALITY_PATTERN.search(filename_norm):
+                qual_idx = qual_match.start()
+                if qual_idx > 0:
                     processed_raw = filename_norm[:qual_idx].strip()
                     base_raw = processed_raw
 
@@ -393,7 +405,13 @@ def extract_media_info(filename: str, caption: str):
     if not base_name or base_name.lower() == "n/a":
         base_name = normalize(remove_ignored_words(filename_norm)).strip() or filename_norm
 
+    # Season pack label: "Combined" / "Complete" (sirf jab episode number nahi hai)
+    pack = None
+    if season is not None and episode is None:
+        pack = "Combined" if re.search(r"combined", unified) else "Complete"
+
     return {
+        "pack": pack,
         "processed": normalize(processed_raw),
         "base_name": base_name,
         "tag": tag,
@@ -501,7 +519,8 @@ async def _process_with_lock(bot, filename, caption, media_info, base_name, proc
         "timestamp": datetime.now(),
         "tag": media_info["tag"],
         "season": media_info["season"],
-        "episode": media_info["episode"]
+        "episode": media_info["episode"],
+        "pack": media_info.get("pack")
     }
 
     if not movie_doc:
@@ -698,6 +717,16 @@ async def update_movie_message(bot, base_name):
             await send_movie_update(bot, base_name)
             return
 
+        # === Naya file aaya -> NAYA post (edit nahi), taaki users ko notification mile ===
+        if UPDATE_AS_NEW_POST:
+            new_id = await send_movie_update(bot, base_name)   # DB me message_id naya ho jata hai
+            if new_id and DELETE_OLD_UPDATE_POST and new_id != message_id:
+                try:
+                    await bot.delete_messages(chat_id=MOVIE_UPDATE_CHANNEL, message_ids=message_id)
+                except Exception as e:
+                    logger.warning(f"Purana update post delete nahi hua ({base_name}, id={message_id}): {e}")
+            return
+
         # 1) Coloured buttons: Bot API edit
         if _colors_on(bot):
             try:
@@ -808,7 +837,7 @@ def generate_movie_message(movie_doc, base_name):
     all_ott_platforms = set()
     all_tags = set()
     episodes_by_season = defaultdict(set)
-    season_packs = set()   # sirf season wali files (episode number nahi)
+    season_packs = defaultdict(set)   # season -> {'Complete','Combined'} (episode number nahi)
 
     for file in movie_doc["files"]:
         if file["quality"] != "N/A":
@@ -825,7 +854,7 @@ def generate_movie_message(movie_doc, base_name):
             episode = file["episode"]
             episodes_by_season[season].add(episode)
         elif file.get("season"):
-            season_packs.add(file["season"])
+            season_packs[file["season"]].add(file.get("pack") or "Complete")
 
     primary_tag = "#SERIES" if "#SERIES" in all_tags else "#MOVIE"
 
@@ -833,10 +862,11 @@ def generate_movie_message(movie_doc, base_name):
     epi_block = ""
     if episodes_by_season or season_packs:
         episode_lines = []
-        for season in sorted(set(episodes_by_season.keys()) | season_packs, key=lambda x: int(x)):
+        for season in sorted(set(episodes_by_season.keys()) | set(season_packs.keys()), key=lambda x: int(x)):
             episodes = sorted(list(episodes_by_season.get(season, [])), 
                             key=lambda x: int(x.split('-')[0]) if '-' in x else int(x))
-            ep_list = ", ".join(episodes) if episodes else "Complete Season"
+            # Episodes ke saath Complete/Combined bhi dikhao (agar us season ki aisi file hai)
+            ep_list = ", ".join(episodes + sorted(season_packs.get(season, [])))
 
             line = (
                 f"<b>┇ 💠 Season {int(season):02d}</b>\n"
