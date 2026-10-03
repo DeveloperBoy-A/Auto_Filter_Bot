@@ -130,13 +130,13 @@ async def api_send(bot, chat_id, rows, *, text=None, photo=None, spoiler=False, 
         res = await _call(bot, "sendPhoto", {
             "chat_id": chat_id, "caption": text, "parse_mode": "HTML",
             "reply_markup": markup_json(rows), "has_spoiler": spoiler or None,
-            "reply_parameters": {"message_id": reply_to} if reply_to else None,
+            "reply_parameters": {"message_id": reply_to, "allow_sending_without_reply": True} if reply_to else None,
         }, photo=photo)
     else:
         res = await _call(bot, "sendMessage", {
             "chat_id": chat_id, "text": text, "parse_mode": "HTML",
             "reply_markup": markup_json(rows), "link_preview_options": link_preview,
-            "reply_parameters": {"message_id": reply_to} if reply_to else None,
+            "reply_parameters": {"message_id": reply_to, "allow_sending_without_reply": True} if reply_to else None,
         })
     return res["message_id"]
 
@@ -154,3 +154,47 @@ async def api_edit(bot, chat_id, message_id, rows, *, text, is_photo, link_previ
             "parse_mode": "HTML", "reply_markup": markup_json(rows),
             "link_preview_options": link_preview,
         })
+
+
+# ---------------------------------------------------------------- reply helper
+class _SentHandle:
+    """Bot API se bheje message ka chhota handle: .id aur .delete() (pyrogram Message jaisa)."""
+    def __init__(self, client, chat_id, message_id):
+        self._client = client
+        self.chat_id = chat_id
+        self.id = message_id
+
+    async def delete(self):
+        return await self._client.delete_messages(self.chat_id, self.id)
+
+
+async def reply_styled(client, message, text, rows, *, plain_text=None):
+    """
+    `message` ka reply coloured buttons ke saath bhejta hai.
+    Bot API fail ho to normal (bina colour) reply_text se bhej deta hai.
+    Return: object jisme .id aur .delete() hai (dono raste me).
+    plain_text: fallback (pyrogram) wala text, agar API wale se alag chahiye.
+    """
+    if COLORS_ENABLED and getattr(client, "bot_token", None):
+        try:
+            mid = await api_send(client, message.chat.id, rows, text=text, reply_to=message.id)
+            return _SentHandle(client, message.chat.id, mid)
+        except Exception as e:
+            logger.warning(f"Coloured reply failed ({e}), plain buttons se bhej raha hu")
+
+    from pyrogram.types import InlineKeyboardMarkup
+    markup = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                b["text"],
+                **({"url": b["url"]} if b.get("url") else {"callback_data": b["callback_data"]})
+            )
+            for b in row
+        ]
+        for row in rows
+    ])
+    return await message.reply_text(
+        text=plain_text if plain_text is not None else text,
+        reply_markup=markup,
+        reply_to_message_id=message.id,
+    )
