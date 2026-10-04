@@ -6,6 +6,7 @@ import warnings
 import logging
 from io import BytesIO
 from PIL import Image
+import hashlib
 from info import DREAMXBOTZ_IMAGE_FETCH, TMDB_API_KEY
 from imdbkit import IMDBKit
 
@@ -623,9 +624,49 @@ def _gfx_tokens(text):
 
 def _gfx_title_tokens(title):
     toks = _gfx_tokens(title)
-    if len(toks) > 1 and toks[0] in ("the", "a", "an"):
+
+    # Leading article
+    while toks and toks[0] in ("the", "a", "an"):
         toks = toks[1:]
-    return toks
+
+    # Release noise
+    noise = {
+        "movie",
+        "film",
+        "web",
+        "series",
+        "show",
+        "poster",
+        "official",
+        "hd",
+        "hq",
+        "full",
+        "watch",
+        "download",
+        "hindi",
+        "dubbed",
+        "part",
+        "episode",
+        "season",
+        "ep",
+        "pt",
+    }
+
+    cleaned = []
+
+    for tok in toks:
+        if tok in noise:
+            continue
+
+        if _YEAR_RE.match(tok):
+            continue
+
+        if _SIZE_RE.match(tok):
+            continue
+
+        cleaned.append(tok)
+
+    return cleaned
 
 
 def _gfx_neighbor_ok(tok):
@@ -729,32 +770,147 @@ async def _google_cse_images(session, query):
 
 
 async def _google_images_scrape(session, query):
-    """Keyless best-effort: Google Images HTML se original image URLs nikalta hai.
-    Fragile hai (Google layout badalta rehta hai / cloud IPs par block ho sakta hai)."""
-    params = {"q": query, "tbm": "isch", "hl": "en", "gl": "us", "safe": "active", "tbs": "iar:t"}
-    headers = {"User-Agent": _BROWSER_UA, "Accept-Language": "en-US,en;q=0.9"}
-    async with session.get("https://www.google.com/search", params=params,
-                           headers=headers, timeout=_GOOGLE_TIMEOUT) as resp:
-        if resp.status != 200:
-            raise RuntimeError(f"HTTP {resp.status}")
-        final_url = str(resp.url)
-        html = await resp.text()
-    if "consent.google" in final_url or "unusual traffic" in html or "/sorry/" in final_url:
-        raise RuntimeError("Google ne consent/captcha page diya (blocked)")
+    """
+    Keyless Google Images scraper.
 
-    out, seen = [], set()
-    for m in re.finditer(r'\["(https?://(?:[^"\\]|\\.)+?)",\s*\d{2,5},\s*\d{2,5}\]', html):
+    Google HTML layout change hone par multiple URL patterns try karta hai.
+    Thumbnail URLs ko reject karta hai.
+    """
+
+    params = {
+        "q": query,
+        "tbm": "isch",
+        "hl": "en",
+        "gl": "us",
+        "safe": "active",
+        "tbs": "iar:t"
+    }
+
+    headers = {
+        "User-Agent": _BROWSER_UA,
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept": "text/html,application/xhtml+xml"
+    }
+
+    async with session.get(
+        "https://www.google.com/search",
+        params=params,
+        headers=headers,
+        timeout=_GOOGLE_TIMEOUT
+    ) as resp:
+
+        if resp.status != 200:
+            raise RuntimeError(
+                f"HTTP {resp.status}"
+            )
+
+        final_url = str(resp.url)
+        html = await resp.text(
+            errors="ignore"
+        )
+
+    low_html = html.lower()
+
+    if (
+        "consent.google" in final_url.lower()
+        or "unusual traffic" in low_html
+        or "/sorry/" in final_url.lower()
+        or "captcha" in low_html
+    ):
+        raise RuntimeError(
+            "Google consent/captcha/block page"
+        )
+
+    out = []
+    seen = set()
+
+    def add_url(url):
+        if not url:
+            return
+
+        url = str(url)
+
+        if not url.startswith("http"):
+            return
+
+        low = url.lower()
+
+        # Google thumbnails / tracking images reject.
+        if any(
+            x in low
+            for x in (
+                "gstatic.com",
+                "encrypted-tbn",
+                "googleusercontent.com"
+            )
+        ):
+            return
+
+        if url in seen:
+            return
+
+        seen.add(url)
+
+        out.append({
+            "url": url,
+            "title": None,
+            "context": None,
+            "width": None,
+            "height": None
+        })
+
+    # Pattern 1: old Google image array format.
+    for m in re.finditer(
+        r'\["(https?://(?:[^"\\]|\\.)+?)",\s*(\d{2,5}),\s*(\d{2,5})\]',
+        html
+    ):
         raw = m.group(1)
+
         try:
-            url = json.loads(f'"{raw}"')
+            url = json.loads(
+                f'"{raw}"'
+            )
         except Exception:
             url = raw
-        if "gstatic.com" in url or "encrypted-tbn" in url or url in seen:
-            continue
-        seen.add(url)
-        out.append({"url": url, "title": None, "context": None, "width": None, "height": None})
-        if len(out) >= 40:
+
+        add_url(url)
+
+        if out:
+            out[-1]["width"] = int(m.group(2))
+            out[-1]["height"] = int(m.group(3))
+
+        if len(out) >= 50:
             break
+
+    # Pattern 2: escaped URLs used by newer Google layouts.
+    if len(out) < 10:
+        for m in re.finditer(
+            r'https?://[^"\'\\\s<>]+',
+            html
+        ):
+            raw = m.group(0)
+
+            try:
+                url = (
+                    raw
+                    .replace("\\u003d", "=")
+                    .replace("\\u0026", "&")
+                    .replace("\\/", "/")
+                )
+            except Exception:
+                url = raw
+
+            # Only likely image URLs.
+            if re.search(
+                r'\.(?:jpg|jpeg|png|webp)(?:\?|$)',
+                url,
+                re.IGNORECASE
+            ):
+                add_url(url)
+
+            if len(out) >= 50:
+                break
+
     return out
 
 
@@ -793,8 +949,34 @@ async def _google_poster_fallback(title, year, kind=None):
         logger.info(f"[POSTER] Google Images skipped (title too short): '{title}'")
         return None
 
-    kind_word = "web series poster" if kind == "series" else "movie poster"
-    query = f'"{title}" {year} {kind_word}' if year else f'"{title}" {kind_word}'
+    clean_title = " ".join(
+        _gfx_title_tokens(title)
+    ).strip()
+
+    if not clean_title:
+        logger.info(
+            f"[POSTER] Google Images skipped: "
+            f"empty clean title for '{title}'"
+        )
+        return None
+
+    kind_word = (
+        "web series poster"
+        if kind == "series"
+        else "movie poster"
+    )
+
+    if year:
+        query = (
+            f'"{clean_title}" "{year}" '
+            f'{kind_word}'
+        )
+    else:
+        query = (
+            f'"{clean_title}" '
+            f'{kind_word}'
+        )
+        
     logger.info(f"[POSTER] Google Images fallback started: {query}")
 
     try:
@@ -836,100 +1018,300 @@ async def _google_poster_fallback(title, year, kind=None):
 
 
 # ----------------------------------------------------------------------------
-# Custom generated poster (16:9, dark cinematic) - fetch_image() ke saath compatible
+# Custom generated poster (16:9, Tokyo cinematic UI)
 # ----------------------------------------------------------------------------
+
 _CUSTOM_MARK = "tpbposter"
 _CP_W, _CP_H = 1280, 720
-_BG_NAMES = ("StreetPunk - Midjourney.jpeg", "StreetPunk - Midjourney.jpg",
-             "StreetPunk_Midjourney.jpeg", "StreetPunk.jpeg")
+
+# Local Tokyo cinematic backgrounds.
+# Randomly one background is selected for every generated poster.
+_CP_BG_DIRS = (
+    os.path.join(os.getcwd(), "assets", "poster_bg"),
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                 "assets", "poster_bg"),
+)
+
+_CP_BG_NAMES = (
+    "tokyo_street_01.jpg",
+    "tokyo_street_02.jpg",
+    "tokyo_tower_01.jpg",
+    "tokyo_neon_01.jpg",
+    "tokyo_city_01.jpg",
+    "StreetPunk - Midjourney.jpeg",
+    "StreetPunk - Midjourney.jpg",
+    "StreetPunk_Midjourney.jpeg",
+    "StreetPunk.jpeg",
+)
+
+POSTER_BRAND = os.environ.get(
+    "POSTER_BRAND",
+    "[Tokyo_Updates]"
+)
+
+CUSTOM_POSTER_BG = os.environ.get(
+    "CUSTOM_POSTER_BG",
+    ""
+)
+
+CUSTOM_POSTER_FONT = os.environ.get(
+    "CUSTOM_POSTER_FONT",
+    ""
+)
 
 
-def _custom_poster_base():
-    try:
-        from info import URL
-        if URL and str(URL).startswith("http"):
-            return str(URL).rstrip("/") + "/"
-    except Exception:
-        pass
-    return "https://telegram.org/"
+def _find_backgrounds():
+    """
+    Find all available poster backgrounds.
+
+    Priority:
+    1. CUSTOM_POSTER_BG
+    2. assets/poster_bg/
+    3. old StreetPunk fallback
+    """
+    found = []
+
+    # Explicit custom background
+    if CUSTOM_POSTER_BG:
+        if os.path.isabs(CUSTOM_POSTER_BG):
+            if os.path.isfile(CUSTOM_POSTER_BG):
+                found.append(CUSTOM_POSTER_BG)
+        else:
+            for d in _CP_BG_DIRS:
+                p = os.path.join(d, CUSTOM_POSTER_BG)
+                if os.path.isfile(p):
+                    found.append(p)
+
+    # Standard Tokyo backgrounds
+    for d in _CP_BG_DIRS:
+        if not os.path.isdir(d):
+            continue
+
+        for name in _CP_BG_NAMES:
+            p = os.path.join(d, name)
+            if os.path.isfile(p) and p not in found:
+                found.append(p)
+
+        # Also pick any jpg/jpeg/png/webp from poster_bg
+        try:
+            for name in sorted(os.listdir(d)):
+                if name.lower().endswith(
+                    (".jpg", ".jpeg", ".png", ".webp")
+                ):
+                    p = os.path.join(d, name)
+                    if os.path.isfile(p) and p not in found:
+                        found.append(p)
+        except Exception:
+            pass
+
+    return found
 
 
-def _make_custom_poster_url(title, year):
-    """Valid https URL (caption ke <a href> me chalega, bot ke web page par jata hai);
-    title+year isi me encoded hai taaki DB me sirf string store ho aur fetch_image
-    isse poster khud render kar le. Koi IMDb/TMDB link nahi."""
-    val = quote(str(title), safe="") + "~" + (str(year) if year else "")
-    return f"{_custom_poster_base()}?{_CUSTOM_MARK}={val}"
+def _pick_background(title):
+    """
+    Deterministic-random background.
 
+    Same movie title -> same background during repeated rendering,
+    but different movie titles get different backgrounds.
+    """
+    backgrounds = _find_backgrounds()
 
-def _parse_custom_poster_url(url):
-    if not isinstance(url, str) or f"{_CUSTOM_MARK}=" not in url:
+    if not backgrounds:
         return None
-    try:
-        val = parse_qs(urlparse(url).query).get(_CUSTOM_MARK, [""])[0]
-        title, _, year = val.rpartition("~")
-        return (title, year or None) if title else None
-    except Exception:
-        return None
+
+    digest = hashlib.md5(
+        str(title).encode("utf-8", errors="ignore")
+    ).hexdigest()
+
+    index = int(digest[:8], 16) % len(backgrounds)
+
+    return backgrounds[index]
 
 
-def _find_background():
-    here = os.path.dirname(os.path.abspath(__file__))
-    root = os.path.dirname(os.path.dirname(here))
-    dirs = [os.getcwd(), root, here, os.path.join(root, "assets"),
-            os.path.join(root, "images"), os.path.join(root, "plugins")]
-    names = ([CUSTOM_POSTER_BG] if CUSTOM_POSTER_BG else []) + list(_BG_NAMES)
-    for n in names:
-        if os.path.isabs(n) and os.path.isfile(n):
-            return n
-        for d in dirs:
-            p = os.path.join(d, n)
-            if os.path.isfile(p):
-                return p
-    return None
-
-
-def _cp_background():
+def _cp_background(title):
     W, H = _CP_W, _CP_H
-    path = _find_background()
+    path = _pick_background(title)
+
     if path:
         try:
-            bg = ImageOps.fit(Image.open(path).convert("RGB"), (W, H), Image.LANCZOS)
-            shade = Image.new("RGB", (W, H), (0, 0, 0))
-            bg = Image.blend(bg, shade, 0.55)           # text readable rahe
-            return bg
-        except Exception as e:
-            logger.warning(f"[POSTER] Custom background load failed ({path}): {e}")
+            bg = ImageOps.fit(
+                Image.open(path).convert("RGB"),
+                (W, H),
+                Image.LANCZOS
+            )
 
-    # StreetPunk image nahi mili -> procedural dark cinematic background
-    mask = Image.linear_gradient("L").resize((W, H))
-    top, bottom = Image.new("RGB", (W, H), (8, 8, 16)), Image.new("RGB", (W, H), (30, 12, 44))
-    bg = Image.composite(bottom, top, mask)
-    glow = Image.new("RGB", (W, H), (0, 0, 0))
+            # Strong cinematic dark overlay.
+            shade = Image.new("RGB", (W, H), (4, 5, 12))
+            bg = Image.blend(bg, shade, 0.48)
+
+            # Bottom dark gradient for title readability.
+            gradient = Image.new("L", (1, H))
+
+            for y in range(H):
+                if y < int(H * 0.38):
+                    value = 25
+                else:
+                    value = int(
+                        25 +
+                        ((y - H * 0.38) / (H * 0.62)) * 210
+                    )
+
+                gradient.putpixel((0, y), min(255, value))
+
+            gradient = gradient.resize((W, H))
+
+            dark = Image.new("RGB", (W, H), (0, 0, 0))
+            bg = Image.composite(dark, bg, gradient)
+
+            return bg
+
+        except Exception as e:
+            logger.warning(
+                f"[POSTER] Tokyo background load failed "
+                f"({path}): {e}"
+            )
+
+    # No image found -> procedural Tokyo-style fallback.
+    # This prevents the poster system from breaking.
+    bg = Image.new("RGB", (W, H), (7, 8, 18))
+    draw = ImageDraw.Draw(bg)
+
+    # Skyline
+    random.seed(
+        int(
+            hashlib.md5(
+                str(title).encode(
+                    "utf-8",
+                    errors="ignore"
+                )
+            ).hexdigest()[:8],
+            16
+        )
+    )
+
+    x = 0
+
+    while x < W:
+        bw = random.randint(35, 90)
+        bh = random.randint(90, 390)
+
+        draw.rectangle(
+            (
+                x,
+                H - bh,
+                x + bw,
+                H
+            ),
+            fill=(
+                random.randint(10, 25),
+                random.randint(10, 25),
+                random.randint(25, 50)
+            )
+        )
+
+        # Building windows
+        for wy in range(
+            H - bh + 25,
+            H - 20,
+            28
+        ):
+            for wx in range(
+                x + 10,
+                x + bw - 8,
+                20
+            ):
+                if random.random() > 0.45:
+                    draw.rectangle(
+                        (
+                            wx,
+                            wy,
+                            wx + 6,
+                            wy + 10
+                        ),
+                        fill=(
+                            255,
+                            random.randint(100, 220),
+                            random.randint(40, 130)
+                        )
+                    )
+
+        x += bw + random.randint(8, 18)
+
+    # Tokyo Tower-like silhouette
+    tx = int(W * 0.77)
+
+    draw.polygon(
+        [
+            (tx - 50, H - 40),
+            (tx, 180),
+            (tx + 50, H - 40)
+        ],
+        fill=(20, 22, 35)
+    )
+
+    draw.line(
+        (tx, 180, tx, H - 40),
+        fill=(180, 50, 90),
+        width=6
+    )
+
+    draw.line(
+        (tx - 50, H - 40, tx, 180),
+        fill=(130, 40, 70),
+        width=4
+    )
+
+    draw.line(
+        (tx + 50, H - 40, tx, 180),
+        fill=(130, 40, 70),
+        width=4
+    )
+
+    # Neon glow
+    glow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     gd = ImageDraw.Draw(glow)
-    gd.ellipse((-220, -260, 520, 380), fill=(255, 45, 149))
-    gd.ellipse((W - 560, H - 330, W + 240, H + 260), fill=(0, 190, 255))
-    glow = glow.filter(ImageFilter.GaussianBlur(160))
-    bg = Image.blend(bg, glow, 0.35)
-    vign = Image.radial_gradient("L").resize((W, H))
-    bg = Image.composite(bg, Image.new("RGB", (W, H), (0, 0, 0)), vign.point(lambda v: 255 - int(v * 0.55)))
-    grain = Image.effect_noise((W, H), 22).convert("RGB")
-    return Image.blend(bg, grain, 0.05)
+
+    gd.ellipse(
+        (-250, -220, 500, 420),
+        fill=(255, 25, 130, 110)
+    )
+
+    gd.ellipse(
+        (W - 520, H - 380, W + 220, H + 250),
+        fill=(0, 150, 255, 100)
+    )
+
+    glow = glow.filter(
+        ImageFilter.GaussianBlur(130)
+    )
+
+    bg = Image.alpha_composite(
+        bg.convert("RGBA"),
+        glow
+    ).convert("RGB")
+
+    return bg
 
 
 def _cp_font(size):
-    cands = [CUSTOM_POSTER_FONT,
-             "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-             "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
-             "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
-             "DejaVuSans-Bold.ttf", "arialbd.ttf"]
+    cands = [
+        CUSTOM_POSTER_FONT,
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+        "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
+        "DejaVuSans-Bold.ttf",
+        "arialbd.ttf"
+    ]
+
     for p in cands:
         if not p:
             continue
+
         try:
             return ImageFont.truetype(p, size)
         except Exception:
             continue
+
     try:
         return ImageFont.load_default(size=size)
     except TypeError:
@@ -937,87 +1319,386 @@ def _cp_font(size):
 
 
 def _cp_wrap(draw, text, font, max_w):
-    lines, cur = [], ""
+    lines = []
+    cur = ""
+
     for word in text.split():
         trial = f"{cur} {word}".strip()
-        if draw.textlength(trial, font=font) <= max_w or not cur:
+
+        if draw.textlength(
+            trial,
+            font=font
+        ) <= max_w or not cur:
             cur = trial
         else:
             lines.append(cur)
             cur = word
+
     if cur:
         lines.append(cur)
+
     return lines
+
+
+def _draw_rounded_box(
+    draw,
+    xy,
+    radius,
+    fill,
+    outline=None,
+    width=1
+):
+    draw.rounded_rectangle(
+        xy,
+        radius=radius,
+        fill=fill,
+        outline=outline,
+        width=width
+    )
 
 
 def _render_custom_poster_sync(title, year) -> BytesIO:
     W, H = _CP_W, _CP_H
-    img = _cp_background().convert("RGB")
-    draw = ImageDraw.Draw(img)
-    title_txt = str(title).strip().upper()
 
-    # title ko width/height me fit karo (max 3 lines)
-    max_w, max_h = int(W * 0.82), 330
-    lines, font, lh = [title_txt], _cp_font(56), 70
-    for size in range(150, 55, -6):
+    img = _cp_background(title).convert("RGBA")
+    draw = ImageDraw.Draw(img)
+
+    title_txt = re.sub(
+        r"\s+",
+        " ",
+        str(title or "").strip()
+    ).upper()
+
+    if not title_txt:
+        title_txt = "UNKNOWN TITLE"
+
+    # ------------------------------------------------------------
+    # TOP UI
+    # ------------------------------------------------------------
+
+    top_font = _cp_font(24)
+
+    # Left badge
+    _draw_rounded_box(
+        draw,
+        (48, 40, 270, 84),
+        18,
+        fill=(8, 10, 20, 215),
+        outline=(255, 255, 255, 80),
+        width=2
+    )
+
+    draw.text(
+        (68, 49),
+        "TOKYO CINEMA",
+        font=top_font,
+        fill=(255, 255, 255)
+    )
+
+    # Right badge
+    right_txt = (
+        "WEB SERIES"
+        if year
+        else "MOVIE"
+    )
+
+    rf = _cp_font(22)
+    rw = draw.textlength(
+        right_txt,
+        font=rf
+    )
+
+    _draw_rounded_box(
+        draw,
+        (
+            W - rw - 105,
+            40,
+            W - 48,
+            84
+        ),
+        18,
+        fill=(8, 10, 20, 215),
+        outline=(255, 255, 255, 80),
+        width=2
+    )
+
+    draw.text(
+        (
+            W - rw - 76,
+            50
+        ),
+        right_txt,
+        font=rf,
+        fill=(240, 240, 250)
+    )
+
+    # ------------------------------------------------------------
+    # TITLE
+    # ------------------------------------------------------------
+
+    max_w = int(W * 0.78)
+    max_h = 300
+
+    lines = [title_txt]
+    font = _cp_font(56)
+    line_h = 66
+
+    for size in range(150, 48, -5):
         f = _cp_font(size)
-        ls = _cp_wrap(draw, title_txt, f, max_w)
-        lh_ = int(size * 1.18)
-        if len(ls) <= 3 and len(ls) * lh_ <= max_h:
-            lines, font, lh = ls, f, lh_
+        ls = _cp_wrap(
+            draw,
+            title_txt,
+            f,
+            max_w
+        )
+
+        lh = int(size * 1.12)
+
+        if len(ls) <= 3 and len(ls) * lh <= max_h:
+            lines = ls
+            font = f
+            line_h = lh
             break
-    else:
-        font = _cp_font(56)
-        lines, lh = _cp_wrap(draw, title_txt, font, max_w)[:3], 66
 
-    block_h = len(lines) * lh
-    year_h = 90 if year else 0
-    y0 = (H - (block_h + year_h)) // 2 - 20
+    block_h = len(lines) * line_h
 
-    # soft shadow
-    shadow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    year_font = _cp_font(46) if year else None
+    year_txt = str(year) if year else ""
+
+    year_w = (
+        draw.textlength(
+            year_txt,
+            font=year_font
+        )
+        if year_font
+        else 0
+    )
+
+    total_h = block_h + (
+        72 if year else 0
+    )
+
+    y0 = int(
+        (H - total_h) / 2
+    ) - 12
+
+    # Shadow layer
+    shadow = Image.new(
+        "RGBA",
+        (W, H),
+        (0, 0, 0, 0)
+    )
+
     sd = ImageDraw.Draw(shadow)
+
     for i, line in enumerate(lines):
-        tw = sd.textlength(line, font=font)
-        sd.text(((W - tw) / 2 + 4, y0 + i * lh + 6), line, font=font, fill=(0, 0, 0, 230))
-    shadow = shadow.filter(ImageFilter.GaussianBlur(7))
-    img = Image.alpha_composite(img.convert("RGBA"), shadow).convert("RGB")
+        tw = sd.textlength(
+            line,
+            font=font
+        )
+
+        sd.text(
+            (
+                (W - tw) / 2 + 6,
+                y0 + i * line_h + 8
+            ),
+            line,
+            font=font,
+            fill=(0, 0, 0, 230)
+        )
+
+    shadow = shadow.filter(
+        ImageFilter.GaussianBlur(9)
+    )
+
+    img = Image.alpha_composite(
+        img,
+        shadow
+    )
+
     draw = ImageDraw.Draw(img)
 
+    # Title panel
+    panel_top = y0 - 28
+    panel_bottom = y0 + block_h + (
+        70 if year else 20
+    )
+
+    _draw_rounded_box(
+        draw,
+        (
+            110,
+            panel_top,
+            W - 110,
+            panel_bottom
+        ),
+        28,
+        fill=(4, 6, 14, 115),
+        outline=(255, 255, 255, 55),
+        width=2
+    )
+
     for i, line in enumerate(lines):
-        tw = draw.textlength(line, font=font)
-        draw.text(((W - tw) / 2, y0 + i * lh), line, font=font, fill=(255, 255, 255))
+        tw = draw.textlength(
+            line,
+            font=font
+        )
+
+        # Slight title highlight/shadow
+        draw.text(
+            (
+                (W - tw) / 2 + 2,
+                y0 + i * line_h + 3
+            ),
+            line,
+            font=font,
+            fill=(10, 10, 18)
+        )
+
+        draw.text(
+            (
+                (W - tw) / 2,
+                y0 + i * line_h
+            ),
+            line,
+            font=font,
+            fill=(255, 255, 255)
+        )
+
+    # ------------------------------------------------------------
+    # YEAR BADGE
+    # ------------------------------------------------------------
 
     if year:
-        yf = _cp_font(58)
-        spaced = " ".join(str(year))
-        yw = draw.textlength(spaced, font=yf)
         yy = y0 + block_h + 18
-        draw.text(((W - yw) / 2, yy), spaced, font=yf, fill=(255, 196, 61))
-        draw.line(((W - 260) / 2, yy + 78, (W + 260) / 2, yy + 78), fill=(255, 45, 149), width=3)
 
-    # brand: "Tokyo PrincessBot" + chhota TM (glyph-safe)
-    bf, tmf = _cp_font(34), _cp_font(15)
-    bw = draw.textlength(POSTER_BRAND, font=bf)
-    tmw = draw.textlength("TM", font=tmf)
-    bx = (W - (bw + tmw + 3)) / 2
-    by = H - 78
-    draw.text((bx, by), POSTER_BRAND, font=bf, fill=(235, 235, 245))
-    draw.text((bx + bw + 3, by - 2), "TM", font=tmf, fill=(235, 235, 245))
+        badge_w = int(year_w + 58)
+
+        _draw_rounded_box(
+            draw,
+            (
+                (W - badge_w) / 2,
+                yy,
+                (W + badge_w) / 2,
+                yy + 54
+            ),
+            18,
+            fill=(15, 16, 28, 230),
+            outline=(255, 190, 70, 190),
+            width=2
+        )
+
+        draw.text(
+            (
+                (W - year_w) / 2,
+                yy + 4
+            ),
+            year_txt,
+            font=year_font,
+            fill=(255, 205, 80)
+        )
+
+    # ------------------------------------------------------------
+    # BOTTOM UI
+    # ------------------------------------------------------------
+
+    bottom_font = _cp_font(22)
+
+    info_txt = "MOVIE • SERIES • WEB CONTENT"
+
+    iw = draw.textlength(
+        info_txt,
+        font=bottom_font
+    )
+
+    draw.text(
+        (
+            (W - iw) / 2,
+            H - 118
+        ),
+        info_txt,
+        font=bottom_font,
+        fill=(210, 215, 230)
+    )
+
+    # Divider
+    draw.line(
+        (
+            int(W * 0.30),
+            H - 83,
+            int(W * 0.70),
+            H - 83
+        ),
+        fill=(255, 255, 255, 100),
+        width=2
+    )
+
+    # Branding
+    brand_font = _cp_font(30)
+
+    bw = draw.textlength(
+        POSTER_BRAND,
+        font=brand_font
+    )
+
+    bx = (W - bw) / 2
+
+    draw.text(
+        (
+            bx,
+            H - 70
+        ),
+        POSTER_BRAND,
+        font=brand_font,
+        fill=(255, 255, 255)
+    )
+
+    # Small corner branding
+    small_font = _cp_font(17)
+
+    draw.text(
+        (50, H - 52),
+        "© TOKYO UPDATES",
+        font=small_font,
+        fill=(185, 190, 205)
+    )
+
+    draw.text(
+        (W - 190, H - 52),
+        "OFFICIAL",
+        font=small_font,
+        fill=(185, 190, 205)
+    )
 
     out = BytesIO()
-    img.save(out, format="JPEG", quality=90)
+
+    img.convert("RGB").save(
+        out,
+        format="JPEG",
+        quality=92,
+        optimize=True
+    )
+
     out.seek(0)
+
     return out
 
 
 async def _render_custom_poster(title, year):
     try:
-        return await asyncio.to_thread(_render_custom_poster_sync, title, year)
-    except Exception as e:
-        logger.error(f"[POSTER] Custom poster render failed for '{title}': {e}")
-        return None
+        return await asyncio.to_thread(
+            _render_custom_poster_sync,
+            title,
+            year
+        )
 
+    except Exception as e:
+        logger.error(
+            f"[POSTER] Custom poster render failed "
+            f"for '{title}': {e}"
+        )
+
+        return None
 
 # ----------------------------------------------------------------------------
 # Wrapper: TMDB -> Proxy -> IMDb (existing, unchanged) -> Google -> Custom
