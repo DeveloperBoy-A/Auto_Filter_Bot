@@ -41,6 +41,11 @@ def _resize_image_sync(data: bytes, size) -> BytesIO:
 
 
 async def fetch_image(url, size=(860, 1200)):
+    # Custom fallback poster (URL me title/year encoded hai) -> khud render karo, 16:9 BytesIO
+    _custom = _parse_custom_poster_url(url)
+    if _custom:
+        return await _render_custom_poster(*_custom)
+
     if not DREAMXBOTZ_IMAGE_FETCH:
         logger.info("Image fetching is disabled.")
         return url
@@ -548,3 +553,550 @@ async def get_movie_detailsx(query, id=False, file=None, kind=None):
             logger.warning(f"IMDb poster fallback failed for '{q}': {e}")
 
     return details
+
+
+# ============================================================================
+# POSTER FALLBACK (ADDITIVE BLOCK)
+#   Official TMDB -> TMDB Proxy -> IMDb -> Google Images -> Custom poster
+#
+# Is block se upar ka koi existing code change nahi hua. Sirf:
+#   1) fetch_image() ke shuru me 3 lines add hui (custom poster ke liye)
+#   2) get_movie_detailsx() ka purana version `_get_movie_detailsx_core` naam se
+#      save hota hai aur neeche naya wrapper usi naam `get_movie_detailsx` se chalta hai.
+# ============================================================================
+import os
+import json
+import random
+from urllib.parse import quote, unquote, urlparse, parse_qs
+
+from PIL import ImageDraw, ImageFont, ImageFilter, ImageOps
+
+
+def _env_on(name, default=True):
+    return os.environ.get(name, str(default)).strip().lower() not in ("false", "0", "off", "no", "")
+
+
+GOOGLE_POSTER_FALLBACK = _env_on("GOOGLE_POSTER_FALLBACK", True)
+CUSTOM_POSTER_FALLBACK = _env_on("CUSTOM_POSTER_FALLBACK", True)
+# Optional: Google Custom Search JSON API (sirf purane customers ke liye; 1 Jan 2027 ko band ho rahi hai)
+GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY", "")
+GOOGLE_CSE_ID = os.environ.get("GOOGLE_CSE_ID", "")
+# Branding / background / font (sab optional, env se badal sakte ho)
+POSTER_BRAND = os.environ.get("POSTER_BRAND", "Tokyo PrincessBot")
+CUSTOM_POSTER_BG = os.environ.get("CUSTOM_POSTER_BG", "")      # full path, ya file ka naam
+CUSTOM_POSTER_FONT = os.environ.get("CUSTOM_POSTER_FONT", "")  # .ttf ka path
+
+_GOOGLE_TIMEOUT = aiohttp.ClientTimeout(total=10)
+_MAX_IMAGE_BYTES = 8 * 1024 * 1024
+_GOOGLE_MAX_TRIES = 5
+_GOOGLE_TOTAL_BUDGET = 30  # seconds
+
+_BROWSER_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+)
+
+
+# ----------------------------------------------------------------------------
+# Strict matching for Google results (same principle as _title_matches)
+# ----------------------------------------------------------------------------
+# Title phrase ke aas-paas sirf ye "noise" words / year / size tokens allowed hain.
+# "Immortal Combat", "The Immortal Man" jaisa koi aur word chipka ho to REJECT.
+_GFX_NOISE = frozenset({
+    "the", "a", "an", "movie", "film", "poster", "posters", "official", "hd", "hq", "uhd",
+    "full", "watch", "download", "imdb", "wallpaper", "web", "series", "season", "tv", "show",
+    "new", "latest", "trailer", "first", "look", "review", "cast", "hindi", "dubbed", "free",
+    "online", "dvd", "bluray", "cover", "art", "key", "theatrical", "release", "image", "images",
+    "photo", "jpg", "jpeg", "png", "webp", "large", "original", "medium", "thumb", "small",
+    "wikipedia", "wiki", "tmdb", "themoviedb", "letterboxd", "mubi", "rotten", "tomatoes",
+    "amazon", "netflix", "com", "org", "net", "www", "http", "https", "upload", "media", "en",
+    "of", "on", "in", "and", "s",
+})
+_YEAR_RE = re.compile(r"^(?:19|20)\d{2}$")
+_SIZE_RE = re.compile(r"^(?:\d+px|[wh]\d{2,4}|\d{2,4}x\d{2,4}|\d{3,4}p|s\d{1,2}|season\d{1,2}|v\d{1,2})$")
+
+
+def _gfx_tokens(text):
+    text = unquote(str(text or "")).lower().replace("&", " and ")
+    return re.sub(r"[^a-z0-9]+", " ", text).split()
+
+
+def _gfx_title_tokens(title):
+    toks = _gfx_tokens(title)
+    if len(toks) > 1 and toks[0] in ("the", "a", "an"):
+        toks = toks[1:]
+    return toks
+
+
+def _gfx_neighbor_ok(tok):
+    if tok is None:
+        return True
+    return tok in _GFX_NOISE or bool(_YEAR_RE.match(tok)) or bool(_SIZE_RE.match(tok))
+
+
+def _gfx_phrase_status(tokens, title_tokens):
+    """'match' = title milta hai aur aas-paas sirf noise/year; 'conflict' = title kisi
+    lambe/dusre naam ka hissa hai; 'none' = title mila hi nahi."""
+    n = len(title_tokens)
+    if not n or len(tokens) < n:
+        return "none"
+    found = False
+    for i in range(len(tokens) - n + 1):
+        if tokens[i:i + n] == title_tokens:
+            found = True
+            before = tokens[i - 1] if i > 0 else None
+            after = tokens[i + n] if i + n < len(tokens) else None
+            if _gfx_neighbor_ok(before) and _gfx_neighbor_ok(after):
+                return "match"
+    return "conflict" if found else "none"
+
+
+def _gfx_url_text(url):
+    try:
+        p = urlparse(str(url))
+        return f"{p.path} {p.query}"
+    except Exception:
+        return ""
+
+
+def _score_google_candidate(c, title_tokens, year):
+    """Candidate ko score do; None = reject. c: {url,width,height,title,context}"""
+    w, h = c.get("width") or 0, c.get("height") or 0
+    if w and h:
+        if min(w, h) < 300 or h < 450:
+            return None                      # tiny / thumbnail
+        if not (1.25 <= h / w <= 1.8):
+            return None                      # poster-shaped nahi (stretch ho jata)
+
+    srcs = []
+    if c.get("title"):
+        srcs.append(("title", _gfx_tokens(c["title"])))
+    srcs.append(("url", _gfx_tokens(_gfx_url_text(c["url"]))))
+    if c.get("context"):
+        srcs.append(("context", _gfx_tokens(_gfx_url_text(c["context"]))))
+
+    matches, title_hit = 0, False
+    for name, toks in srcs:
+        st = _gfx_phrase_status(toks, title_tokens)
+        if st == "conflict":
+            return None                      # kisi aur (lambe) title ka poster
+        if st == "match":
+            matches += 1
+            title_hit = title_hit or name == "title"
+    if not matches:
+        return None                          # title ka koi saboot nahi
+
+    score = matches * 10 + (4 if title_hit else 0)
+
+    if year:
+        try:
+            y = int(year)
+            ys = {int(t) for _, toks in srcs for t in toks if _YEAR_RE.match(t)}
+            if ys:
+                if any(abs(v - y) <= 1 for v in ys):
+                    score += 8 if y in ys else 5
+                else:
+                    return None              # alag saal ka (remake/dusri film)
+        except ValueError:
+            pass
+
+    if h:
+        score += min(h, 1800) / 600.0
+    return score
+
+
+# ----------------------------------------------------------------------------
+# Google Images: candidate collection (async, existing aiohttp session reuse)
+# ----------------------------------------------------------------------------
+async def _google_cse_images(session, query):
+    params = {"key": GOOGLE_API_KEY, "cx": GOOGLE_CSE_ID, "q": query,
+              "searchType": "image", "num": 10, "safe": "active"}
+    async with session.get("https://www.googleapis.com/customsearch/v1",
+                           params=params, timeout=_GOOGLE_TIMEOUT) as resp:
+        data = await resp.json(content_type=None)
+        if resp.status != 200:
+            msg = (data.get("error") or {}).get("message") if isinstance(data, dict) else ""
+            raise RuntimeError(f"CSE HTTP {resp.status}: {msg}")
+    out = []
+    for it in data.get("items") or []:
+        img = it.get("image") or {}
+        out.append({
+            "url": it.get("link"), "title": it.get("title"),
+            "context": img.get("contextLink"),
+            "width": img.get("width"), "height": img.get("height"),
+        })
+    return [c for c in out if c["url"]]
+
+
+async def _google_images_scrape(session, query):
+    """Keyless best-effort: Google Images HTML se original image URLs nikalta hai.
+    Fragile hai (Google layout badalta rehta hai / cloud IPs par block ho sakta hai)."""
+    params = {"q": query, "tbm": "isch", "hl": "en", "gl": "us", "safe": "active", "tbs": "iar:t"}
+    headers = {"User-Agent": _BROWSER_UA, "Accept-Language": "en-US,en;q=0.9"}
+    async with session.get("https://www.google.com/search", params=params,
+                           headers=headers, timeout=_GOOGLE_TIMEOUT) as resp:
+        if resp.status != 200:
+            raise RuntimeError(f"HTTP {resp.status}")
+        final_url = str(resp.url)
+        html = await resp.text()
+    if "consent.google" in final_url or "unusual traffic" in html or "/sorry/" in final_url:
+        raise RuntimeError("Google ne consent/captcha page diya (blocked)")
+
+    out, seen = [], set()
+    for m in re.finditer(r'\["(https?://(?:[^"\\]|\\.)+?)",\s*\d{2,5},\s*\d{2,5}\]', html):
+        raw = m.group(1)
+        try:
+            url = json.loads(f'"{raw}"')
+        except Exception:
+            url = raw
+        if "gstatic.com" in url or "encrypted-tbn" in url or url in seen:
+            continue
+        seen.add(url)
+        out.append({"url": url, "title": None, "context": None, "width": None, "height": None})
+        if len(out) >= 40:
+            break
+    return out
+
+
+def _check_image_sync(data):
+    img = Image.open(BytesIO(data))
+    img.verify()
+    img = Image.open(BytesIO(data))
+    return img.size
+
+
+async def _validate_remote_image(session, url):
+    """Wahi request jo fetch_image() baad me karega: download + valid image + poster-shape."""
+    try:
+        async with session.get(url, timeout=_GOOGLE_TIMEOUT) as resp:
+            if resp.status != 200:
+                return False
+            ctype = (resp.headers.get("Content-Type") or "").lower()
+            if ctype and not (ctype.startswith("image/") or "octet-stream" in ctype):
+                return False
+            data = await resp.content.read(_MAX_IMAGE_BYTES + 1)
+        if not data or len(data) > _MAX_IMAGE_BYTES:
+            return False
+        w, h = await asyncio.to_thread(_check_image_sync, data)
+        return min(w, h) >= 300 and h >= 450 and 1.25 <= h / w <= 1.8
+    except Exception as e:
+        logger.debug(f"[POSTER] Google candidate invalid ({url[:80]}): {e}")
+        return False
+
+
+async def _google_poster_fallback(title, year, kind=None):
+    """Return: valid poster image URL, ya None."""
+    if not GOOGLE_POSTER_FALLBACK:
+        return None
+    title_tokens = _gfx_title_tokens(title)
+    if len("".join(title_tokens)) < 3:
+        logger.info(f"[POSTER] Google Images skipped (title too short): '{title}'")
+        return None
+
+    kind_word = "web series poster" if kind == "series" else "movie poster"
+    query = f'"{title}" {year} {kind_word}' if year else f'"{title}" {kind_word}'
+    logger.info(f"[POSTER] Google Images fallback started: {query}")
+
+    try:
+        session = await get_session()
+        cands = []
+        if GOOGLE_API_KEY and GOOGLE_CSE_ID:
+            try:
+                cands = await _google_cse_images(session, query)
+            except Exception as e:
+                logger.warning(f"[POSTER] Google CSE API failed: {e}")
+        if not cands:
+            try:
+                cands = await _google_images_scrape(session, query)
+            except Exception as e:
+                logger.warning(f"[POSTER] Google Images failed: {e}")
+                return None
+
+        scored = []
+        for c in cands:
+            s = _score_google_candidate(c, title_tokens, year)
+            if s is not None:
+                scored.append((s, c))
+        scored.sort(key=lambda x: x[0], reverse=True)
+
+        if not scored:
+            logger.info(f"[POSTER] Google Images failed: no strict title/year match "
+                        f"among {len(cands)} results for '{title}'")
+            return None
+
+        for _, c in scored[:_GOOGLE_MAX_TRIES]:
+            if await _validate_remote_image(session, c["url"]):
+                logger.info(f"[POSTER] Google poster found: {c['url']}")
+                return c["url"]
+
+        logger.info("[POSTER] Google Images failed: matching candidates were not valid images")
+    except Exception as e:
+        logger.warning(f"[POSTER] Google Images failed: {e}")
+    return None
+
+
+# ----------------------------------------------------------------------------
+# Custom generated poster (16:9, dark cinematic) - fetch_image() ke saath compatible
+# ----------------------------------------------------------------------------
+_CUSTOM_MARK = "tpbposter"
+_CP_W, _CP_H = 1280, 720
+_BG_NAMES = ("StreetPunk - Midjourney.jpeg", "StreetPunk - Midjourney.jpg",
+             "StreetPunk_Midjourney.jpeg", "StreetPunk.jpeg")
+
+
+def _custom_poster_base():
+    try:
+        from info import URL
+        if URL and str(URL).startswith("http"):
+            return str(URL).rstrip("/") + "/"
+    except Exception:
+        pass
+    return "https://telegram.org/"
+
+
+def _make_custom_poster_url(title, year):
+    """Valid https URL (caption ke <a href> me chalega, bot ke web page par jata hai);
+    title+year isi me encoded hai taaki DB me sirf string store ho aur fetch_image
+    isse poster khud render kar le. Koi IMDb/TMDB link nahi."""
+    val = quote(str(title), safe="") + "~" + (str(year) if year else "")
+    return f"{_custom_poster_base()}?{_CUSTOM_MARK}={val}"
+
+
+def _parse_custom_poster_url(url):
+    if not isinstance(url, str) or f"{_CUSTOM_MARK}=" not in url:
+        return None
+    try:
+        val = parse_qs(urlparse(url).query).get(_CUSTOM_MARK, [""])[0]
+        title, _, year = val.rpartition("~")
+        return (title, year or None) if title else None
+    except Exception:
+        return None
+
+
+def _find_background():
+    here = os.path.dirname(os.path.abspath(__file__))
+    root = os.path.dirname(os.path.dirname(here))
+    dirs = [os.getcwd(), root, here, os.path.join(root, "assets"),
+            os.path.join(root, "images"), os.path.join(root, "plugins")]
+    names = ([CUSTOM_POSTER_BG] if CUSTOM_POSTER_BG else []) + list(_BG_NAMES)
+    for n in names:
+        if os.path.isabs(n) and os.path.isfile(n):
+            return n
+        for d in dirs:
+            p = os.path.join(d, n)
+            if os.path.isfile(p):
+                return p
+    return None
+
+
+def _cp_background():
+    W, H = _CP_W, _CP_H
+    path = _find_background()
+    if path:
+        try:
+            bg = ImageOps.fit(Image.open(path).convert("RGB"), (W, H), Image.LANCZOS)
+            shade = Image.new("RGB", (W, H), (0, 0, 0))
+            bg = Image.blend(bg, shade, 0.55)           # text readable rahe
+            return bg
+        except Exception as e:
+            logger.warning(f"[POSTER] Custom background load failed ({path}): {e}")
+
+    # StreetPunk image nahi mili -> procedural dark cinematic background
+    mask = Image.linear_gradient("L").resize((W, H))
+    top, bottom = Image.new("RGB", (W, H), (8, 8, 16)), Image.new("RGB", (W, H), (30, 12, 44))
+    bg = Image.composite(bottom, top, mask)
+    glow = Image.new("RGB", (W, H), (0, 0, 0))
+    gd = ImageDraw.Draw(glow)
+    gd.ellipse((-220, -260, 520, 380), fill=(255, 45, 149))
+    gd.ellipse((W - 560, H - 330, W + 240, H + 260), fill=(0, 190, 255))
+    glow = glow.filter(ImageFilter.GaussianBlur(160))
+    bg = Image.blend(bg, glow, 0.35)
+    vign = Image.radial_gradient("L").resize((W, H))
+    bg = Image.composite(bg, Image.new("RGB", (W, H), (0, 0, 0)), vign.point(lambda v: 255 - int(v * 0.55)))
+    grain = Image.effect_noise((W, H), 22).convert("RGB")
+    return Image.blend(bg, grain, 0.05)
+
+
+def _cp_font(size):
+    cands = [CUSTOM_POSTER_FONT,
+             "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+             "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+             "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
+             "DejaVuSans-Bold.ttf", "arialbd.ttf"]
+    for p in cands:
+        if not p:
+            continue
+        try:
+            return ImageFont.truetype(p, size)
+        except Exception:
+            continue
+    try:
+        return ImageFont.load_default(size=size)
+    except TypeError:
+        return ImageFont.load_default()
+
+
+def _cp_wrap(draw, text, font, max_w):
+    lines, cur = [], ""
+    for word in text.split():
+        trial = f"{cur} {word}".strip()
+        if draw.textlength(trial, font=font) <= max_w or not cur:
+            cur = trial
+        else:
+            lines.append(cur)
+            cur = word
+    if cur:
+        lines.append(cur)
+    return lines
+
+
+def _render_custom_poster_sync(title, year) -> BytesIO:
+    W, H = _CP_W, _CP_H
+    img = _cp_background().convert("RGB")
+    draw = ImageDraw.Draw(img)
+    title_txt = str(title).strip().upper()
+
+    # title ko width/height me fit karo (max 3 lines)
+    max_w, max_h = int(W * 0.82), 330
+    lines, font, lh = [title_txt], _cp_font(56), 70
+    for size in range(150, 55, -6):
+        f = _cp_font(size)
+        ls = _cp_wrap(draw, title_txt, f, max_w)
+        lh_ = int(size * 1.18)
+        if len(ls) <= 3 and len(ls) * lh_ <= max_h:
+            lines, font, lh = ls, f, lh_
+            break
+    else:
+        font = _cp_font(56)
+        lines, lh = _cp_wrap(draw, title_txt, font, max_w)[:3], 66
+
+    block_h = len(lines) * lh
+    year_h = 90 if year else 0
+    y0 = (H - (block_h + year_h)) // 2 - 20
+
+    # soft shadow
+    shadow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    sd = ImageDraw.Draw(shadow)
+    for i, line in enumerate(lines):
+        tw = sd.textlength(line, font=font)
+        sd.text(((W - tw) / 2 + 4, y0 + i * lh + 6), line, font=font, fill=(0, 0, 0, 230))
+    shadow = shadow.filter(ImageFilter.GaussianBlur(7))
+    img = Image.alpha_composite(img.convert("RGBA"), shadow).convert("RGB")
+    draw = ImageDraw.Draw(img)
+
+    for i, line in enumerate(lines):
+        tw = draw.textlength(line, font=font)
+        draw.text(((W - tw) / 2, y0 + i * lh), line, font=font, fill=(255, 255, 255))
+
+    if year:
+        yf = _cp_font(58)
+        spaced = " ".join(str(year))
+        yw = draw.textlength(spaced, font=yf)
+        yy = y0 + block_h + 18
+        draw.text(((W - yw) / 2, yy), spaced, font=yf, fill=(255, 196, 61))
+        draw.line(((W - 260) / 2, yy + 78, (W + 260) / 2, yy + 78), fill=(255, 45, 149), width=3)
+
+    # brand: "Tokyo PrincessBot" + chhota TM (glyph-safe)
+    bf, tmf = _cp_font(34), _cp_font(15)
+    bw = draw.textlength(POSTER_BRAND, font=bf)
+    tmw = draw.textlength("TM", font=tmf)
+    bx = (W - (bw + tmw + 3)) / 2
+    by = H - 78
+    draw.text((bx, by), POSTER_BRAND, font=bf, fill=(235, 235, 245))
+    draw.text((bx + bw + 3, by - 2), "TM", font=tmf, fill=(235, 235, 245))
+
+    out = BytesIO()
+    img.save(out, format="JPEG", quality=90)
+    out.seek(0)
+    return out
+
+
+async def _render_custom_poster(title, year):
+    try:
+        return await asyncio.to_thread(_render_custom_poster_sync, title, year)
+    except Exception as e:
+        logger.error(f"[POSTER] Custom poster render failed for '{title}': {e}")
+        return None
+
+
+# ----------------------------------------------------------------------------
+# Wrapper: TMDB -> Proxy -> IMDb (existing, unchanged) -> Google -> Custom
+# ----------------------------------------------------------------------------
+_get_movie_detailsx_core = get_movie_detailsx   # EXISTING function, bilkul unchanged
+
+
+def _has_poster(d):
+    return bool(d and (d.get("poster_url") or d.get("backdrop_url")))
+
+
+def _fallback_details(base, title, year, poster_url, source):
+    """Existing get_movie_detailsx() jaisi structure. base me (title-matched) metadata ho
+    to wo rakhte hain, warna safe defaults. Custom poster ke liye koi IMDb/TMDB link nahi."""
+    if base:
+        d = dict(base)
+        d.setdefault("tmdb_url", d.get("url") or "")
+    else:
+        d = {
+            "title": title, "year": year or None,
+            "release_date": str(year) if year else None,
+            "rating": "N/A", "votes": 0, "runtime": None, "certificates": None,
+            "tmdb_url": "", "url": "",
+            "genres": [], "languages": [], "countries": [],
+            "director": [], "writer": [], "producer": [], "composer": [],
+            "cinematographer": [], "cast": [],
+            "plot": "", "tagline": None, "box_office": None, "distributors": [],
+            "imdb_id": None, "tmdb_id": None, "backdrop_url": None,
+        }
+    d["poster_url"] = poster_url
+    d["poster_source"] = source
+    return d
+
+
+async def get_movie_detailsx(query, id=False, file=None, kind=None, poster_fallback=None):
+    """
+    Wrapper: pehle purana get_movie_detailsx (TMDB -> Proxy -> IMDb), phir
+    Google Images, phir Custom poster.
+
+    poster_fallback: None => auto (sirf jab `kind` diya ho, yani channel update flow).
+    Isse post_handler / utils.get_posterx (jo poster_url seedha Telegram ko dete hain)
+    pehle jaise hi chalte hain - unhe custom/Google fallback nahi milta.
+    """
+    result = None
+    try:
+        result = await _get_movie_detailsx_core(query, id=id, file=file, kind=kind)
+    except Exception as e:
+        logger.error(f"[POSTER] Primary poster lookup crashed for '{query}': {e}")
+
+    use_fallback = (kind is not None) if poster_fallback is None else bool(poster_fallback)
+
+    if _has_poster(result):
+        if use_fallback:
+            src = "TMDB" if result.get("tmdb_id") or result.get("tmdb_url") else "IMDb"
+            logger.info(f"[POSTER] {src} poster found: {result.get('title') or query}")
+        return result
+
+    if not use_fallback or id:
+        return result
+
+    title, year = _split_title_year(str(query).strip())
+
+    # ---- Google Images ----
+    try:
+        g_url = await asyncio.wait_for(
+            _google_poster_fallback(title, year, kind), timeout=_GOOGLE_TOTAL_BUDGET
+        )
+    except Exception as e:
+        logger.warning(f"[POSTER] Google Images failed: {e}")
+        g_url = None
+    if g_url:
+        return _fallback_details(result, title, year, g_url, "google")
+
+    # ---- Custom generated poster ----
+    if CUSTOM_POSTER_FALLBACK:
+        test = await _render_custom_poster(title, year)    # chal sakta hai ya nahi, pehle check
+        if test is not None:
+            logger.info(f"[POSTER] Using custom fallback poster: {title} {year or ''}".strip())
+            return _fallback_details(result, title, year, _make_custom_poster_url(title, year), "custom")
+
+    logger.error(f"[POSTER] All poster fallbacks failed: {query}")
+    return result
