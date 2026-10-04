@@ -632,7 +632,10 @@ async def send_movie_update(bot, base_name):
             # Poster fetch fail ho jaye to pehle post hi nahi jaata tha - ab text post jayega.
             poster = None
             if movie_doc.get("poster_url") and not LINK_PREVIEW:
-                poster = await fetch_image(movie_doc["poster_url"], (860, 1200))
+                # Landscape (backdrop) ho to 16:9 size, warna portrait - pehle backdrop bhi
+                # 860x1200 me kheench jata tha (stretch)
+                size = (1280, 720) if movie_doc.get("is_backdrop") else (860, 1200)
+                poster = await fetch_image(movie_doc["poster_url"], size)
             is_photo = poster is not None
 
             msg_id = None
