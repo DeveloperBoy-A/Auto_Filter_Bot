@@ -1024,6 +1024,47 @@ async def _google_poster_fallback(title, year, kind=None):
 _CUSTOM_MARK = "tpbposter"
 _CP_W, _CP_H = 1280, 720
 
+def _make_custom_poster_url(title, year=None):
+    """Create an internal URL marker for generated custom posters."""
+    return (
+        f"https://{_CUSTOM_MARK}/poster?"
+        f"title={quote(str(title or ''))}"
+        f"&year={quote(str(year or ''))}"
+    )
+
+
+def _parse_custom_poster_url(url):
+    """Parse internal custom poster URL and return (title, year)."""
+    try:
+        if not url:
+            return None
+
+        parsed = urlparse(str(url))
+
+        if parsed.netloc != _CUSTOM_MARK:
+            return None
+
+        params = parse_qs(parsed.query)
+
+        title = unquote(
+            params.get("title", [""])[0]
+        ).strip()
+
+        year = unquote(
+            params.get("year", [""])[0]
+        ).strip() or None
+
+        if not title:
+            return None
+
+        return title, year
+
+    except Exception as e:
+        logger.warning(
+            f"[POSTER] Failed to parse custom poster URL: {e}"
+        )
+        return None
+
 # Local Tokyo cinematic backgrounds.
 # Randomly one background is selected for every generated poster.
 _CP_BG_DIRS = (
