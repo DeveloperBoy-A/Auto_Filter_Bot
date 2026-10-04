@@ -9,12 +9,17 @@ post kabhi nahi rukta.
 
 Colour band karne ke liye env: BUTTON_COLORS=False
 
+Helpers: api_send / api_edit (low level), reply_styled / send_styled / edit_styled (aasaan),
+html_mention(user). Button dict me ye keys chalti hain: text, style, aur inme se ek:
+url | callback_data | switch_inline_query_current_chat | switch_inline_query
+
 Note: colour sirf un users ko dikhega jinka Telegram app Feb 2026 ke baad ka hai.
 """
 import os
 import json
 import logging
 import aiohttp
+from html import escape as _esc
 from io import BytesIO
 from pyrogram import enums
 from pyrogram.types import InlineKeyboardButton
@@ -23,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 COLORS_ENABLED = os.environ.get("BUTTON_COLORS", "True").strip().lower() not in ("false", "0", "off", "no", "")
 VALID_STYLES = {"primary", "success", "danger"}
+_BTN_KEYS = ("url", "callback_data", "switch_inline_query_current_chat", "switch_inline_query")
 
 _session = None
 _warned = False
@@ -79,10 +85,9 @@ def markup_json(rows):
         out = []
         for b in row:
             d = {"text": b["text"]}
-            if b.get("url"):
-                d["url"] = b["url"]
-            if b.get("callback_data"):
-                d["callback_data"] = b["callback_data"]
+            for key in _BTN_KEYS:
+                if b.get(key) is not None:
+                    d[key] = b[key]
             if b.get("style") in VALID_STYLES:
                 d["style"] = b["style"]
             out.append(d)
@@ -156,9 +161,9 @@ async def api_edit(bot, chat_id, message_id, rows, *, text, is_photo, link_previ
         })
 
 
-# ---------------------------------------------------------------- reply helper
+# ---------------------------------------------------------------- reply helpers
 class _SentHandle:
-    """Bot API se bheje message ka chhota handle: .id aur .delete() (pyrogram Message jaisa)."""
+    """Bot API se bheje/edit kiye message ka chhota handle: .id aur .delete() (pyrogram Message jaisa)."""
     def __init__(self, client, chat_id, message_id):
         self._client = client
         self.chat_id = chat_id
@@ -168,33 +173,88 @@ class _SentHandle:
         return await self._client.delete_messages(self.chat_id, self.id)
 
 
-async def reply_styled(client, message, text, rows, *, plain_text=None):
-    """
-    `message` ka reply coloured buttons ke saath bhejta hai.
-    Bot API fail ho to normal (bina colour) reply_text se bhej deta hai.
-    Return: object jisme .id aur .delete() hai (dono raste me).
-    plain_text: fallback (pyrogram) wala text, agar API wale se alag chahiye.
-    """
-    if COLORS_ENABLED and getattr(client, "bot_token", None):
-        try:
-            mid = await api_send(client, message.chat.id, rows, text=text, reply_to=message.id)
-            return _SentHandle(client, message.chat.id, mid)
-        except Exception as e:
-            logger.warning(f"Coloured reply failed ({e}), plain buttons se bhej raha hu")
+def html_mention(user):
+    """Bot API (HTML) ke liye safe mention: <a href="tg://user?id=..">Name</a>."""
+    if user is None:
+        return "User"
+    name = _esc(getattr(user, "first_name", None) or "User")
+    return f'<a href="tg://user?id={user.id}">{name}</a>'
 
+
+def _pyro_markup(rows):
+    """Fallback: wahi buttons, bina colour, pyrogram markup me."""
     from pyrogram.types import InlineKeyboardMarkup
-    markup = InlineKeyboardMarkup([
+    return InlineKeyboardMarkup([
         [
             InlineKeyboardButton(
                 b["text"],
-                **({"url": b["url"]} if b.get("url") else {"callback_data": b["callback_data"]})
+                **{k: b[k] for k in _BTN_KEYS if b.get(k) is not None}
             )
             for b in row
         ]
         for row in rows
     ])
+
+
+def _has_media(message):
+    return any(getattr(message, a, None) for a in ("photo", "video", "document", "animation", "audio"))
+
+
+async def reply_styled(client, message, text, rows, *, plain_text=None, quote=True):
+    """
+    `message` ka reply coloured buttons ke saath bhejta hai.
+    Bot API fail ho to normal (bina colour) reply_text se bhej deta hai.
+    Return: object jisme .id aur .delete() hai (dono raste me).
+    plain_text: fallback (pyrogram) wala text, agar API wale se alag chahiye.
+    quote: False => user ke message ko quote/reply nahi karega (private chat me aksar yahi chahiye).
+    """
+    if COLORS_ENABLED and getattr(client, "bot_token", None):
+        try:
+            mid = await api_send(client, message.chat.id, rows, text=text,
+                                 reply_to=message.id if quote else None)
+            return _SentHandle(client, message.chat.id, mid)
+        except Exception as e:
+            logger.warning(f"Coloured reply failed ({e}), plain buttons se bhej raha hu")
+
     return await message.reply_text(
         text=plain_text if plain_text is not None else text,
-        reply_markup=markup,
-        reply_to_message_id=message.id,
+        reply_markup=_pyro_markup(rows),
+        reply_to_message_id=message.id if quote else None,
     )
+
+
+async def send_styled(client, chat_id, text, rows, *, plain_text=None):
+    """chat_id par coloured buttons wala naya message (reply nahi). Return: .id/.delete() wala object."""
+    if COLORS_ENABLED and getattr(client, "bot_token", None):
+        try:
+            mid = await api_send(client, chat_id, rows, text=text)
+            return _SentHandle(client, chat_id, mid)
+        except Exception as e:
+            logger.warning(f"Coloured send failed ({e}), plain buttons se bhej raha hu")
+    return await client.send_message(
+        chat_id, plain_text if plain_text is not None else text, reply_markup=_pyro_markup(rows)
+    )
+
+
+async def edit_styled(client, message, text, rows, *, plain_text=None):
+    """
+    Maujooda bot-message ko edit karke coloured buttons lagata hai (callback query ke
+    `query.message.edit(...)` ki jagah). Photo/video message ho to caption edit hota hai.
+    Return: .id/.delete() wala object.
+    """
+    media = _has_media(message)
+    if COLORS_ENABLED and getattr(client, "bot_token", None):
+        try:
+            await api_edit(client, message.chat.id, message.id, rows, text=text, is_photo=media)
+            return _SentHandle(client, message.chat.id, message.id)
+        except BotApiError as e:
+            if e.not_modified:
+                return _SentHandle(client, message.chat.id, message.id)
+            logger.warning(f"Coloured edit failed ({e}), plain buttons se edit kar raha hu")
+        except Exception as e:
+            logger.warning(f"Coloured edit error ({e}), plain buttons se edit kar raha hu")
+
+    body = plain_text if plain_text is not None else text
+    if media:
+        return await message.edit_caption(body, reply_markup=_pyro_markup(rows))
+    return await message.edit_text(body, reply_markup=_pyro_markup(rows))
