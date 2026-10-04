@@ -583,7 +583,7 @@ CUSTOM_POSTER_FALLBACK = _env_on("CUSTOM_POSTER_FALLBACK", True)
 GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY", "")
 GOOGLE_CSE_ID = os.environ.get("GOOGLE_CSE_ID", "")
 # Branding / background / font (sab optional, env se badal sakte ho)
-POSTER_BRAND = os.environ.get("POSTER_BRAND", "Tokyo PrincessBot")
+POSTER_BRAND = os.environ.get("POSTER_BRAND", "Tokyo_Updates")
 CUSTOM_POSTER_BG = os.environ.get("CUSTOM_POSTER_BG", "")      # full path, ya file ka naam
 CUSTOM_POSTER_FONT = os.environ.get("CUSTOM_POSTER_FONT", "")  # .ttf ka path
 
@@ -732,12 +732,29 @@ def _score_google_candidate(c, title_tokens, year):
     if year:
         try:
             y = int(year)
-            ys = {int(t) for _, toks in srcs for t in toks if _YEAR_RE.match(t)}
+
+            ys = {
+                int(t)
+                for _, toks in srcs
+                for t in toks
+                if _YEAR_RE.match(t)
+            }
+
+            # Year available hai to verify karo.
+            # Year missing hai to poster reject MAT karo.
             if ys:
-                if any(abs(v - y) <= 1 for v in ys):
-                    score += 8 if y in ys else 5
+                if y in ys:
+                    score += 8
+                elif any(abs(v - y) <= 1 for v in ys):
+                    score += 5
                 else:
-                    return None              # alag saal ka (remake/dusri film)
+                    # Clearly different year -> reject.
+                    return None
+            else:
+                # Google metadata me year nahi mila,
+                # lekin exact title mil gaya -> allow.
+                score += 2
+
         except ValueError:
             pass
 
@@ -967,38 +984,88 @@ async def _google_poster_fallback(title, year, kind=None):
     )
 
     if year:
-        query = (
-            f'"{clean_title}" "{year}" '
-            f'{kind_word}'
-        )
+        queries = [
+            f'"{clean_title}" "{year}" {kind_word}',
+            f'"{clean_title}" {kind_word}',
+            f'"{clean_title}" poster',
+        ]
     else:
-        query = (
-            f'"{clean_title}" '
-            f'{kind_word}'
-        )
-        
-    logger.info(f"[POSTER] Google Images fallback started: {query}")
+        queries = [
+            f'"{clean_title}" {kind_word}',
+            f'"{clean_title}" poster',
+        ]
+
+    logger.info(
+        f"[POSTER] Google Images fallback started: "
+        f'"{clean_title}"'
+    )
 
     try:
         session = await get_session()
-        cands = []
-        if GOOGLE_API_KEY and GOOGLE_CSE_ID:
-            try:
-                cands = await _google_cse_images(session, query)
-            except Exception as e:
-                logger.warning(f"[POSTER] Google CSE API failed: {e}")
-        if not cands:
-            try:
-                cands = await _google_images_scrape(session, query)
-            except Exception as e:
-                logger.warning(f"[POSTER] Google Images failed: {e}")
-                return None
 
         scored = []
-        for c in cands:
-            s = _score_google_candidate(c, title_tokens, year)
-            if s is not None:
-                scored.append((s, c))
+        total_candidates = 0
+
+        for query in queries:
+
+            logger.info(
+                f"[POSTER] Google query: {query}"
+            )
+
+            cands = []
+
+            if GOOGLE_API_KEY and GOOGLE_CSE_ID:
+                try:
+                    cands = await _google_cse_images(
+                        session,
+                        query
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"[POSTER] Google CSE API failed: {e}"
+                    )
+
+            if not cands:
+                try:
+                    cands = await _google_images_scrape(
+                        session,
+                        query
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"[POSTER] Google Images failed: {e}"
+                    )
+                    cands = []
+
+            total_candidates += len(cands)
+
+            for c in cands:
+                s = _score_google_candidate(
+                    c,
+                    title_tokens,
+                    year
+                )
+
+                if s is not None:
+                    scored.append((s, c))
+
+            # Kisi query se valid candidates mil gaye
+            # to unnecessary extra queries mat chalao.
+            if scored:
+                break
+
+        scored.sort(
+            key=lambda x: x[0],
+            reverse=True
+        )
+
+        if not scored:
+            logger.info(
+                f"[POSTER] Google Images failed: "
+                f"no valid title match among "
+                f"{total_candidates} results for '{title}'"
+            )
+            return None
         scored.sort(key=lambda x: x[0], reverse=True)
 
         if not scored:
@@ -1474,6 +1541,51 @@ def _render_custom_poster_sync(title, year) -> BytesIO:
     )
 
     # ------------------------------------------------------------
+    # CINEMATIC BORDER
+    # ------------------------------------------------------------
+
+    border_color = (255, 255, 255, 75)
+
+    draw.rounded_rectangle(
+        (
+            24,
+            24,
+            W - 24,
+            H - 24
+        ),
+        radius=22,
+        outline=border_color,
+        width=2
+    )
+
+    # Small corner accents
+    accent = (255, 205, 80, 170)
+
+    draw.line(
+        (42, 110, 42, 155),
+        fill=accent,
+        width=4
+    )
+
+    draw.line(
+        (42, 110, 87, 110),
+        fill=accent,
+        width=4
+    )
+
+    draw.line(
+        (W - 42, H - 110, W - 42, H - 155),
+        fill=accent,
+        width=4
+    )
+
+    draw.line(
+        (W - 42, H - 110, W - 87, H - 110),
+        fill=accent,
+        width=4
+    )
+
+    # ------------------------------------------------------------
     # TITLE
     # ------------------------------------------------------------
 
@@ -1484,7 +1596,7 @@ def _render_custom_poster_sync(title, year) -> BytesIO:
     font = _cp_font(56)
     line_h = 66
 
-    for size in range(150, 48, -5):
+    for size in range(125, 48, -5):
         f = _cp_font(size)
         ls = _cp_wrap(
             draw,
@@ -1674,22 +1786,66 @@ def _render_custom_poster_sync(title, year) -> BytesIO:
         width=2
     )
 
-    # Branding
+    # Branding + Telegram icon
     brand_font = _cp_font(30)
 
-    bw = draw.textlength(
-        POSTER_BRAND,
+    brand_text = "Tokyo_Updates"
+
+    # Telegram-style icon
+    icon_size = 42
+    icon_x = 0
+    icon_y = H - 76
+
+    brand_w = draw.textlength(
+        brand_text,
         font=brand_font
     )
 
-    bx = (W - bw) / 2
+    total_brand_w = icon_size + 12 + brand_w
+
+    start_x = (W - total_brand_w) / 2
+
+    # Cyan circular icon
+    draw.ellipse(
+        (
+            start_x,
+            icon_y,
+            start_x + icon_size,
+            icon_y + icon_size
+        ),
+        fill=(40, 169, 224, 255)
+    )
+
+    # White Telegram paper-plane
+    ix = start_x
+    iy = icon_y
+
+    draw.polygon(
+        [
+            (ix + 8, iy + 21),
+            (ix + 34, iy + 8),
+            (ix + 25, iy + 34),
+            (ix + 20, iy + 25),
+            (ix + 8, iy + 21),
+        ],
+        fill=(255, 255, 255, 255)
+    )
+
+    draw.polygon(
+        [
+            (ix + 20, iy + 25),
+            (ix + 34, iy + 8),
+            (ix + 25, iy + 34),
+        ],
+        fill=(235, 235, 235, 255)
+    )
 
     draw.text(
         (
-            bx,
-            H - 70
+            start_x + icon_size + 12,
+            H - 72
         ),
-        POSTER_BRAND,
+        brand_text,
         font=brand_font,
         fill=(255, 255, 255)
     )
