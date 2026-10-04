@@ -7,7 +7,7 @@ from urllib.parse import quote_plus
 import logging
 from database.ia_filterdb import Media, Media2, MEDIA_DBS, delete_file_by_id, get_file_details, get_search_results, get_bad_files,normalize_for_search
 from html import escape as _html_escape
-from plugins.Dreamxfutures.button_style import reply_styled
+from plugins.Dreamxfutures.button_style import reply_styled, edit_styled, html_mention
 
 from database.config_db import mdb
 from pyrogram.errors import FloodWait, UserIsBlocked, MessageNotModified, PeerIdInvalid, ChatAdminRequired, UserNotParticipant
@@ -448,15 +448,21 @@ async def give_filter(client, message):
         _, _, total_results = await get_search_results(chat_id=message.chat.id, query=search.lower(), offset=0, filter=True)
         if total_results == 0:
             return
-        await message.reply_text(
-            f"<b>Hᴇʏ {message.from_user.mention},\n\n"
-            f"ʏᴏᴜʀ ʀᴇǫᴜᴇꜱᴛ ɪꜱ ᴀʟʀᴇᴀᴅʏ ᴀᴠᴀɪʟᴀʙʟᴇ ✅\n\n"
-            f"📂 ꜰɪʟᴇꜱ ꜰᴏᴜɴᴅ : {str(total_results)}\n"
-            f"🔍 ꜱᴇᴀʀᴄʜ :</b> <code>{search}</code>\n\n"
-            f"<b>‼️ ᴛʜɪs ɪs ᴀ <u>sᴜᴘᴘᴏʀᴛ ɢʀᴏᴜᴘ</u> sᴏ ᴛʜᴀᴛ ʏᴏᴜ ᴄᴀɴ'ᴛ ɢᴇᴛ ғɪʟᴇs ғʀᴏᴍ ʜᴇʀᴇ...\n\n"
-            f"📝 ꜱᴇᴀʀᴄʜ ʜᴇʀᴇ : 👇</b>",
-            reply_markup=InlineKeyboardMarkup(
-                [[InlineKeyboardButton("🔍 ᴊᴏɪɴ ᴀɴᴅ ꜱᴇᴀʀᴄʜ ʜᴇʀᴇ 🔎", url=GRP_LNK)]])
+        def _support_text(mention, s):
+            return (
+                f"<b>Hᴇʏ {mention},\n\n"
+                f"ʏᴏᴜʀ ʀᴇǫᴜᴇꜱᴛ ɪꜱ ᴀʟʀᴇᴀᴅʏ ᴀᴠᴀɪʟᴀʙʟᴇ ✅\n\n"
+                f"📂 ꜰɪʟᴇꜱ ꜰᴏᴜɴᴅ : {str(total_results)}\n"
+                f"🔍 ꜱᴇᴀʀᴄʜ :</b> <code>{s}</code>\n\n"
+                f"<b>‼️ ᴛʜɪs ɪs ᴀ <u>sᴜᴘᴘᴏʀᴛ ɢʀᴏᴜᴘ</u> sᴏ ᴛʜᴀᴛ ʏᴏᴜ ᴄᴀɴ'ᴛ ɢᴇᴛ ғɪʟᴇs ғʀᴏᴍ ʜᴇʀᴇ...\n\n"
+                f"📝 ꜱᴇᴀʀᴄʜ ʜᴇʀᴇ : 👇</b>"
+            )
+
+        await reply_styled(
+            client, message,
+            text=_support_text(html_mention(message.from_user), _html_escape(search)),
+            rows=[[{"text": "🔍 ᴊᴏɪɴ ᴀɴᴅ ꜱᴇᴀʀᴄʜ ʜᴇʀᴇ 🔎", "url": GRP_LNK, "style": "success"}]],   # hara
+            plain_text=_support_text(message.from_user.mention, search),
         )
 
 
@@ -479,15 +485,23 @@ async def pm_text(bot, message):
         if pm_search:
             await auto_filter(bot, message)
         else:
-            await message.reply_text(
-                text=(
+            def _pm_block_text(user):
+                return (
                     f"<b>🙋 ʜᴇʏ {user} 😍 ,\n\n"
                     "𝒀𝒐𝒖 𝒄𝒂𝒏 𝒔𝒆𝒂𝒓𝒄𝒉 𝒇𝒐𝒓 𝒎𝒐𝒗𝒊𝒆𝒔 𝒐𝒏𝒍𝒚 𝒐𝒏 𝒐𝒖𝒓 𝑴𝒐𝒗𝒊𝒆 𝑮𝒓𝒐𝒖𝒑. 𝒀𝒐𝒖 𝒂𝒓𝒆 𝒏𝒐𝒕 𝒂𝒍𝒍𝒐𝒘𝒆𝒅 𝒕𝒐 𝒔𝒆𝒂𝒓𝒄𝒉 𝒇𝒐𝒓 𝒎𝒐𝒗𝒊𝒆𝒔 𝒐𝒏 𝑫𝒊𝒓𝒆𝒄𝒕 𝑩𝒐𝒕. 𝑷𝒍𝒆𝒂𝒔𝒆 𝒋𝒐𝒊𝒏 𝒐𝒖𝒓 𝒎𝒐𝒗𝒊𝒆 𝒈𝒓𝒐𝒖𝒑 𝒃𝒚 𝒄𝒍𝒊𝒄𝒌𝒊𝒏𝒈 𝒐𝒏 𝒕𝒉𝒆  𝑹𝑬𝑸𝑼𝑬𝑺𝑻 𝑯𝑬𝑹𝑬 𝒃𝒖𝒕𝒕𝒐𝒏 𝒈𝒊𝒗𝒆𝒏 𝒃𝒆𝒍𝒐𝒘 𝒂𝒏𝒅 𝒔𝒆𝒂𝒓𝒄𝒉 𝒚𝒐𝒖𝒓 𝒇𝒂𝒗𝒐𝒓𝒊𝒕𝒆 𝒎𝒐𝒗𝒊𝒆 𝒕𝒉𝒆𝒓𝒆 👇\n\n"
                     "<blockquote>"
                     "आप केवल हमारे 𝑴𝒐𝒗𝒊𝒆 𝑮𝒓𝒐𝒖𝒑 पर ही 𝑴𝒐𝒗𝒊𝒆 𝑺𝒆𝒂𝒓𝒄𝒉 कर सकते हो । "
                     "आपको 𝑫𝒊𝒓𝒆𝒄𝒕 𝑩𝒐𝒕 पर 𝑴𝒐𝒗𝒊𝒆 𝑺𝒆𝒂𝒓𝒄𝒉 करने की 𝑷𝒆𝒓𝒎𝒊𝒔𝒔𝒊𝒐𝒏 नहीं है कृपया नीचे दिए गए 𝑹𝑬𝑸𝑼𝑬𝑺𝑻 𝑯𝑬𝑹𝑬 वाले 𝑩𝒖𝒕𝒕𝒐𝒏 पर क्लिक करके हमारे 𝑴𝒐𝒗𝒊𝒆 𝑮𝒓𝒐𝒖𝒑 को 𝑱𝒐𝒊𝒏 करें और वहां पर अपनी मनपसंद 𝑴𝒐𝒗𝒊𝒆 𝑺𝒆𝒂𝒓𝒄𝒉 सर्च करें ।"
                     "</blockquote></b>"
-                ), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📝 ʀᴇǫᴜᴇsᴛ ʜᴇʀᴇ ", url=GRP_LNK)]]))
+                )
+
+            await reply_styled(
+                bot, message,
+                text=_pm_block_text(_html_escape(user)),
+                rows=[[{"text": "📝 ʀᴇǫᴜᴇsᴛ ʜᴇʀᴇ ", "url": GRP_LNK, "style": "success"}]],   # hara
+                plain_text=_pm_block_text(user),
+                quote=False,
+            )
             await bot.send_message(chat_id=LOG_CHANNEL,
                                    text=(
                                        f"<b>#𝐏𝐌_𝐌𝐒𝐆\n\n"
@@ -742,23 +756,21 @@ async def advantage_spoll_choker(bot, query):
     if year:
         auto_fill_text += f" {year}"
     
-    btn = InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton(
-                "📝Sᴇɴᴅ Rᴇǫᴜᴇsᴛ Tᴏ Aᴅᴍɪɴ📝",
-            switch_inline_query_current_chat=auto_fill_text
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                "💬 Jᴏɪɴ Sᴜᴘᴘᴏʀᴛ Gʀᴏᴜᴘ 💬",
-                url=SUPPORT_CHAT
-            )
-        ]
-    ])
-    
-    # Edit message to show guide + buttons
-    k = await query.message.edit(script.MVE_NT_FND, reply_markup=btn)
+    rows = [
+        [{
+            "text": "📝Sᴇɴᴅ Rᴇǫᴜᴇsᴛ Tᴏ Aᴅᴍɪɴ📝",
+            "switch_inline_query_current_chat": auto_fill_text,
+            "style": "success",      # hara
+        }],
+        [{
+            "text": "💬 Jᴏɪɴ Sᴜᴘᴘᴏʀᴛ Gʀᴏᴜᴘ 💬",
+            "url": SUPPORT_CHAT,
+            "style": "primary",      # neela
+        }],
+    ]
+
+    # Edit message to show guide + buttons (coloured)
+    k = await edit_styled(bot, query.message, script.MVE_NT_FND, rows)
     
     # Auto-delete after 30 sec
     await asyncio.sleep(30)
