@@ -10,6 +10,7 @@ Collections (same DB as the rest of the bot):
   movie_requests  – the requests
   request_meta    – small key/value docs (e.g. dashboard message id)
 """
+import os
 import logging
 from datetime import datetime, timedelta
 
@@ -22,6 +23,14 @@ from database.users_chats_db import db as _bot_db
 from request_helpers import OPEN_STATUSES, same_request
 
 logger = logging.getLogger(__name__)
+
+# Closed (uploaded / rejected) requests are auto-deleted by MongoDB after this many days.
+# Pending / processing / cam_only requests are NEVER deleted. 0 = keep forever.
+try:
+    CLEANUP_DAYS = int(os.environ.get("REQUEST_CLEANUP_DAYS", 30))
+except ValueError:
+    CLEANUP_DAYS = 30
+TTL_INDEX_NAME = "ttl_closed_requests"
 
 _MATCH_FIELDS = {"title_key": 1, "season": 1, "year": 1, "langs": 1, "status": 1, "key": 1}
 
@@ -64,6 +73,34 @@ class RequestDB:
             await self.col.create_index([("status", ASCENDING), ("closed_at", DESCENDING)])
         except Exception as e:
             logger.warning(f"[REQ] index creation failed: {e}")
+        await self._setup_ttl()
+
+    async def _setup_ttl(self):
+        """Auto-delete closed requests after CLEANUP_DAYS (MongoDB TTL index on `closed_at`)."""
+        try:
+            if CLEANUP_DAYS <= 0:
+                try:
+                    await self.col.drop_index(TTL_INDEX_NAME)      # feature turned off
+                except Exception:
+                    pass
+                return
+            secs = CLEANUP_DAYS * 86400
+            try:
+                await self.col.create_index(
+                    [("closed_at", ASCENDING)],
+                    expireAfterSeconds=secs,
+                    partialFilterExpression={"open": False},       # open requests are never touched
+                    name=TTL_INDEX_NAME,
+                )
+            except Exception:
+                # index exists with a different number of days -> update it in place
+                await self.col.database.command(
+                    "collMod", self.col.name,
+                    index={"name": TTL_INDEX_NAME, "expireAfterSeconds": secs},
+                )
+            logger.info(f"[REQ] closed requests auto-delete after {CLEANUP_DAYS} days")
+        except Exception as e:
+            logger.warning(f"[REQ] auto-cleanup (TTL) not enabled: {e}")
 
     # ───────────── reads ───────────── #
 
@@ -190,14 +227,23 @@ class RequestDB:
 
     # ───────────── dashboard queries ───────────── #
 
+    @staticmethod
+    def _tab_filter(tab):
+        if tab == "p":
+            return {"open": True}                                   # pending
+        if tab == "u":
+            return {"open": False, "status": "uploaded"}            # uploaded
+        return {"open": False, "status": {"$ne": "uploaded"}}       # rejected / other closed
+
     async def count_tab(self, tab):
-        return await self.col.count_documents({"open": tab == "p"})
+        return await self.col.count_documents(self._tab_filter(tab))
 
     async def list_tab(self, tab, skip, limit):
+        cursor = self.col.find(self._tab_filter(tab))
         if tab == "p":
-            cursor = self.col.find({"open": True}).sort([("user_count", -1), ("created_at", 1)])
+            cursor = cursor.sort([("user_count", -1), ("created_at", 1)])
         else:
-            cursor = self.col.find({"open": False}).sort("closed_at", -1)
+            cursor = cursor.sort("closed_at", -1)
         return await cursor.skip(skip).limit(limit).to_list(length=limit)
 
     async def stats(self):
