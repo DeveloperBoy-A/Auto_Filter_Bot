@@ -141,6 +141,45 @@ def user_markup(req):
 
 
 # ═════════════════════════════ safe telegram helpers ═════════════════════════════ #
+async def _send_request_reply(bot, message, text, markup=None):
+    """Send request response as a reply in the request group."""
+    try:
+        return await bot.send_message(
+            chat_id=message.chat.id,
+            text=text,
+            reply_markup=markup,
+            parse_mode=HTML,
+            disable_web_page_preview=True,
+            reply_to_message_id=message.id,
+        )
+
+    except FloodWait as e:
+        await asyncio.sleep(e.value + 1)
+
+        return await bot.send_message(
+            chat_id=message.chat.id,
+            text=text,
+            reply_markup=markup,
+            parse_mode=HTML,
+            disable_web_page_preview=True,
+            reply_to_message_id=message.id,
+        )
+
+    except Exception as e:
+        logger.warning(f"[REQ] request reply failed: {e}")
+
+        # Fallback to Pyrogram's normal reply
+        try:
+            return await message.reply_text(
+                text,
+                reply_markup=markup,
+                parse_mode=HTML,
+                disable_web_page_preview=True,
+            )
+        except Exception:
+            logger.exception("[REQ] request reply fallback failed")
+            return None
+
 
 async def _safe_edit_post(bot, req):
     """Edit the request-channel post to match the DB doc."""
@@ -378,15 +417,22 @@ async def _join_or_create(bot, parsed, entry):
 async def request_command(bot, message):
     if REQST_CHANNEL is None or not message.from_user:
         return
+
     user = message.from_user
+
     if user.is_bot or user.id in temp.BANNED_USERS:
         return
 
     await rq.ensure_indexes()
 
     parsed, source_link = _content_of(message)
+
     if not parsed:
-        err = await message.reply_text(USAGE, parse_mode=HTML)
+        err = await _send_request_reply(
+            bot,
+            message,
+            USAGE
+        )
         _spawn(_delete_later(err, message, delay=REPLY_DELETE_AFTER))
         return
 
@@ -401,32 +447,72 @@ async def request_command(bot, message):
 
     try:
         state, doc = await _join_or_create(bot, parsed, entry)
+
     except Exception as e:
         logger.exception("[REQ] register failed")
-        err = await message.reply_text(f"<b>ᴇʀʀᴏʀ:</b> <code>{esc(e)}</code>", parse_mode=HTML)
+
+        err = await _send_request_reply(
+            bot,
+            message,
+            f"<b>ᴇʀʀᴏʀ:</b> <code>{esc(e)}</code>"
+        )
+
         _spawn(_delete_later(err, delay=30))
         return
 
     name = esc(display_name(parsed))
-    bot_btn = Btn("🤖 Start Bot (DM alerts)", url=f"https://t.me/{temp.U_NAME}") if temp.U_NAME else None
 
-    # ───── reply text per outcome ─────
+    bot_btn = (
+        Btn(
+            "🤖 Start Bot (DM alerts)",
+            url=f"https://t.me/{temp.U_NAME}"
+        )
+        if temp.U_NAME
+        else None
+    )
+
+    # ───────────── request result ───────────── #
+
     if state == "new":
-        temp.RQ_MATCH_CACHE = (0.0, [])                     # new open request -> upload matcher must see it
-        # create the post in the request channel
+
+        temp.RQ_MATCH_CACHE = (0.0, [])
+
+        # Create request post in request channel
         try:
             post = await bot.send_message(
-                REQST_CHANNEL, render_post(doc), reply_markup=post_markup(doc),
-                parse_mode=HTML, disable_web_page_preview=True,
+                REQST_CHANNEL,
+                render_post(doc),
+                reply_markup=post_markup(doc),
+                parse_mode=HTML,
+                disable_web_page_preview=True,
             )
-            await rq.set_post(doc["_id"], post.id, _safe_link(post))
-            doc["post_id"], doc["post_link"] = post.id, _safe_link(post)
+
+            await rq.set_post(
+                doc["_id"],
+                post.id,
+                _safe_link(post)
+            )
+
+            doc["post_id"] = post.id
+            doc["post_link"] = _safe_link(post)
+
         except Exception as e:
-            logger.error(f"[REQ] cannot post in request channel: {e}")
+
+            logger.error(
+                f"[REQ] cannot post in request channel: {e}"
+            )
+
             await rq.delete(doc["_id"])
-            err = await message.reply_text(f"<b>ᴇʀʀᴏʀ:</b> <code>{esc(e)}</code>", parse_mode=HTML)
+
+            err = await _send_request_reply(
+                bot,
+                message,
+                f"<b>ᴇʀʀᴏʀ:</b> <code>{esc(e)}</code>"
+            )
+
             _spawn(_delete_later(err, delay=30))
             return
+
         text = (
             f"{top('RECEIVED', '✅')}\n"
             f"┃ 🎬 <b>{name}</b>\n"
@@ -436,8 +522,11 @@ async def request_command(bot, message):
             "🔔 Upload hote hi aapko <b>auto notification</b> mil jayegi.\n"
             "💡 Bot ko PM me start kar lo taaki seedha DM aaye."
         )
+
     elif state == "joined":
+
         n = doc.get("user_count", 1)
+
         text = (
             f"{top('ADDED', '✅')}\n"
             f"┃ 🎬 <b>{name}</b>\n"
@@ -446,55 +535,116 @@ async def request_command(bot, message):
             "📌 Ye request pehle se maangi ja rahi thi.\n"
             "🔔 Upload hote hi aapko bhi notification milegi."
         )
-        schedule_post_refresh(bot, doc["_id"])
+
+        schedule_post_refresh(
+            bot,
+            doc["_id"]
+        )
+
     elif state == "duplicate":
-        icon, label = status_meta(doc.get("status"))
+
+        icon, label = status_meta(
+            doc.get("status")
+        )
+
         text = (
             f"{top('ALREADY REQUESTED', '⚠️')}\n"
             f"┃ 🎬 <b>{esc(display_name(doc))}</b>\n"
             f"┃ 📊 {sc('status')} : {icon} {label}\n"
-            f"┃ 👥 {sc('users')}  : <b>{doc.get('user_count', 1)}</b>\n"
+            f"┃ 👥 {sc('users')}  : "
+            f"<b>{doc.get('user_count', 1)}</b>\n"
             f"{BOX_END}\n\n"
-            "✅ Dobara bhejne ki zaroorat nahi — duplicate count nahi hoti."
+            "✅ Dobara bhejne ki zaroorat nahi — "
+            "duplicate count nahi hoti."
         )
+
     elif state == "uploaded":
+
         text = (
             f"{top('ALREADY UPLOADED', '✅')}\n"
             f"┃ 🎬 <b>{esc(display_name(doc))}</b>\n"
             f"{BOX_END}\n\n"
-            "🔍 Ye haal hi me upload ho chuki hai — group me search karke download kar lo."
+            "🔍 Ye haal hi me upload ho chuki hai — "
+            "group me search karke download kar lo."
         )
+
     elif state == "limit":
+
         text = (
             f"{top('REQUEST LIMIT', '🚫')}\n"
-            f"┃ 📌 {sc('pending')} : <b>{MAX_OPEN_PER_USER}</b> / {MAX_OPEN_PER_USER}\n"
+            f"┃ 📌 {sc('pending')} : "
+            f"<b>{MAX_OPEN_PER_USER}</b> / {MAX_OPEN_PER_USER}\n"
             f"{BOX_END}\n\n"
-            "⏳ Kuch requests upload hone ke baad nayi request karo."
+            "⏳ Kuch requests upload hone ke baad "
+            "nayi request karo."
         )
+
     else:
-        text = "<b>⚠️ Request abhi process nahi ho payi, thodi der baad try karo.</b>"
+
+        text = (
+            "<b>⚠️ Request abhi process nahi ho payi, "
+            "thodi der baad try karo.</b>"
+        )
+
+    # ───────────── buttons ───────────── #
 
     rows = []
+
     r1 = []
+
     if MOVIE_UPDATE_CHANNEL_LINK:
-        r1.append(Btn("ᴍᴏᴠɪᴇ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ📢", url=MOVIE_UPDATE_CHANNEL_LINK))
+        r1.append(
+            Btn(
+                "ᴍᴏᴠɪᴇ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ📢",
+                url=MOVIE_UPDATE_CHANNEL_LINK
+            )
+        )
+
     if doc and doc.get("post_link"):
-        r1.append(Btn("ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ👁‍🗨", url=doc["post_link"]))
+        r1.append(
+            Btn(
+                "ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ👁‍🗨",
+                url=doc["post_link"]
+            )
+        )
+
     if r1:
         rows.append(r1)
+
     if state in ("new", "joined") and bot_btn:
         rows.append([bot_btn])
-    if state == "uploaded" and GRP_LNK:
-        rows.append([Btn("🔍 Search", url=GRP_LNK)])
 
-    reply = await message.reply_text(
-        text, reply_markup=Markup(rows) if rows else None, parse_mode=HTML, disable_web_page_preview=True
+    if state == "uploaded" and GRP_LNK:
+        rows.append([
+            Btn(
+                "🔍 Search",
+                url=GRP_LNK
+            )
+        ])
+
+    # ───────────── THIS IS THE IMPORTANT CHANGE ───────────── #
+
+    reply = await _send_request_reply(
+        bot,
+        message,
+        text,
+        markup=Markup(rows) if rows else None
     )
+
+    # ───────────── dashboard ───────────── #
+
     if state in ("new", "joined"):
         schedule_dashboard_refresh(bot)
-    _spawn(_delete_later(reply, message, delay=REPLY_DELETE_AFTER))
 
+    # ───────────── auto delete ───────────── #
 
+    _spawn(
+        _delete_later(
+            reply,
+            message,
+            delay=REPLY_DELETE_AFTER
+        )
+    )
 # ═════════════════════════════ admin callbacks ═════════════════════════════ #
 
 def _is_admin(query):
