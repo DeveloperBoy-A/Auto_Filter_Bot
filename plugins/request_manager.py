@@ -37,7 +37,7 @@ from database.requests_db import rq
 from request_helpers import (
     ADMIN_ACTIONS, status_meta, display_name, esc, user_mention,
     parse_request, parse_file_info, request_matches_file,
-    render_post, render_dashboard, user_message, sc, bs, box_top, BOX_END, TABS,
+    render_post, render_dashboard, user_message, sc, bs, top, BOX_END, TABS,
 )
 
 logger = logging.getLogger(__name__)
@@ -300,9 +300,9 @@ async def notify_on_upload(bot, file_name, caption=""):
 # ═════════════════════════════ /request command ═════════════════════════════ #
 
 USAGE = (
-    f"┏━━ ❌ {bs('REQUEST FORMAT')} ━━━━━━━━\n"
+    f"{top('REQUEST FORMAT', '❌')}\n"
     "┃ अपनी मूवी या सीरीज का नाम तो लिखिये!\n"
-    "┗━━━━━━━━━━━━━━━━━━━━\n\n"
+    f"{BOX_END}\n\n"
     f"📝 <b>{sc('format')}</b>\n"
     "<code>/request [Name] [Year] [Lang]</code>\n\n"
     f"🎬 <b>{sc('movie example')}</b>\n"
@@ -428,7 +428,7 @@ async def request_command(bot, message):
             _spawn(_delete_later(err, delay=30))
             return
         text = (
-            f"┏━━ ✅ {bs('REQUEST RECEIVED')} ━━━━\n"
+            f"{top('RECEIVED', '✅')}\n"
             f"┃ 🎬 <b>{name}</b>\n"
             f"┃ 📊 {sc('status')} : ⏳ Pending\n"
             f"┃ 👥 {sc('users')}  : <b>1</b>\n"
@@ -439,7 +439,7 @@ async def request_command(bot, message):
     elif state == "joined":
         n = doc.get("user_count", 1)
         text = (
-            f"┏━━ ✅ {bs('REQUEST ADDED')} ━━━━━━\n"
+            f"{top('ADDED', '✅')}\n"
             f"┃ 🎬 <b>{name}</b>\n"
             f"┃ 👥 {sc('waiting')} : <b>{n}</b> users\n"
             f"{BOX_END}\n\n"
@@ -450,7 +450,7 @@ async def request_command(bot, message):
     elif state == "duplicate":
         icon, label = status_meta(doc.get("status"))
         text = (
-            f"┏━━ ⚠️ {bs('ALREADY REQUESTED')} ━━━\n"
+            f"{top('ALREADY REQUESTED', '⚠️')}\n"
             f"┃ 🎬 <b>{esc(display_name(doc))}</b>\n"
             f"┃ 📊 {sc('status')} : {icon} {label}\n"
             f"┃ 👥 {sc('users')}  : <b>{doc.get('user_count', 1)}</b>\n"
@@ -459,14 +459,14 @@ async def request_command(bot, message):
         )
     elif state == "uploaded":
         text = (
-            f"┏━━ ✅ {bs('ALREADY UPLOADED')} ━━━\n"
+            f"{top('ALREADY UPLOADED', '✅')}\n"
             f"┃ 🎬 <b>{esc(display_name(doc))}</b>\n"
             f"{BOX_END}\n\n"
             "🔍 Ye haal hi me upload ho chuki hai — group me search karke download kar lo."
         )
     elif state == "limit":
         text = (
-            f"┏━━ 🚫 {bs('REQUEST LIMIT')} ━━━━━\n"
+            f"{top('REQUEST LIMIT', '🚫')}\n"
             f"┃ 📌 {sc('pending')} : <b>{MAX_OPEN_PER_USER}</b> / {MAX_OPEN_PER_USER}\n"
             f"{BOX_END}\n\n"
             "⏳ Kuch requests upload hone ke baad nayi request karo."
