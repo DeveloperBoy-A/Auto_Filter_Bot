@@ -748,7 +748,7 @@ async def save_template(client, message):
 request_filter = filters.regex(r"(?i)(/request|#request)")
 
 @Client.on_message(request_filter & filters.group)
-async def requests(bot, message):
+async def old_requests(bot, message):
     # Agar Request Channel set nahi hai toh return ho jaye
     if REQST_CHANNEL is None:
         return
