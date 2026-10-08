@@ -7,6 +7,7 @@ from collections import defaultdict
 from plugins.Dreamxfutures.Imdbposter import get_movie_detailsx, fetch_image, get_movie_details
 from database.users_chats_db import db
 from plugins.quality_manager import extract_quality_info, is_high_quality, run_quality_cleanup_background
+from plugins.request_manager import notify_on_upload
 
 from pyrogram import Client, filters, enums
 from info import CHANNELS, MOVIE_UPDATE_CHANNEL, LINK_PREVIEW, ABOVE_PREVIEW, BAD_WORDS, ADMINS, LANDSCAPE_POSTER, TMDB_POSTER, MULTIPLE_DB
@@ -480,6 +481,12 @@ async def media_handler(bot, message):
 
     except Exception as e:
         logger.error(f"[QUALITY] Error in quality management: {e}", exc_info=True)
+
+    # === Auto Request Notification ===
+    try:
+        asyncio.create_task(notify_on_upload(bot, real_file_name, media.caption))
+    except Exception:
+        logger.exception("[REQ] auto notify hook failed")
 
     # === Update Processing Start ===
     try:
