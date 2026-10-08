@@ -11,6 +11,7 @@ so everything here is easy to unit-test).
 - render_dashboard()     : text of the "pending requests" page
 - user_message()         : DM text sent to the requesters
 """
+import os
 import re
 import html
 import difflib
@@ -47,20 +48,30 @@ def bs(text) -> str:
     return "".join(out)
 
 
-W = "━" * 20
+# Border width (number of ━). Phone screens are narrow: if a line still wraps, lower this
+# (env REQUEST_BOX_WIDTH), e.g. 10.
+try:
+    BAR_LEN = max(6, int(os.environ.get("REQUEST_BOX_WIDTH", 12)))
+except ValueError:
+    BAR_LEN = 12
+BAR = "━" * BAR_LEN
 
 
-def box_top(title="", icon=""):
-    head = f"{icon} {bs(title)}".strip() if title else ""
-    return f"┏━━ {head} ━━━━━━━━" if head else f"┏{W}"
+def top(title="", icon=""):
+    """Top border. With title:  ┏━ 📊 𝗦𝗨𝗠𝗠𝗔𝗥𝗬 ━   (short, never wraps)"""
+    if not title:
+        return "┏" + BAR
+    head = f"{icon} {bs(title)}" if icon else bs(title)
+    return f"┏━ {head} ━"
 
 
-BOX_MID = "┣" + W
-BOX_END = "┗" + W
+box_top = top                      # old name (kept for imports)
+BOX_MID = "┣" + BAR
+BOX_END = "┗" + BAR
 
 
 def boxed(title, icon, lines):
-    """┏━━ 🎬 𝗧𝗜𝗧𝗟𝗘 ━━━   ┃ line   ┗━━━"""
+    """box with title + ┃ lines + bottom"""
     body = "\n".join(f"┃ {l}" if l else "┃" for l in lines)
     return f"{box_top(title, icon)}\n{body}\n{BOX_END}"
 
@@ -429,7 +440,7 @@ def render_post(req) -> str:
     out += [f"┃ {l}" for l in lines]
 
     if users:
-        shown = users if len(users) <= 5 else users[:4]
+        shown = users if len(users) <= 3 else users[:3]
         names = ", ".join(user_mention(u) for u in shown)
         if len(users) > len(shown):
             names += f" +{len(users) - len(shown)} more"
@@ -446,15 +457,16 @@ def render_post(req) -> str:
 
     mf = req.get("matched_file")
     if mf:
-        q = f" • {esc(mf.get('quality'))}" if mf.get("quality") else ""
-        out.append(f"┃ 📁 {sc('file')} : <code>{esc((mf.get('name') or '')[:55])}</code>{q}")
+        out.append(f"┃ 📁 {sc('file')} : <code>{esc((mf.get('name') or '')[:28])}</code>")
+        if mf.get("quality"):
+            out.append(f"┃ 📀 {sc('quality')} : {esc(mf['quality'])}")
 
     nt = req.get("notified")
     if nt:
         total = nt.get("total", n)
         sent = nt.get("dm", 0) + nt.get("group", 0)
         out.append(f"┃ 📨 {sc('notified')} : <b>{sent}/{total} sent</b>")
-        out.append(f"┃      💬 DM {nt.get('dm', 0)}  •  👥 Group {nt.get('group', 0)}  •  ❌ Failed {nt.get('failed', 0)}")
+        out.append(f"┃ 💬 DM {nt.get('dm', 0)} • 👥 Grp {nt.get('group', 0)} • ❌ {nt.get('failed', 0)}")
 
     if is_open:
         out.append(f"┃ 🕒 {sc('requested')} : {ago(req.get('created_at'))}")
@@ -469,14 +481,14 @@ def render_post(req) -> str:
 
 # tab code -> (icon, heading, empty text)
 TABS = {
-    "p": ("⏳", "PENDING REQUESTS",  "Koi pending request nahi hai 🎉"),
-    "u": ("✅", "UPLOADED REQUESTS", "Abhi tak koi request upload nahi hui."),
-    "r": ("❌", "REJECTED REQUESTS", "Koi rejected request nahi hai."),
+    "p": ("⏳", "PENDING LIST",  "Koi pending request nahi hai 🎉"),
+    "u": ("✅", "UPLOADED LIST", "Abhi tak koi request upload nahi hui."),
+    "r": ("❌", "REJECTED LIST", "Koi rejected request nahi hai."),
 }
 MAX_TEXT = 3950          # Telegram hard limit is 4096
 
 
-def _short(text, n=38) -> str:
+def _short(text, n=28) -> str:
     text = str(text)
     return text if len(text) <= n else text[: n - 1] + "…"
 
@@ -493,7 +505,7 @@ def _item_box(tab, number, r) -> str:
     if tab == "p":
         info = f"👥 {users_txt}"
         if r.get("langs"):
-            info += f"  •  🌐 {esc(', '.join(r['langs']))}"
+            info += f" • 🌐 {esc(', '.join(r['langs']))}"
         lines.append(info)
         stat = "" if r.get("status") == "pending" else f"{icon} {label}  •  "
         lines.append(f"{stat}🕒 {ago(r.get('created_at'))}")
@@ -502,15 +514,18 @@ def _item_box(tab, number, r) -> str:
         sent = nt.get("dm", 0) + nt.get("group", 0)
         lines.append(f"📨 <b>{sent}/{nt.get('total', n)}</b> users notified")
         if nt:
-            lines.append(f"💬 DM {nt.get('dm', 0)}  •  👥 Group {nt.get('group', 0)}  •  ❌ Failed {nt.get('failed', 0)}")
+            lines.append(f"💬 {nt.get('dm', 0)} • 👥 {nt.get('group', 0)} • ❌ {nt.get('failed', 0)}")
         q = (r.get("matched_file") or {}).get("quality")
-        lines.append((f"📀 {esc(q)}  •  " if q else "") + f"🕒 {ago(r.get('closed_at'))}")
+        if q:
+            lines.append(f"📀 {esc(q)}")
+        lines.append(f"🕒 {ago(r.get('closed_at'))}")
     else:
         lines.append(f"{icon} {label}")
-        lines.append(f"👥 {users_txt}  •  🕒 {ago(r.get('closed_at'))}")
+        lines.append(f"👥 {users_txt}")
+        lines.append(f"🕒 {ago(r.get('closed_at'))}")
 
     body = "\n".join(f"┃ {l}" for l in lines)
-    return f"┏━━ {bs(str(number))} ━━━━━━━━━━\n{body}\n{BOX_END}"
+    return f"{top(str(number))}\n{body}\n{BOX_END}"
 
 
 def render_dashboard(tab, page, pages, items, stats, now_text, skip=0) -> str:
@@ -523,21 +538,21 @@ def render_dashboard(tab, page, pages, items, stats, now_text, skip=0) -> str:
     t_icon, t_head, t_empty = TABS[tab]
 
     header = "\n".join([
-        "┏" + "━" * 24,
+        top(),
         f"┃ 📋 {bs('REQUEST PAGE')}",
         f"┃ {sc('this is the request page')}",
-        f"┃ {sc('all user requests are tracked here')}",
-        "┗" + "━" * 24,
+        f"┃ {sc('all user requests here')}",
+        BOX_END,
     ])
     summary = "\n".join([
-        f"┏━━ 📊 {bs('SUMMARY')} ━━━━━━━━",
+        top("SUMMARY", "📊"),
         f"┃ ⏳ {sc('pending')}   : <b>{stats.get('pending', 0)}</b>",
         f"┃ ✅ {sc('uploaded')}  : <b>{stats.get('uploaded', 0)}</b>",
         f"┃ ❌ {sc('rejected')}  : <b>{stats.get('rejected', 0)}</b>",
         f"┃ 📨 {sc('notified')}  : <b>{stats.get('notified', 0)}</b> users",
         BOX_END,
     ])
-    section = f"{t_icon} {bs(t_head)}   <i>({page}/{pages})</i>"
+    section = f"{t_icon} {bs(t_head)}  <i>({page}/{pages})</i>"
     footer = f"🕒 <i>{sc('updated')}: {now_text}</i>"
 
     boxes = [_item_box(tab, skip + i, r) for i, r in enumerate(items, start=1)]
@@ -567,22 +582,22 @@ def user_message(status, mention, title, n_users=1, finfo=None) -> str:
     hello = f"👋 {sc('hey')} {mention},"
 
     def card(head, icon):
-        return f"┏━━ {icon} {bs(head)} ━━━━━━━━\n┃ 🎬 <b>{t}</b>\n{BOX_END}"
+        return f"{top(head, icon)}\n┃ 🎬 <b>{t}</b>\n{BOX_END}"
 
     if status == "uploaded":
         extra = []
         if finfo:
             if finfo.get("quality"):
-                extra.append(f"┃ 📀 {sc('quality')}  : <b>{esc(finfo['quality'])}</b>")
+                extra.append(f"┃ 📀 <b>{esc(finfo['quality'])}</b>")
             if finfo.get("langs"):
-                extra.append(f"┃ 🌐 {sc('language')} : <b>{esc(', '.join(sorted(finfo['langs'])))}</b>")
-        extra.append(f"┃ 👥 {sc('requested by')} : <b>{n_users}</b> {'users' if n_users != 1 else 'user'}")
-        box = f"┏━━ 🎉 {bs('REQUEST UPLOADED')} ━━━━\n┃ 🎬 <b>{t}</b>\n" + "\n".join(extra) + f"\n{BOX_END}"
+                extra.append(f"┃ 🌐 <b>{esc(', '.join(sorted(finfo['langs'])))}</b>")
+        extra.append(f"┃ 👥 {sc('users')} : <b>{n_users}</b>")
+        box = f"{top('UPLOADED', '🎉')}\n┃ 🎬 <b>{t}</b>\n" + "\n".join(extra) + f"\n{BOX_END}"
         return (
             f"{box}\n\n{hello}\n"
             f"✅ Aapki request <b>upload ho gayi</b> hai!\n"
             f"🔍 Group me search karke download kar lo.\n"
-            f"📨 Is request ke <b>sabhi users</b> ko notification bhej di gayi hai."
+            f"📨 Sabhi users ko notification bhej di gayi."
         )
     if status == "cam_only":
         return (f"{card('CAM / LOW QUALITY', '🎥')}\n\n{hello}\n"
