@@ -37,7 +37,7 @@ from database.requests_db import rq
 from request_helpers import (
     ADMIN_ACTIONS, status_meta, display_name, esc, user_mention,
     parse_request, parse_file_info, request_matches_file,
-    render_post, render_dashboard, user_message,
+    render_post, render_dashboard, user_message, sc, bs, box_top, BOX_END, TABS,
 )
 
 logger = logging.getLogger(__name__)
@@ -300,16 +300,16 @@ async def notify_on_upload(bot, file_name, caption=""):
 # ═════════════════════════════ /request command ═════════════════════════════ #
 
 USAGE = (
-    "<b>❌ अपनी मूवी या सीरीज का नाम तो लिखिये!</b>\n"
-    "<code>━━━━━━━━━━━━━━━━━━━━━</code>\n"
-    "<b>📝 सही तरीका (Format):</b>\n"
+    f"┏━━ ❌ {bs('REQUEST FORMAT')} ━━━━━━━━\n"
+    "┃ अपनी मूवी या सीरीज का नाम तो लिखिये!\n"
+    "┗━━━━━━━━━━━━━━━━━━━━\n\n"
+    f"📝 <b>{sc('format')}</b>\n"
     "<code>/request [Name] [Year] [Lang]</code>\n\n"
-    "<b>🎬 मूवी का उदाहरण (Movie Example):</b>\n"
-    "<blockquote><code>/request Stree 2 2024 Hindi</code></blockquote>\n\n"
-    "<b>📺 सीरीज का उदाहरण (Series Example):</b>\n"
+    f"🎬 <b>{sc('movie example')}</b>\n"
+    "<blockquote><code>/request Stree 2 2024 Hindi</code></blockquote>\n"
+    f"📺 <b>{sc('series example')}</b>\n"
     "<blockquote><code>/request Mirzapur S03 Hindi</code></blockquote>\n"
-    "<code>━━━━━━━━━━━━━━━━━━━━━</code>\n"
-    "<b>✨ Tip:</b> <i>Msg पर Reply करके भी Request कर सकते हैं।</i>"
+    "✨ <i>Tip: Msg par Reply karke bhi request kar sakte ho.</i>"
 )
 
 request_filter = filters.regex(r"(?i)(?<!\w)[/#]request(?:@\w+)?(?!\w)")
@@ -428,41 +428,48 @@ async def request_command(bot, message):
             _spawn(_delete_later(err, delay=30))
             return
         text = (
-            "<b>✅ ʀᴇǫᴜᴇꜱᴛ ʀᴇᴄᴇɪᴠᴇᴅ!</b>\n\n"
-            f"🎬 <b>{name}</b>\n"
-            "📊 Status: ⏳ Pending\n\n"
+            f"┏━━ ✅ {bs('REQUEST RECEIVED')} ━━━━\n"
+            f"┃ 🎬 <b>{name}</b>\n"
+            f"┃ 📊 {sc('status')} : ⏳ Pending\n"
+            f"┃ 👥 {sc('users')}  : <b>1</b>\n"
+            f"{BOX_END}\n\n"
             "🔔 Upload hote hi aapko <b>auto notification</b> mil jayegi.\n"
             "💡 Bot ko PM me start kar lo taaki seedha DM aaye."
         )
     elif state == "joined":
         n = doc.get("user_count", 1)
         text = (
-            "<b>✅ ʀᴇǫᴜᴇꜱᴛ ᴀᴅᴅᴇᴅ!</b>\n\n"
-            f"🎬 <b>{name}</b>\n"
-            f"👥 Ye request pehle se maangi ja rahi thi — ab <b>{n}</b> users wait kar rahe hain.\n"
+            f"┏━━ ✅ {bs('REQUEST ADDED')} ━━━━━━\n"
+            f"┃ 🎬 <b>{name}</b>\n"
+            f"┃ 👥 {sc('waiting')} : <b>{n}</b> users\n"
+            f"{BOX_END}\n\n"
+            "📌 Ye request pehle se maangi ja rahi thi.\n"
             "🔔 Upload hote hi aapko bhi notification milegi."
         )
         schedule_post_refresh(bot, doc["_id"])
     elif state == "duplicate":
         icon, label = status_meta(doc.get("status"))
         text = (
-            "<b>⚠️ ʀᴇǫᴜᴇꜱᴛ ᴘᴇʜʟᴇ ʜɪ ʜᴏ ᴄʜᴜᴋɪ ʜᴀɪ!</b>\n\n"
-            f"🎬 <b>{esc(display_name(doc))}</b>\n"
-            f"📊 Status: {icon} {label}\n"
-            f"👥 Total requesters: <b>{doc.get('user_count', 1)}</b>\n\n"
+            f"┏━━ ⚠️ {bs('ALREADY REQUESTED')} ━━━\n"
+            f"┃ 🎬 <b>{esc(display_name(doc))}</b>\n"
+            f"┃ 📊 {sc('status')} : {icon} {label}\n"
+            f"┃ 👥 {sc('users')}  : <b>{doc.get('user_count', 1)}</b>\n"
+            f"{BOX_END}\n\n"
             "✅ Dobara bhejne ki zaroorat nahi — duplicate count nahi hoti."
         )
     elif state == "uploaded":
         text = (
-            "<b>✅ ᴀʟʀᴇᴀᴅʏ ᴜᴘʟᴏᴀᴅᴇᴅ!</b>\n\n"
-            f"🎬 <b>{esc(display_name(doc))}</b> haal hi me upload ho chuki hai.\n"
-            "🔍 Group me search karke download kar lo."
+            f"┏━━ ✅ {bs('ALREADY UPLOADED')} ━━━\n"
+            f"┃ 🎬 <b>{esc(display_name(doc))}</b>\n"
+            f"{BOX_END}\n\n"
+            "🔍 Ye haal hi me upload ho chuki hai — group me search karke download kar lo."
         )
     elif state == "limit":
         text = (
-            "<b>🚫 ʀᴇǫᴜᴇꜱᴛ ʟɪᴍɪᴛ!</b>\n\n"
-            f"Aapki <b>{MAX_OPEN_PER_USER}</b> requests abhi pending hain.\n"
-            "⏳ Kuch upload hone ke baad nayi request karo."
+            f"┏━━ 🚫 {bs('REQUEST LIMIT')} ━━━━━\n"
+            f"┃ 📌 {sc('pending')} : <b>{MAX_OPEN_PER_USER}</b> / {MAX_OPEN_PER_USER}\n"
+            f"{BOX_END}\n\n"
+            "⏳ Kuch requests upload hone ke baad nayi request karo."
         )
     else:
         text = "<b>⚠️ Request abhi process nahi ho payi, thodi der baad try karo.</b>"
@@ -604,16 +611,17 @@ async def rq_callbacks(bot, query):
 # ═════════════════════════════ dashboard ═════════════════════════════ #
 
 def _dash_markup(tab, page, pages, stats):
-    p_lbl = f"⏳ Pending ({stats['pending']})"
-    d_lbl = f"✅ Done ({stats['uploaded'] + stats['rejected']})"
-    if tab == "p":
-        p_lbl = "• " + p_lbl
-    else:
-        d_lbl = "• " + d_lbl
+    labels = {
+        "p": f"⏳ Pending ({stats['pending']})",
+        "u": f"✅ Uploaded ({stats['uploaded']})",
+        "r": f"❌ Rejected ({stats['rejected']})",
+    }
+    labels[tab] = "• " + labels[tab]
     prev_p = page - 1 if page > 1 else pages
     next_p = page + 1 if page < pages else 1
     return Markup([
-        [Btn(p_lbl, callback_data="rqpg#p#1"), Btn(d_lbl, callback_data="rqpg#d#1")],
+        [Btn(labels["p"], callback_data="rqpg#p#1")],
+        [Btn(labels["u"], callback_data="rqpg#u#1"), Btn(labels["r"], callback_data="rqpg#r#1")],
         [
             Btn("◀️ Prev", callback_data=f"rqpg#{tab}#{prev_p}"),
             Btn(f"📄 {page}/{pages}", callback_data="rq#noop#x"),
@@ -701,7 +709,7 @@ def schedule_dashboard_refresh(bot, delay=3.0):
 async def dashboard_nav(bot, query):
     try:
         _, tab, page = query.data.split("#")
-        tab = tab if tab in ("p", "d") else "p"
+        tab = tab if tab in TABS else "p"
         text, markup, page = await build_dashboard(tab, int(page))
         try:
             await query.message.edit_text(text, reply_markup=markup, parse_mode=HTML, disable_web_page_preview=True)
