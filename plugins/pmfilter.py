@@ -3058,13 +3058,13 @@ async def ai_spell_check(chat_id, wrong_name):
     # karo (IMDB apna khud ka relevance ranking already deta hai).
     candidates = []
     best = process.extractOne(title_for_imdb, movie_list)
-    if best and best[1] > 70:
+    if best and best[1] > 75:
         candidates.append(best[0])
     for m in movie_list:
         if m not in candidates:
             candidates.append(m)
 
-    for movie in candidates[:4]:
+    for movie in candidates[:6]:
         # 🔑 Year ko hamesha title ke saath hi rakho, meta ke saath nahi.
         title_with_year = f"{movie} {year}".strip() if year else movie
         final_query = re.sub(r"\s+", " ", f"{title_with_year} {meta_suffix}").strip()
@@ -3186,11 +3186,11 @@ async def advantage_spell_chok(client, message):
         m for m in scored_movies
         if fuzz.token_sort_ratio(poster_query, (m.title or "").lower()) >= 40
     ]
-    movies = (relevant_movies or scored_movies)[:8]
+    movies = movies[:8]
 
     buttons = [
         [{
-            "text": movie.title,
+            "text": (getattr(movie, "label", None) or movie.title)[:60],
             "callback_data": f"spol#{movie.imdb_id}#{user}",
             "style": "success",     # hara
         }]
