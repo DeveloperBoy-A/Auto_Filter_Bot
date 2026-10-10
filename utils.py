@@ -432,9 +432,14 @@ async def get_poster(query, bulk=False, id=False, file=None):
         def _apply_kind_filter(lst):
             fk = [m for m in lst if m.kind and m.kind in kind_filter]
             return fk if fk else lst
-
+            
+        # 🔑 FIX: Strict year filtering issue solved
         if year_val:
             filtered = [m for m in movie_list if m.year and str(m.year) == str(year_val)]
+            # Agar exact year match nahi mili (like upcoming movies), to result ko khaali 
+            # karne ke bajaye saari relevant movies suggestions me dikha do.
+            if not filtered:
+                filtered = movie_list 
         else:
             filtered = movie_list
 
