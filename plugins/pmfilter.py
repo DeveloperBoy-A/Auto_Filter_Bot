@@ -3058,7 +3058,7 @@ async def ai_spell_check(chat_id, wrong_name):
     # karo (IMDB apna khud ka relevance ranking already deta hai).
     candidates = []
     best = process.extractOne(title_for_imdb, movie_list)
-    if best and best[1] > 75:
+    if best and best[1] > 85:
         candidates.append(best[0])
     for m in movie_list:
         if m not in candidates:
