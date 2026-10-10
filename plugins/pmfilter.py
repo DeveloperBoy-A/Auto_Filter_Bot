@@ -3036,10 +3036,14 @@ async def ai_spell_check(chat_id, wrong_name):
 
     candidates = []
     best = process.extractOne(title_for_imdb, movie_list)
-    
-    # 🔑 Fix 1: Score 85/75 ki jagah >= 90 kiya taaki galat (Vogue/Rough) direct DB search na ho
-    if best and best[1] >= 90:
-        candidates.append(best[0])
+    if best:
+        # 🔑 FIX: process.extractOne ke fake high score par bharosa mat karo.
+        # Sirf strict spelling match (fuzz.ratio) check karo.
+        strict_score = fuzz.ratio(title_for_imdb, best[0].lower())
+        
+        # Agar exact spelling match 88 ya usse zyada hai, tabhi autocorrect hoga
+        if strict_score >= 88:
+            candidates.append(best[0])
         
     for m in movie_list:
         if m not in candidates:
