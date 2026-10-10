@@ -273,8 +273,11 @@ def _normalize_title_for_match(t) -> str:
     t = str(t).lower().strip()
     t = t.replace("&", " and ")
     t = re.sub(r'[^a-z0-9 ]', '', t)
+    
+    # ✅ [NEW] Neutralize 'a' and 'e' vowels to bridge Mere vs Mera differences
+    t = t.replace('a', 'x').replace('e', 'x')
+    
     t = re.sub(r'\s+', ' ', t).strip()
-
     return t
 
 
@@ -328,20 +331,22 @@ async def _tmdb_search_best(session, media_type, title, year, strict_year):
     if not matches:
         return None
 
-    # Movies (and any cross-type fallback): year must match, exact first then +-1.
-    if year and (media_type == "movie" or strict_year):
+    # ✅ [NEW] Strict year verification enforces boundary check for both series and films
+    if year:
         for tol in (0, 1):
             for r in matches:
                 if _year_close(r.get(date_key), year, tol):
                     return r
         return None
 
+    return matches
+
     # Series: the year in the filename is the season's year. A show can't have
     # started AFTER that, so prefer a show whose first_air_date <= that year.
     if year:
         for r in matches:
             fa = (r.get(date_key) or "")[:4]
-            if not fa or (fa.isdigit() and int(fa) <= int(year)):
+            if fa and fa.isdigit() and abs(int(fa) - int(year)) <= 1:
                 return r
 
     return matches[0]
@@ -986,14 +991,14 @@ async def _google_poster_fallback(title, year, kind=None):
 
     if year:
         queries = [
-            f'"{clean_title}" "{year}" {kind_word}',
-            f'"{clean_title}" {kind_word}',
-            f'"{clean_title}" poster',
+            f'{clean_title} {year} {kind_word}',
+            f'{clean_title} {year} poster',
+            f'{clean_title} poster {year}'
         ]
     else:
         queries = [
-            f'"{clean_title}" {kind_word}',
-            f'"{clean_title}" poster',
+            f'{clean_title} {kind_word}',
+            f'{clean_title} poster'
         ]
 
     logger.info(
