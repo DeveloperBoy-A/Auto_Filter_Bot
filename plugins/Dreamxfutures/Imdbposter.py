@@ -13,7 +13,7 @@ from imdbkit import IMDBKit
 
 logger = logging.getLogger(__name__)
 
-ia = IMDBKit()
+ia = IMDBKit(tmdb_api_key=TMDB_API_KEY, region="IN")
 
 LONG_IMDB_DESCRIPTION = False
 
@@ -192,7 +192,7 @@ async def get_movie_details(query, id=False, file=None, kind=None):
             plot = plot[:800] + "..."
 
         imdb_id = movie.imdb_id
-        if imdb_id and not str(imdb_id).startswith("tt"):
+        if imdb_id and not str(imdb_id).startswith(("tt", "tmdb:")):
             imdb_id = f"tt{imdb_id}"
 
         poster_url = movie.cover_url
@@ -227,6 +227,7 @@ async def get_movie_details(query, id=False, file=None, kind=None):
             'year': movie.year,
             'genres': list_to_str(getattr(movie, "genres", None)),
             'poster_url': poster_url,
+            'backdrop_url': getattr(movie, "backdrop_url", None),
             'plot': plot,
             'rating': str(movie.rating) if getattr(movie, "rating", None) else "N/A",
             'url': getattr(movie, "url", None) or (f'https://www.imdb.com/title/{imdb_id}' if imdb_id else "")
