@@ -31,7 +31,7 @@ BTN_URL_REGEX = re.compile(
 )
 
 
-imdb = IMDBKit() 
+imdb = IMDBKit(tmdb_api_key=TMDB_API_KEY, region="IN") 
 BANNED = {}
 SMART_OPEN = '“'
 SMART_CLOSE = '”'
@@ -427,7 +427,7 @@ async def get_poster(query, bulk=False, id=False, file=None):
 
         movie_list = search_result.titles[:MAX_LIST_ELM]
 
-        kind_filter = ['movie', 'tv series', 'tvSeries', 'tvMiniSeries', 'tvMovie']
+        kind_filter = ['Movie', 'Web Series', 'Mini Series', 'TV Movie', 'movie', 'tv series', 'tvSeries', 'tvMiniSeries', 'tvMovie']
 
         def _apply_kind_filter(lst):
             fk = [m for m in lst if m.kind and m.kind in kind_filter]
@@ -477,7 +477,7 @@ async def get_poster(query, bulk=False, id=False, file=None):
     if len(plot) > 800:
         plot = plot[:800] + "..."
     imdb_id = movie.imdb_id
-    if not imdb_id.startswith("tt"):
+    if not imdb_id.startswith(("tt", "tmdb:")):
         imdb_id = f"tt{imdb_id}"
     return {
         'title': movie.title,
@@ -510,9 +510,10 @@ async def get_poster(query, bulk=False, id=False, file=None):
         'genres': listx_to_str(movie.genres),
         'poster': movie.cover_url,
         'plot': plot,
-        'rating': str(movie.rating),
+        'rating': str(movie.rating) if movie.rating else "N/A",
         "url": movie.url or f"https://www.imdb.com/title/{imdb_id}"
     }
+    
 #Remove Nahi Kiya Hu.....Agar Tujha Remove Karna Hai To Kar Dena
 async def old_get_poster(query, bulk=False, id=False, file=None):
     if not id:
