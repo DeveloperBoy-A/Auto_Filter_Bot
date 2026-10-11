@@ -2973,143 +2973,168 @@ async def old_advantage_spell_chok(client, message):
         pass
 
 
-# ── Original Regex aur split_query_meta ko wapas restore kiya gaya hai ──
-YEAR_PATTERN = re.compile(r"\b(19\d{2}|20\d{2})\b")
 
+# ============================================================================
+#  FILE 1  -  spell-check wali file
+#  Isme jo pehle YEAR_PATTERN se lekar advantage_spell_chok ke end tak tha,
+#  wo SAB hata kar ye poora block paste karo.
+#  NAYA IMPORT KUCH NAHI CHAHIYE (re, asyncio, imdb, logger, quote_plus,
+#  get_poster, get_search_results, reply_styled, script, _html_escape
+#  pehle se aapki file me hain).
+#
+#  NIYAM
+#   1. Auto-correct SIRF tab jab IMDb me wahi title ho jo user ne likha
+#      (exact, ya same pronunciation jaise pathan = Pathaan).
+#   2. Baaki sab (typo, extra words, title nahi mila) -> suggestion buttons.
+#   3. Year se title decide nahi hota. Year sirf same-title me sahi year chunta
+#      hai, aur galat year par note dikhata hai.
+#   4. Google button sirf tab jab IMDb ke paas sach me kuch nahi.
+# ============================================================================
+
+# Inme se kisi title par hi auto-correct hoga. ("close" = chhota typo jaise
+# "intersteler". Typo bhi auto karwana ho to "close" yahan jod do.)
+AUTO_CORRECT_TYPES = ("exact", "phonetic")
+
+YEAR_PATTERN = re.compile(r"(?<![A-Za-z0-9])((?:19|20)\d{2})(?![A-Za-z0-9])")
+
+# DB file names me jo extra cheeze hoti hain (sirf DB query dubara banane ke liye)
 META_TOKEN_PATTERN = re.compile(
-    r"\b("
+    r"(?<![a-z0-9])("
+    r"s\d{1,2}\s*e\d{1,3}|season\s*\d{1,2}(?:\s*episode\s*\d{1,3})?|"
+    r"episode\s*\d{1,3}|ep\s*\d{1,3}|s\d{1,2}|e\d{1,3}|"
     r"malayalam|mal|tamil|telugu|kannada|bengali|punjabi|marathi|gujarati|"
-    r"english|hindi|dual\saudio|multi\saudio|dubbed|"
+    r"english|hindi|dual[\s-]?audio|multi[\s-]?audio|dubbed|"
     r"480p|576p|720p|1080p|1440p|2160p|4k|8k|hd|fhd|fullhd|uhd|hdr|"
     r"webrip|web[- ]?dl|webdl|bluray|brrip|hdrip|dvdrip|camrip|hdtc|"
-    r"season\s*\d{1,2}|s\d{1,2}|episode\s*\d{1,3}|ep\s*\d{1,3}|e\d{1,3}"
-    r")\b",
-    re.IGNORECASE
+    r"x264|x265|hevc|10bit"
+    r")(?![a-z0-9])",
+    re.IGNORECASE,
 )
 
-FILLER_WORD_PATTERN = re.compile(
-    r"\b(pl(i|e)?(s|z+|ease|se|ese|(e+)s(e)?)|(send|snd|giv(e)?|gib)(\sme)?|"
-    r"movie(s)?|new|latest|bro|bruh|broh|helo|that|find|link|download|"
-    r"full\smovie|any(one)?|with\s*subtitle(s)?|subtitle(s)?|subs?|complete)\b",
-    re.IGNORECASE
+# Filler sirf message ki SHURUAT / AAKHIR me hatega, beech me nahi.
+# (isse "The New Mutants", "Find Me", "That Girl" jaise titles kharab nahi hote)
+_LEAD_FILLER = re.compile(
+    r"^\s*(?:"
+    r"pl(?:i|e)?(?:s|z+|ease|se|ese)|(?:send|snd|giv(?:e)?|gib)(?:\s+me)?|"
+    r"bro|bruh|broh|helo|hello|hi|find|download|link|files?|"
+    r"(?:new|latest)(?=\s+movies?\b)|movies?|full\s+movie"
+    r")\b[\s,:;.!-]*",
+    re.IGNORECASE,
+)
+_TRAIL_FILLER = re.compile(
+    r"[\s,:;.!-]*\b(?:"
+    r"pl(?:i|e)?(?:s|z+|ease|se|ese)|movies?|full\s+movie|link|download|files?|"
+    r"with\s*subtitles?|subtitles?|subs?|complete|bro|bruh|broh"
+    r")\s*$",
+    re.IGNORECASE,
 )
 
-def split_query_meta(raw_text):
-    text = (raw_text or "").lower()
 
-    year_match = YEAR_PATTERN.search(text)
-    year = year_match.group(1) if year_match else None
+def _strip_filler(text):
+    prev = None
+    while prev != text:
+        prev = text
+        text = _LEAD_FILLER.sub("", text, count=1)
+        text = _TRAIL_FILLER.sub("", text, count=1)
+    return text.strip()
+
+
+def split_query_parts(raw_text):
+    """
+    'full house with Rohit S01 E07'  -> ('full house with rohit', 's01 e07', None)
+    'mr bachachhan 2024 hindi 1080p' -> ('mr bachachhan', 'hindi 1080p', '2024')
+    'T-170 2026'                     -> ('t-170', '', '2026')
+    Title me year NAHI hota.
+    """
+    text = _strip_filler(re.sub(r"\s+", " ", (raw_text or "").lower()).strip())
+
     meta_words = []
-    
     for m in META_TOKEN_PATTERN.finditer(text):
         word = re.sub(r"\s+", " ", m.group(0)).strip()
         if word and word not in meta_words:
             meta_words.append(word)
-            
-    cleaned = META_TOKEN_PATTERN.sub(" ", text)
-    if year:
-        cleaned = cleaned.replace(year, " ")
-    cleaned = FILLER_WORD_PATTERN.sub(" ", cleaned)
-    cleaned = re.sub(r"[!@#$%^*()_+={};\"<>?/\\|.,:_-]", " ", cleaned)
-    cleaned = re.sub(r"\s+", " ", cleaned).strip()
-    
-    title_for_imdb = f"{cleaned} {year}".strip() if year else cleaned
-    meta_suffix = " ".join(meta_words).strip()
-    return title_for_imdb, meta_suffix, year 
+
+    # imdbkit parser: S01E07 / "s01 e07", year ki position, 1080p/WEB-DL junk,
+    # aakhir ka "hindi dubbed" sab sambhalta hai
+    parsed = imdb.parse_media_structure(text)
+    title = (parsed.get("title_punct") or parsed.get("title") or "").strip()   # "t-170" bacha rehta hai
+    year = parsed.get("year")
+    year = str(year) if year else None
+
+    if not title:
+        title = re.sub(r"\s+", " ", text).strip()
+
+    return title, " ".join(meta_words).strip(), year
+
+
+def split_query_meta(raw_text):
+    """Purane format me wapas: (title_for_imdb_with_year, meta_suffix, year)."""
+    title, meta, year = split_query_parts(raw_text)
+    title_for_imdb = f"{title} {year}".strip() if year else title
+    return title_for_imdb, meta, year
+
+
+async def _imdb_lookup(title, year=None):
+    """imdbkit SearchResult. Har title par .match_type aur .year_match hota hai."""
+    return await asyncio.to_thread(
+        imdb.search_title, (title or "").lower(), 10, int(year) if year else None
+    )
 
 
 async def ai_spell_check(chat_id, wrong_name):
-    # Aapka original meta_suffix separate karne ka logic yahan zaroori hai
-    title_for_imdb, meta_suffix, year = split_query_meta(wrong_name)
-    if not title_for_imdb:
-        title_for_imdb = wrong_name
-
-    async def search_movie(name):
-        search_results = await asyncio.to_thread(imdb.search_movie, name.lower())
-        if not search_results or not hasattr(search_results, "titles"):
-            return []
-        return [movie.title for movie in search_results.titles]
-        
-    movie_list = await search_movie(title_for_imdb)
-    if not movie_list:
+    """DB query string deta hai (auto-correct) ya None (-> suggestions dikhao)."""
+    title, meta_suffix, year = split_query_parts(wrong_name)
+    if not title:
         return None
 
-    candidates = []
-    best = process.extractOne(title_for_imdb, movie_list)
-    if best:
-        # 🔑 FIX: process.extractOne ke fake high score par bharosa mat karo.
-        # Sirf strict spelling match (fuzz.ratio) check karo.
-        strict_score = fuzz.ratio(title_for_imdb, best[0].lower())
-        
-        # Agar exact spelling match 88 ya usse zyada hai, tabhi autocorrect hoga
-        if strict_score >= 88:
-            candidates.append(best[0])
-        
-    for m in movie_list:
-        if m not in candidates:
-            candidates.append(m)
+    try:
+        result = await _imdb_lookup(title, year)
+    except Exception as e:
+        logger.exception("ai_spell_check: imdb search failed for %r: %s", wrong_name, e)
+        return None
 
-    for movie in candidates[:6]:
-        title_with_year = f"{movie} {year}".strip() if year else movie
-        # Aapka original logic jo DB me Hindi/1080p ko dubara jodta hai
-        final_query = re.sub(r"\s+", " ", f"{title_with_year} {meta_suffix}").strip()
-        
-        files, _, _ = await get_search_results(chat_id=chat_id, query=final_query)
-        if files:
-            return final_query
+    # SIRF wahi titles jo user ne sach me likhe hain.
+    # "the mongoose" -> "The Mouse", "full house with rohit" -> "Full House",
+    # "mr bachachhan" -> "Bol Bachchan" jaise look-alike kabhi auto nahi honge.
+    exact = [t for t in (result.titles if result else []) if t.match_type in AUTO_CORRECT_TYPES]
+    if year:
+        # year fit hona chahiye (same year / chalti series / +-1). Galat year -> guess nahi,
+        # suggestions + year note dikhao.
+        exact = [t for t in exact if t.year_match in ("exact", "within", "near", None)]
+    if not exact:
+        return None
 
+    tried = set()
+    for t in exact[:4]:                       # same title ke alag year / remake
+        title_with_year = f"{t.title} {year}".strip() if year else t.title
+        queries = []
         if meta_suffix:
-            files, _, _ = await get_search_results(chat_id=chat_id, query=title_with_year)
+            queries.append(re.sub(r"\s+", " ", f"{title_with_year} {meta_suffix}").strip())
+        queries.append(title_with_year)
+
+        for q in queries:
+            if q.lower() in tried:
+                continue
+            tried.add(q.lower())
+            files, _, _ = await get_search_results(chat_id=chat_id, query=q)
             if files:
-                return title_with_year
-                
-    return None 
+                return q
+
+    # Title asli hai par DB me file nahi (ya year match nahi): guess mat karo,
+    # advantage_spell_chok Request button ke saath dikhayega.
+    return None
 
 
 async def advantage_spell_chok(client, message):
     search = message.text
-    # Aapka original custom Telegram slang regex
-    query = re.sub(
-        r"(?:"
-        r"\bpl(i|e)?(s|z+|ease|se|ese|(e+)s(e+)?)\b|"
-        r"\b(send|snd|giv(e)?|gib)(\sme)?\b|"
-        r"\bmovie(s)?\b|"
-        r"\bnew\b|\blatest\b|"
-        r"\bbr((o|u)h?)\b|"
-        r"\bmal(ayalam)?\b|\bt(h)?amil\b|\btelugu\b|\bkannada\b|"
-        r"\bbengali\b|\bpunjabi\b|\bmarathi\b|\bgujarati\b|"
-        r"\benglish\b|\bhindi\b|"
-        r"\bfile(s)?\b|\bthat\b|\bfind\b|\bund(o)\b|"
-        r"\bkit(t(i|y)?)?o(w)?\b|"
-        r"\bthar(u)?(o)\b|\bkittum(o)\b|"
-        r"\baya(k)(um(o))?\b|"
-        r"\bfull\smovie\b|\bany(one)?\b|"
-        r"\bwith\ssubtitle(s)?\b|\bsubtitle(s)?\b|\bsubs?\b|"
-        r"\bdownload\b|\bcomplete\b|\bcombined\b|\bproper\b|"
-        r"\bquality\b|\baudio\b|\bvideo\b|"
-        r"\b480p\b|\b576p\b|\b720p\b|\b1080p\b|\b1440p\b|\b2160p\b|"
-        r"\b4k\b|\b8k\b|\bhd\b|\bfhd\b|\bfullhd\b|\buhd\b|\bhdr\b|"
-        r"\bwebrip\b|\bweb[- ]?dl\b|\bwebdl\b|\bbluray\b|\bbrrip\b|"
-        r"\bhdrip\b|\bdvdrip\b|\bcamrip\b|\bhdtc\b|"
-        r"\bdubbed\b|\bdual\saudio\b|\bmulti\s*audio\b|"
-        r"\bseason\b|\bs\d{1,2}\b|\bepisode\b|\bep\d{1,3}\b|\be\d{1,3}\b"
-        r")",
-        "",
-        message.text,
-        flags=re.IGNORECASE
-    )
-
-    query = re.sub(r"[\s._|•~]+", " ", query).strip()
-    query = query + " movie"
-
-    title_for_imdb, _meta_suffix, _year = split_query_meta(search)
-    poster_query = title_for_imdb or search
+    title, _meta, year = split_query_parts(search)
+    poster_query = title or search
 
     try:
-        # Aapka original get_poster function hi rakha gaya hai
-        movies = await get_poster(poster_query, bulk=True)
+        result = await _imdb_lookup(poster_query, year)
+        movies = list(result.titles) if result else []
     except Exception as e:
-        logger.exception("get_poster failed for query=%s: %s", query, e)
+        logger.exception("imdb search failed for query=%s: %s", search, e)
         try:
             k = await message.reply(script.I_CUDNT.format(message.from_user.mention))
             await asyncio.sleep(60)
@@ -3125,21 +3150,23 @@ async def advantage_spell_chok(client, message):
             pass
         return
 
+    request_btn = [{
+        "text": f"📝 Request Original: {search[:40]}",
+        "switch_inline_query_current_chat": f"/request {search}",
+        "style": "warning",
+    }]
+
+    # IMDb ke paas sach me kuch nahi (relaxed word-level search bhi khaali)
     if not movies:
         google = quote_plus(search)
-        button = [[{
-            "text": "🔍 ᴄʜᴇᴄᴋ sᴘᴇʟʟɪɴɢ ᴏɴ ɢᴏᴏɢʟᴇ 🔍",
-            "url": f"https://www.google.com/search?q={google}",
-            "style": "primary",
-        }]]
-        
-        # Original request button fallback me bhi
-        button.append([{
-            "text": f"📝 Request Original: {search[:40]}",
-            "switch_inline_query_current_chat": f"/request {search}",
-            "style": "warning", 
-        }])
-        
+        button = [
+            [{
+                "text": "🔍 ᴄʜᴇᴄᴋ sᴘᴇʟʟɪɴɢ ᴏɴ ɢᴏᴏɢʟᴇ 🔍",
+                "url": f"https://www.google.com/search?q={google}",
+                "style": "primary",
+            }],
+            request_btn,
+        ]
         k = await reply_styled(
             client, message,
             text=script.I_CUDNT.format(_html_escape(search)),
@@ -3147,30 +3174,18 @@ async def advantage_spell_chok(client, message):
             plain_text=script.I_CUDNT.format(search),
         )
         await asyncio.sleep(60)
-        try:
-            await k.delete()
-        except Exception:
-            pass
-        try:
-            await message.delete()
-        except Exception:
-            pass
+        for obj in (k, message):
+            try:
+                await obj.delete()
+            except Exception:
+                pass
         return
 
     user = message.from_user.id if message.from_user else 0
 
-    scored_movies = sorted(
-        movies,
-        key=lambda m: fuzz.token_sort_ratio(poster_query, (m.title or "").lower()),
-        reverse=True
-    )
-    relevant_movies = [
-        m for m in scored_movies
-        if fuzz.token_sort_ratio(poster_query, (m.title or "").lower()) >= 40
-    ]
-    
-    # 🔑 Fix 2: 'movies = movies[:8]' hata diya gaya jisse gande suggestion aa rahe the.
-    movies_to_show = relevant_movies[:5]
+    # Library pehle hi rank kar chuki hai (exact > phonetic > close > partial > weak,
+    # sahi year pehle). Yahan dobara sort / filter MAT karo.
+    movies_to_show = movies[:6]
 
     buttons = [
         [{
@@ -3180,32 +3195,23 @@ async def advantage_spell_chok(client, message):
         }]
         for movie in movies_to_show
     ]
-    
-    # 🔑 Fix 3: Hamesha suggestion me original naam request karne ka button aayega
-    buttons.append([{
-        "text": f"📝 Request Original: {search[:40]}",
-        "switch_inline_query_current_chat": f"/request {search}",
-        "style": "warning", 
-    }])
-
+    buttons.append(request_btn)
     buttons.append([{
         "text": "🚫 ᴄʟᴏsᴇ 🚫",
         "callback_data": "close_data",
         "style": "danger",
     }])
 
-    d = await reply_styled(
-        client, message,
-        text=script.CUDNT_FND.format(message.from_user.mention),
-        rows=buttons,
-    )
+    text = script.CUDNT_FND.format(message.from_user.mention)
+    if year and result.year_found is False:
+        # likha hua year kisi title se match nahi hua -> user ko batao
+        text += f"\n\nℹ️ <b>{year}</b> saal ki is naam ki koi entry nahi mili, closest titles neeche hain."
+
+    d = await reply_styled(client, message, text=text, rows=buttons)
 
     await asyncio.sleep(60)
-    try:
-        await d.delete()
-    except Exception:
-        pass
-    try:
-        await message.delete()
-    except Exception:
-        pass
+    for obj in (d, message):
+        try:
+            await obj.delete()
+        except Exception:
+            pass
