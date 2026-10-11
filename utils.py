@@ -257,7 +257,7 @@ async def groups_broadcast(chat_id, message, is_pin=False):
     except Exception as e:
         print(f"Error sending to group {chat_id}: {e}")
         return None
-
+        
 async def junk_group(chat_id, message):
     try:
         kk = await message.copy(chat_id=chat_id)
@@ -344,6 +344,9 @@ _IMDB_MOVIE_CACHE: dict = {}
 _IMDB_CACHE_TTL = 3600          # seconds a cached IMDb lookup stays valid
 _IMDB_CACHE_MAX_ENTRIES = 500   # hard cap so memory can't grow unbounded
 
+# get_poster() sirf in match types par single movie chunta hai (exact title / same pronunciation)
+_AUTO_MATCH_TYPES = ("exact", "phonetic")
+
 
 def _imdb_cache_get(cache, key):
     entry = cache.get(key)
@@ -363,12 +366,15 @@ def _imdb_cache_set(cache, key, value):
     cache[key] = (_time.time(), value)
 
 
-async def _cached_imdb_search_movie(title: str):
-    key = title.lower().strip()
+async def _cached_imdb_search_movie(title: str, year=None):
+    # key me year bhi hai, kyunki year se ranking badalti hai
+    key = f"{title.lower().strip()}|{year or ''}"
     cached = _imdb_cache_get(_IMDB_SEARCH_CACHE, key)
     if cached is not None:
         return cached
-    result = await asyncio.to_thread(imdb.search_movie, title.lower())
+    result = await asyncio.to_thread(
+        imdb.search_title, title.lower(), 10, int(year) if year else None
+    )
     _imdb_cache_set(_IMDB_SEARCH_CACHE, key, result)
     return result
 
@@ -409,56 +415,34 @@ def _title_matches(candidate_title, expected_title) -> bool:
 async def get_poster(query, bulk=False, id=False, file=None):
     if not id:
         query = (query.strip()).lower()
-        title = query
-        year_val = None
 
-        year_list = re.findall(r'[1-2]\d{3}$', query, re.IGNORECASE)
-        if year_list:
-            year_val = year_list[0]
-            title = (query.replace(year_val, "")).strip()
-        elif file is not None:
-            year_list = re.findall(r'[1-2]\d{3}', file, re.IGNORECASE)
+        # title / year alag karo (S01E07, 1080p, aakhir ka "hindi" bhi hat jata hai,
+        # "t-170" jaisa hyphen bacha rehta hai)
+        parsed = imdb.parse_media_structure(query)
+        title = (parsed.get("title_punct") or parsed.get("title") or query).strip()
+        year_val = str(parsed["year"]) if parsed.get("year") else None
+
+        if not year_val and file is not None:
+            year_list = re.findall(r'(?<![0-9])(?:19|20)\d{2}(?![0-9])', str(file))
             if year_list:
                 year_val = year_list[0]
 
-        search_result = await _cached_imdb_search_movie(title)
+        search_result = await _cached_imdb_search_movie(title, year_val)
         if not search_result or not search_result.titles:
             return None
 
-        movie_list = search_result.titles[:MAX_LIST_ELM]
-
-        kind_filter = ['Movie', 'Web Series', 'Mini Series', 'TV Movie', 'movie', 'tv series', 'tvSeries', 'tvMiniSeries', 'tvMovie']
-
-        def _apply_kind_filter(lst):
-            fk = [m for m in lst if m.kind and m.kind in kind_filter]
-            return fk if fk else lst
-            
-        # 🔑 FIX: Strict year filtering issue solved
-        if year_val:
-            filtered = [m for m in movie_list if m.year and str(m.year) == str(year_val)]
-            # Agar exact year match nahi mili (like upcoming movies), to result ko khaali 
-            # karne ke bajaye saari relevant movies suggestions me dikha do.
-            if not filtered:
-                filtered = movie_list 
-        else:
-            filtered = movie_list
-
         if bulk:
-            filtered_kind = _apply_kind_filter(filtered) if filtered else _apply_kind_filter(movie_list)
-            return filtered_kind[:MAX_LIST_ELM]
+            # Library ne pehle hi rank kar diya hai:
+            # exact > phonetic > close > partial > weak, aur same-title me sahi year pehle.
+            # Year se result khaali nahi hota aur kisi galat title ko upar nahi chadhata.
+            return search_result.titles[:int(MAX_LIST_ELM or 10)]
 
+        # Single movie: sirf wahi jo SACH ME match kare (exact / same pronunciation)
         movie_brief = None
-
-        for m in _apply_kind_filter(filtered):
-            if _title_matches(getattr(m, "title", "") or "", title):
+        for m in search_result.titles:
+            if m.match_type in _AUTO_MATCH_TYPES:
                 movie_brief = m
                 break
-
-        if not movie_brief and filtered is not movie_list:
-            for m in _apply_kind_filter(movie_list):
-                if _title_matches(getattr(m, "title", "") or "", title):
-                    movie_brief = m
-                    break
 
         if not movie_brief:
             return None
@@ -518,6 +502,10 @@ async def get_poster(query, bulk=False, id=False, file=None):
         'rating': str(movie.rating) if movie.rating else "N/A",
         "url": movie.url or f"https://www.imdb.com/title/{imdb_id}"
     }
+
+
+
+
     
 #Remove Nahi Kiya Hu.....Agar Tujha Remove Karna Hai To Kar Dena
 async def old_get_poster(query, bulk=False, id=False, file=None):
