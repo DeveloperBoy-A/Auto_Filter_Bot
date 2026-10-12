@@ -112,6 +112,11 @@ async def dreamxbotz_start():
     temp.B_LINK = me.mention
     dreamxbotz.username = '@' + me.username
     dreamxbotz.loop.create_task(check_expired_premium(dreamxbotz))
+    try:
+        from plugins.request_manager import start_deletion_sweeper
+        start_deletion_sweeper(dreamxbotz)
+    except Exception as e:
+        logging.warning(f"request deletion sweeper not started: {e}")
     logging.info(f"{me.first_name} with Pyrogram v{__version__} (Layer {layer}) started on {me.username}.")
     logging.info(LOG_STR)
     logging.info(script.LOGO)
