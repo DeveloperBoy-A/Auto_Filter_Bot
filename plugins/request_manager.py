@@ -31,6 +31,8 @@ from pyrogram import Client, filters, enums, StopPropagation
 from pyrogram.types import InlineKeyboardButton as Btn, InlineKeyboardMarkup as Markup
 from pyrogram.errors import FloodWait, MessageNotModified, MessageIdInvalid
 
+from types import SimpleNamespace
+from plugins.Dreamxfutures.button_style import COLORS_ENABLED, BotApiError, api_send, api_edit
 from info import ADMINS, REQST_CHANNEL, MOVIE_UPDATE_CHANNEL_LINK, GRP_LNK
 from utils import temp
 from database.requests_db import rq
@@ -62,8 +64,8 @@ GROUP_FALLBACK = _env_flag("REQUEST_GROUP_FALLBACK", True)           # tag users
 MAX_OPEN_PER_USER = _env_int("REQUEST_MAX_OPEN_PER_USER", 10)        # 0 = unlimited
 UPLOADED_BLOCK_DAYS = _env_int("REQUEST_UPLOADED_BLOCK_DAYS", 7)     # 0 = never block re-requests
 REPLY_DELETE_AFTER = _env_int("REQUEST_REPLY_DELETE_AFTER", 60)      # group reply auto-delete (sec)
-DM_DELETE_AFTER = _env_int("REQUEST_DM_DELETE_AFTER", 0)             # 0 = keep DM forever
-GROUP_NOTE_DELETE_AFTER = _env_int("REQUEST_GROUP_NOTE_DELETE_AFTER", 600)
+DM_DELETE_AFTER = _env_int("REQUEST_DM_DELETE_AFTER", 86400)         # DM notification auto-delete (sec) = 24h, 0 = keep forever
+GROUP_NOTE_DELETE_AFTER = _env_int("REQUEST_GROUP_NOTE_DELETE_AFTER", 86400)   # group tag notification = 24h
 DASH_PAGE_SIZE = _env_int("REQUEST_DASH_PAGE_SIZE", 8)
 
 # shared state lives on `temp` (plugin modules can be executed twice by the custom loader)
@@ -91,6 +93,161 @@ async def _delete_later(*messages, delay=60):
             pass
 
 
+async def _delete_in_db(msg, delay):
+    """Persistent delete: stored in MongoDB so it still happens after a bot restart."""
+    if not msg:
+        return
+    try:
+        await rq.schedule_delete(msg.chat.id, msg.id, delay)
+    except Exception:
+        logger.exception("[REQ] could not schedule delete")
+
+
+async def deletion_sweeper(bot, every=300):
+    """Every few minutes delete notifications whose time is up."""
+    while True:
+        try:
+            for d in await rq.due_deletes():
+                try:
+                    await bot.delete_messages(d["chat_id"], d["msg_id"])
+                except FloodWait as e:
+                    await asyncio.sleep(e.value + 1)
+                    continue                      # keep it, retry next round
+                except Exception:
+                    pass                          # already deleted / no rights
+                await rq.done_delete(d["_id"])
+                await asyncio.sleep(0.1)
+        except Exception:
+            logger.exception("[REQ] deletion sweeper error")
+        await asyncio.sleep(every)
+
+
+def start_deletion_sweeper(bot):
+    if getattr(temp, "RQ_SWEEPER", None) is None or temp.RQ_SWEEPER.done():
+        temp.RQ_SWEEPER = _spawn(deletion_sweeper(bot))
+
+
+# ═════════════════════════════ coloured buttons ═════════════════════════════ #
+# Buttons are built as plain dict rows: [[{"text":..., "style": "success", "url"/"callback_data": ...}]]
+# style: "primary" (neela) | "success" (hara) | "danger" (laal) | None (normal grey)
+# Sent through the Telegram Bot API (supports colours). If that ever fails, the SAME
+# buttons go out through pyrogram without colour -> nothing ever breaks.
+# Colours off: env BUTTON_COLORS=False
+
+_NO_PREVIEW = {"is_disabled": True}
+
+# admin option colours (code -> style)
+ACTION_STYLE = {
+    "up": "success", "un": "danger", "aa": "primary", "nr": "primary", "ws": "danger",
+    "hn": "danger", "dd": "danger", "pr": "primary", "cm": "primary", "dt": "primary", "nu": None,
+}
+
+
+def B(text, style=None, **kw):
+    d = {"text": text}
+    d.update(kw)
+    if style:
+        d["style"] = style
+    return d
+
+
+def plain_markup(rows):
+    """Same buttons, no colour (pyrogram fallback)."""
+    if not rows:
+        return None
+    return Markup([
+        [Btn(b["text"], **{k: b[k] for k in ("url", "callback_data") if b.get(k) is not None}) for b in row]
+        for row in rows
+    ])
+
+
+class _Sent:
+    """Tiny stand-in for a pyrogram Message (id / chat.id / link / delete)."""
+    def __init__(self, bot, chat_id, mid):
+        self._bot = bot
+        self.chat = SimpleNamespace(id=chat_id)
+        self.id = mid
+        s_id = str(chat_id)
+        self.link = f"https://t.me/c/{s_id[4:]}/{mid}" if s_id.startswith("-100") else None
+
+    async def delete(self):
+        return await self._bot.delete_messages(self.chat.id, self.id)
+
+
+def _can_color(bot, rows):
+    return bool(COLORS_ENABLED and rows and getattr(bot, "bot_token", None))
+
+
+async def send_rows(bot, chat_id, text, rows=None, reply_to=None, full=False):
+    """Send `text` + coloured `rows`. full=True -> try to return a real pyrogram Message."""
+    if _can_color(bot, rows):
+        for _ in range(2):
+            try:
+                mid = await api_send(bot, chat_id, rows, text=text, link_preview=_NO_PREVIEW, reply_to=reply_to)
+                if full:
+                    try:
+                        return await bot.get_messages(chat_id, mid)
+                    except Exception:
+                        pass
+                return _Sent(bot, chat_id, mid)
+            except BotApiError as e:
+                if e.retry_after:
+                    await asyncio.sleep(e.retry_after + 1)
+                    continue
+                if e.code == 403 or "chat not found" in e.description.lower():
+                    raise                                   # user blocked bot / never started it
+                logger.warning(f"[REQ] coloured send failed ({e}) -> plain buttons")
+                break
+            except Exception as e:
+                logger.warning(f"[REQ] coloured send error ({e}) -> plain buttons")
+                break
+    for _ in range(2):
+        try:
+            return await bot.send_message(
+                chat_id, text, reply_markup=plain_markup(rows), parse_mode=HTML,
+                disable_web_page_preview=True, reply_to_message_id=reply_to,
+            )
+        except FloodWait as e:
+            await asyncio.sleep(e.value + 1)
+    return None
+
+
+async def edit_rows(bot, chat_id, mid, text, rows=None):
+    """Edit text + buttons. Returns 'ok' | 'same' (not modified) | 'gone' (message deleted)."""
+    if _can_color(bot, rows):
+        for _ in range(2):
+            try:
+                await api_edit(bot, chat_id, mid, rows, text=text, is_photo=False, link_preview=_NO_PREVIEW)
+                return "ok"
+            except BotApiError as e:
+                if e.not_modified:
+                    return "same"
+                if e.not_found:
+                    return "gone"
+                if e.retry_after:
+                    await asyncio.sleep(e.retry_after + 1)
+                    continue
+                logger.warning(f"[REQ] coloured edit failed ({e}) -> plain buttons")
+                break
+            except Exception as e:
+                logger.warning(f"[REQ] coloured edit error ({e}) -> plain buttons")
+                break
+    for _ in range(2):
+        try:
+            await bot.edit_message_text(
+                chat_id, mid, text, reply_markup=plain_markup(rows), parse_mode=HTML,
+                disable_web_page_preview=True,
+            )
+            return "ok"
+        except MessageNotModified:
+            return "same"
+        except MessageIdInvalid:
+            return "gone"
+        except FloodWait as e:
+            await asyncio.sleep(e.value + 1)
+    return "fail"
+
+
 # ═════════════════════════════ markups ═════════════════════════════ #
 
 def post_markup(req):
@@ -99,80 +256,61 @@ def post_markup(req):
         row = []
         users = req.get("users") or []
         if users and users[0].get("link"):
-            row.append(Btn("👁️ ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ 👁️", url=users[0]["link"]))
-        row.append(Btn("💢 ꜱʜᴏᴡ ᴏᴘᴛɪᴏɴꜱ 💢", callback_data=f"rq#opt#{rid}"))
-        return Markup([row])
+            row.append(B("👁️ ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ 👁️", "primary", url=users[0]["link"]))
+        row.append(B("💢 ꜱʜᴏᴡ ᴏᴘᴛɪᴏɴꜱ 💢", "danger", callback_data=f"rq#opt#{rid}"))
+        return [row]
     icon, label = status_meta(req.get("status"))
     nt = req.get("notified") or {}
     sent = nt.get("dm", 0) + nt.get("group", 0)
     first = f"{icon} {label}" + (f" • 📨 {sent}/{nt.get('total', req.get('user_count', 0))}" if req.get("notified") else "")
-    return Markup([[Btn(first, callback_data=f"rq#info#{rid}"), Btn("🔄 Reopen", callback_data=f"rq#reo#{rid}")]])
+    ok = req.get("status") == "uploaded"
+    return [[B(first, "success" if ok else None, callback_data=f"rq#info#{rid}"),
+             B("🔄 Reopen", "primary", callback_data=f"rq#reo#{rid}")]]
 
 
 def options_markup(req):
     rid = str(req["_id"])
 
     def b(code):
-        return Btn(ADMIN_ACTIONS[code]["btn"], callback_data=f"rq#{code}#{rid}")
+        return B(ADMIN_ACTIONS[code]["btn"], ACTION_STYLE.get(code), callback_data=f"rq#{code}#{rid}")
 
-    return Markup([
+    return [
         [b("up"), b("un")],
         [b("aa")],
         [b("nr"), b("ws")],
         [b("hn"), b("dd")],
         [b("pr"), b("cm")],
         [b("dt"), b("nu")],
-        [Btn("🗑 Delete", callback_data=f"rq#del#{rid}"), Btn("⬅️ Back", callback_data=f"rq#back#{rid}")],
-    ])
+        [B("🗑 Delete", "danger", callback_data=f"rq#del#{rid}"), B("⬅️ Back", None, callback_data=f"rq#back#{rid}")],
+    ]
 
 
 def user_markup(req):
     rows = []
     first = []
     if MOVIE_UPDATE_CHANNEL_LINK:
-        first.append(Btn("📢 ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ", url=MOVIE_UPDATE_CHANNEL_LINK))
+        first.append(B("📢 ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ", "primary", url=MOVIE_UPDATE_CHANNEL_LINK))
     if GRP_LNK:
-        first.append(Btn("🔍 Search", url=GRP_LNK))
+        first.append(B("🔍 Search", "success", url=GRP_LNK))
     if first:
         rows.append(first)
     if req.get("post_link"):
-        rows.append([Btn("👁 View Request", url=req["post_link"])])
-    return Markup(rows) if rows else None
+        rows.append([B("👁 View Request", "primary", url=req["post_link"])])
+    return rows or None
 
 
 # ═════════════════════════════ safe telegram helpers ═════════════════════════════ #
 async def _send_request_reply(bot, message, text, markup=None):
-    """Send request response as a reply in the request group."""
+    """Send request response as a reply in the request group (markup = coloured rows)."""
     try:
-        return await bot.send_message(
-            chat_id=message.chat.id,
-            text=text,
-            reply_markup=markup,
-            parse_mode=HTML,
-            disable_web_page_preview=True,
-            reply_to_message_id=message.id,
-        )
-
-    except FloodWait as e:
-        await asyncio.sleep(e.value + 1)
-
-        return await bot.send_message(
-            chat_id=message.chat.id,
-            text=text,
-            reply_markup=markup,
-            parse_mode=HTML,
-            disable_web_page_preview=True,
-            reply_to_message_id=message.id,
-        )
-
+        return await send_rows(bot, message.chat.id, text, markup, reply_to=message.id)
     except Exception as e:
         logger.warning(f"[REQ] request reply failed: {e}")
-
         # Fallback to Pyrogram's normal reply
         try:
             return await message.reply_text(
                 text,
-                reply_markup=markup,
+                reply_markup=plain_markup(markup),
                 parse_mode=HTML,
                 disable_web_page_preview=True,
             )
@@ -181,24 +319,15 @@ async def _send_request_reply(bot, message, text, markup=None):
             return None
 
 
-async def _safe_edit_post(bot, req):
+async def _safe_edit_post(bot, req, rows=None):
     """Edit the request-channel post to match the DB doc."""
     if not (REQST_CHANNEL and req.get("post_id")):
         return
-    for _ in range(2):
-        try:
-            await bot.edit_message_text(
-                REQST_CHANNEL, req["post_id"], render_post(req),
-                reply_markup=post_markup(req), parse_mode=HTML, disable_web_page_preview=True,
-            )
-            return
-        except MessageNotModified:
-            return
-        except FloodWait as e:
-            await asyncio.sleep(e.value + 1)
-        except Exception as e:
-            logger.warning(f"[REQ] post edit failed for {req.get('_id')}: {e}")
-            return
+    try:
+        await edit_rows(bot, REQST_CHANNEL, req["post_id"], render_post(req),
+                        rows if rows is not None else post_markup(req))
+    except Exception as e:
+        logger.warning(f"[REQ] post edit failed for {req.get('_id')}: {e}")
 
 
 async def refresh_post(bot, rid):
@@ -225,16 +354,11 @@ def schedule_post_refresh(bot, rid, delay=2.0):
 # ═════════════════════════════ notifications ═════════════════════════════ #
 
 async def _send(bot, chat_id, text, markup=None):
-    for _ in range(2):
-        try:
-            return await bot.send_message(
-                chat_id, text, reply_markup=markup, parse_mode=HTML, disable_web_page_preview=True
-            )
-        except FloodWait as e:
-            await asyncio.sleep(e.value + 1)
-        except Exception:
-            return None
-    return None
+    """DM / group notice with (coloured) buttons. None if it can't be delivered."""
+    try:
+        return await send_rows(bot, chat_id, text, markup)
+    except Exception:
+        return None
 
 
 async def notify_users(bot, req, status, finfo=None):
@@ -243,6 +367,7 @@ async def notify_users(bot, req, status, finfo=None):
     gets tagged in the group where they requested.
     Returns {"total", "dm", "group", "failed", "at"}.
     """
+    start_deletion_sweeper(bot)
     users = req.get("users") or []
     title = display_name(req)
     n = len(users)
@@ -256,7 +381,7 @@ async def notify_users(bot, req, status, finfo=None):
         if msg:
             dm += 1
             if DM_DELETE_AFTER > 0:
-                _spawn(_delete_later(msg, delay=DM_DELETE_AFTER))
+                _spawn(_delete_in_db(msg, DM_DELETE_AFTER))
         else:
             undelivered.append(u)
         await asyncio.sleep(0.06)           # stay well below Telegram's flood limit
@@ -276,7 +401,7 @@ async def notify_users(bot, req, status, finfo=None):
                 msg = await _send(bot, gid, body, markup)
                 if msg:
                     grp += len(chunk)
-                    _spawn(_delete_later(msg, delay=GROUP_NOTE_DELETE_AFTER))
+                    _spawn(_delete_in_db(msg, GROUP_NOTE_DELETE_AFTER))
                 await asyncio.sleep(0.3)
 
     return {"total": n, "dm": dm, "group": grp, "failed": max(n - dm - grp, 0), "at": datetime.utcnow()}
@@ -441,6 +566,8 @@ async def request_command(bot, message):
         "name": user.first_name or "User",
         "group_id": message.chat.id,
         "group_title": message.chat.title,
+        "group_link": (f"https://t.me/{message.chat.username}" if getattr(message.chat, "username", None)
+                       else (getattr(message.chat, "invite_link", None) or _safe_link(message))),
         "link": source_link,
         "at": datetime.utcnow(),
     }
@@ -463,10 +590,7 @@ async def request_command(bot, message):
     name = esc(display_name(parsed))
 
     bot_btn = (
-        Btn(
-            "🤖 Start Bot (DM alerts)",
-            url=f"https://t.me/{temp.U_NAME}"
-        )
+        B("🤖 Start Bot (DM alerts)", "success", url=f"https://t.me/{temp.U_NAME}")
         if temp.U_NAME
         else None
     )
@@ -479,13 +603,15 @@ async def request_command(bot, message):
 
         # Create request post in request channel
         try:
-            post = await bot.send_message(
+            post = await send_rows(
+                bot,
                 REQST_CHANNEL,
                 render_post(doc),
-                reply_markup=post_markup(doc),
-                parse_mode=HTML,
-                disable_web_page_preview=True,
+                post_markup(doc),
+                full=True,
             )
+            if post is None:
+                raise RuntimeError("request channel post could not be sent")
 
             await rq.set_post(
                 doc["_id"],
@@ -594,18 +720,12 @@ async def request_command(bot, message):
 
     if MOVIE_UPDATE_CHANNEL_LINK:
         r1.append(
-            Btn(
-                "ᴍᴏᴠɪᴇ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ📢",
-                url=MOVIE_UPDATE_CHANNEL_LINK
-            )
+            B("ᴍᴏᴠɪᴇ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ📢", "primary", url=MOVIE_UPDATE_CHANNEL_LINK)
         )
 
     if doc and doc.get("post_link"):
         r1.append(
-            Btn(
-                "ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ👁‍🗨",
-                url=doc["post_link"]
-            )
+            B("ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ👁‍🗨", "primary", url=doc["post_link"])
         )
 
     if r1:
@@ -615,12 +735,7 @@ async def request_command(bot, message):
         rows.append([bot_btn])
 
     if state == "uploaded" and GRP_LNK:
-        rows.append([
-            Btn(
-                "🔍 Search",
-                url=GRP_LNK
-            )
-        ])
+        rows.append([B("🔍 Search", "success", url=GRP_LNK)])
 
     # ───────────── THIS IS THE IMPORTANT CHANGE ───────────── #
 
@@ -628,7 +743,7 @@ async def request_command(bot, message):
         bot,
         message,
         text,
-        markup=Markup(rows) if rows else None
+        markup=rows or None
     )
 
     # ───────────── dashboard ───────────── #
@@ -685,11 +800,11 @@ async def _handle_rq(bot, query):
     if act == "opt":
         if not req.get("open", True):
             return await query.answer("Ye request already close hai. Pehle Reopen karo.", show_alert=True)
-        await query.message.edit_reply_markup(options_markup(req))
+        await edit_rows(bot, query.message.chat.id, query.message.id, render_post(req), options_markup(req))
         return await query.answer("Here are the options!")
 
     if act == "back":
-        await query.message.edit_reply_markup(post_markup(req))
+        await edit_rows(bot, query.message.chat.id, query.message.id, render_post(req), post_markup(req))
         return await query.answer()
 
     if act == "reo":
@@ -705,11 +820,11 @@ async def _handle_rq(bot, query):
         return await query.answer("🔄 Reopened!")
 
     if act == "del":
-        kb = Markup([[
-            Btn("✅ Haan, Delete", callback_data=f"rq#delok#{rid}"),
-            Btn("❌ Cancel", callback_data=f"rq#back#{rid}"),
-        ]])
-        await query.message.edit_reply_markup(kb)
+        kb = [[
+            B("✅ Haan, Delete", "danger", callback_data=f"rq#delok#{rid}"),
+            B("❌ Cancel", "success", callback_data=f"rq#back#{rid}"),
+        ]]
+        await edit_rows(bot, query.message.chat.id, query.message.id, render_post(req), kb)
         return await query.answer("Pakka delete karna hai? (users ko kuch nahi bheja jayega)", show_alert=True)
 
     if act == "delok":
@@ -769,16 +884,16 @@ def _dash_markup(tab, page, pages, stats):
     labels[tab] = "• " + labels[tab]
     prev_p = page - 1 if page > 1 else pages
     next_p = page + 1 if page < pages else 1
-    return Markup([
-        [Btn(labels["p"], callback_data="rqpg#p#1")],
-        [Btn(labels["u"], callback_data="rqpg#u#1"), Btn(labels["r"], callback_data="rqpg#r#1")],
+    return [
+        [B(labels["p"], "primary", callback_data="rqpg#p#1")],
+        [B(labels["u"], "success", callback_data="rqpg#u#1"), B(labels["r"], "danger", callback_data="rqpg#r#1")],
         [
-            Btn("◀️ Prev", callback_data=f"rqpg#{tab}#{prev_p}"),
-            Btn(f"📄 {page}/{pages}", callback_data="rq#noop#x"),
-            Btn("Next ▶️", callback_data=f"rqpg#{tab}#{next_p}"),
+            B("◀️ Prev", None, callback_data=f"rqpg#{tab}#{prev_p}"),
+            B(f"📄 {page}/{pages}", None, callback_data="rq#noop#x"),
+            B("Next ▶️", None, callback_data=f"rqpg#{tab}#{next_p}"),
         ],
-        [Btn("🔄 Refresh", callback_data=f"rqpg#{tab}#{page}")],
-    ])
+        [B("🔄 Refresh", "primary", callback_data=f"rqpg#{tab}#{page}")],
+    ]
 
 
 async def build_dashboard(tab="p", page=1):
@@ -810,25 +925,18 @@ async def refresh_dashboard(bot, force_new=False):
         mid = meta.get("message_id")
         if mid and not force_new:
             try:
-                await bot.edit_message_text(
-                    REQST_CHANNEL, mid, text, reply_markup=markup, parse_mode=HTML, disable_web_page_preview=True
-                )
-                return mid
-            except MessageNotModified:
-                return mid
-            except MessageIdInvalid:
-                pass                                                    # deleted -> create a new one
-            except FloodWait as e:
-                await asyncio.sleep(e.value + 1)
-                return mid
+                res = await edit_rows(bot, REQST_CHANNEL, mid, text, markup)
+                if res != "gone":
+                    return mid
+                # deleted -> create a new one below
             except Exception as e:
                 logger.warning(f"[REQ] dashboard edit failed: {e}")
                 return mid
 
         text, markup, _ = await build_dashboard("p", 1)
-        msg = await bot.send_message(
-            REQST_CHANNEL, text, reply_markup=markup, parse_mode=HTML, disable_web_page_preview=True
-        )
+        msg = await send_rows(bot, REQST_CHANNEL, text, markup)
+        if msg is None:
+            return None
         try:
             await bot.pin_chat_message(REQST_CHANNEL, msg.id, disable_notification=True)
         except Exception:
@@ -861,11 +969,11 @@ async def dashboard_nav(bot, query):
         _, tab, page = query.data.split("#")
         tab = tab if tab in TABS else "p"
         text, markup, page = await build_dashboard(tab, int(page))
-        try:
-            await query.message.edit_text(text, reply_markup=markup, parse_mode=HTML, disable_web_page_preview=True)
-            await query.answer("🔄 Updated")
-        except MessageNotModified:
+        res = await edit_rows(bot, query.message.chat.id, query.message.id, text, markup)
+        if res == "same":
             await query.answer("Already up to date ✅")
+        else:
+            await query.answer("🔄 Updated")
 
         meta = await rq.get_meta("dashboard") or {}
         if meta.get("message_id") == query.message.id and query.message.chat.id == REQST_CHANNEL:
@@ -912,5 +1020,5 @@ async def pending_here(bot, message):
     """/pendingreq – the same pending/completed pages, right here in your PM."""
     await rq.ensure_indexes()
     text, markup, _ = await build_dashboard("p", 1)
-    await message.reply_text(text, reply_markup=markup, parse_mode=HTML, disable_web_page_preview=True)
+    await send_rows(bot, message.chat.id, text, markup)
     raise StopPropagation
