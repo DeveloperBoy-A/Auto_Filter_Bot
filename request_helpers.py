@@ -421,7 +421,35 @@ def user_mention(u) -> str:
 
 # ───────────────────────────── request channel post ───────────────────────────── #
 
-def render_post(req) -> str:
+try:
+    MAX_NAMES = max(1, int(os.environ.get("REQUEST_POST_MAX_NAMES", 60)))
+except ValueError:
+    MAX_NAMES = 60
+try:
+    FILE_NAME_LEN = max(4, int(os.environ.get("REQUEST_FILE_NAME_LEN", 12)))
+except ValueError:
+    FILE_NAME_LEN = 12
+
+
+def _group_url(u):
+    """Best clickable link for the group a user requested from."""
+    return u.get("group_link") or u.get("link")
+
+
+def _groups_of(users):
+    """Distinct groups (keep order) -> [(title, url)]."""
+    seen, out = set(), []
+    for u in users:
+        gid = u.get("group_id") or u.get("group_title")
+        if not gid or gid in seen:
+            continue
+        seen.add(gid)
+        if u.get("group_title"):
+            out.append((u["group_title"], _group_url(u)))
+    return out
+
+
+def render_post(req, _max_names=None) -> str:
     status = req.get("status", "pending")
     icon, label = status_meta(status)
     is_open = bool(req.get("open", True))
@@ -429,52 +457,70 @@ def render_post(req) -> str:
     n = req.get("user_count", len(users))
     name = esc(display_name(req))
 
-    name_html = f"<code>{name}</code>" if is_open else f"<s>{name}</s>"
-    lines = [f"🎞 {sc('name')}  : {name_html}"]
+    # closed -> EVERYTHING (labels + values) is struck through
+    def W(text):
+        return text if is_open else f"<s>{text}</s>"
+
+    lines = [W(f"🎞 {sc('name')}  : {name}")]
     if req.get("langs"):
-        lines.append(f"🌐 {sc('lang')}  : {esc(', '.join(req['langs']))}")
-    lines.append(f"👥 {sc('users')} : <b>{n}</b> {'users' if n != 1 else 'user'}")
+        lines.append(W(f"🌐 {sc('lang')}  : {esc(', '.join(req['langs']))}"))
+    lines.append(W(f"👥 {sc('users')} : <b>{n}</b> {'users' if n != 1 else 'user'}"))
 
     head = "NEW REQUEST" if is_open else "REQUEST CLOSED"
     out = [box_top(head, "🎬")]
     out += [f"┃ {l}" for l in lines]
 
     if users:
-        shown = users if len(users) <= 3 else users[:3]
-        names = ", ".join(user_mention(u) for u in shown)
-        if len(users) > len(shown):
-            names += f" +{len(users) - len(shown)} more"
-        first = users[0]
         out.append(BOX_MID)
-        out.append(f"┃ 👤 {sc('requested by')}")
-        out.append(f"┃ {names}")
-        out.append(f"┃ 🆔 {sc('first id')} : <code>{first['id']}</code>")
-        if first.get("group_title"):
-            out.append(f"┃ 🏘 {sc('group')} : <code>{esc(first['group_title'])}</code>")
+        out.append(f"┃ " + W(f"👤 {sc('requested by')}"))
+        cap = _max_names or MAX_NAMES
+        shown = users[:cap]
+        for i, u in enumerate(shown, start=1):
+            out.append("┃ " + W(f"{i}. {user_mention(u)}"))
+        if len(users) > len(shown):
+            out.append("┃ " + W(f"+{len(users) - len(shown)} more"))
+        first = users[0]
+        out.append("┃ " + W(f"🆔 {sc('first id')} : <code>{first['id']}</code>") if is_open
+                   else "┃ " + W(f"🆔 {sc('first id')} : {first['id']}"))
+        groups = _groups_of(users)
+        for idx, (title, url) in enumerate(groups):
+            label_txt = f"🏘 {sc('group')} : " if idx == 0 else "🏘 "
+            gname = esc(title)
+            if url:
+                gname = f'<a href="{esc(url)}">{gname}</a>'
+            out.append("┃ " + W(label_txt + gname))
 
     out.append(BOX_MID)
-    out.append(f"┃ 📊 {sc('status')} : {icon} <b>{label}</b>")
+    out.append("┃ " + W(f"📊 {sc('status')} : {icon} <b>{label}</b>"))
 
     mf = req.get("matched_file")
     if mf:
-        out.append(f"┃ 📁 {sc('file')} : <code>{esc((mf.get('name') or '')[:28])}</code>")
+        fname = (mf.get("name") or "").strip()
+        short_name = fname[:FILE_NAME_LEN].rstrip() + ("…" if len(fname) > FILE_NAME_LEN else "")
+        out.append("┃ " + W(f"📁 {sc('file')} : {esc(short_name)}"))
         if mf.get("quality"):
-            out.append(f"┃ 📀 {sc('quality')} : {esc(mf['quality'])}")
+            out.append("┃ " + W(f"📀 {sc('quality')} : {esc(mf['quality'])}"))
 
     nt = req.get("notified")
     if nt:
         total = nt.get("total", n)
         sent = nt.get("dm", 0) + nt.get("group", 0)
-        out.append(f"┃ 📨 {sc('notified')} : <b>{sent}/{total} sent</b>")
-        out.append(f"┃ 💬 DM {nt.get('dm', 0)} • 👥 Grp {nt.get('group', 0)} • ❌ {nt.get('failed', 0)}")
+        out.append("┃ " + W(f"📨 {sc('notified')} : <b>{sent}/{total} sent</b>"))
+        out.append("┃ " + W(f"💬 DM {nt.get('dm', 0)} • 👥 Grp {nt.get('group', 0)} • ❌ {nt.get('failed', 0)}"))
 
     if is_open:
         out.append(f"┃ 🕒 {sc('requested')} : {ago(req.get('created_at'))}")
     else:
-        out.append(f"┃ 🕒 {sc('closed')} : {ago(req.get('closed_at'))}")
+        out.append("┃ " + W(f"🕒 {sc('closed')} : {ago(req.get('closed_at'))}"))
     out.append(BOX_END)
-    out.append(f"#ʀᴇǫᴜᴇꜱᴛ {'⚡️' if is_open else icon}")
-    return "\n".join(out)
+    out.append(W(f"#ʀᴇǫᴜᴇꜱᴛ {'⚡️' if is_open else icon}"))
+
+    text = "\n".join(out)
+    # safety: Telegram hard limit 4096 -> shrink the name list instead of failing the edit
+    cap = _max_names or MAX_NAMES
+    if len(text) > 4000 and cap > 5:
+        return render_post(req, _max_names=cap // 2)
+    return text
 
 
 # ───────────────────────────── REQUEST PAGE (dashboard) ───────────────────────────── #
