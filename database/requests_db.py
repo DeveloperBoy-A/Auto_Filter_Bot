@@ -48,6 +48,7 @@ class RequestDB:
     def __init__(self, database):
         self.col = database.db.movie_requests
         self.meta = database.db.request_meta
+        self.dels = database.db.request_deletions
         self._ready = False
 
     # ───────────── setup ───────────── #
@@ -276,6 +277,25 @@ class RequestDB:
 
     async def set_meta(self, name, data):
         await self.meta.update_one({"_id": name}, {"$set": data}, upsert=True)
+
+    # ───────────── persistent delayed deletes (survive restarts) ───────────── #
+
+    async def schedule_delete(self, chat_id, msg_id, delay):
+        try:
+            await self.dels.update_one(
+                {"chat_id": int(chat_id), "msg_id": int(msg_id)},
+                {"$set": {"delete_at": datetime.utcnow() + timedelta(seconds=int(delay))}},
+                upsert=True,
+            )
+            await self.dels.create_index([("delete_at", ASCENDING)])
+        except Exception as e:
+            logger.warning(f"[REQ] schedule_delete failed: {e}")
+
+    async def due_deletes(self, limit=100):
+        return await self.dels.find({"delete_at": {"$lte": datetime.utcnow()}}).limit(limit).to_list(length=limit)
+
+    async def done_delete(self, _id):
+        await self.dels.delete_one({"_id": _id})
 
 
 rq = RequestDB(_bot_db)
