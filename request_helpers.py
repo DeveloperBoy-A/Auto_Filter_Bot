@@ -547,6 +547,9 @@ def render_post(req, _max_names=None) -> str:
 # ───────────────────────────── REQUEST PAGE (dashboard) ───────────────────────────── #
 
 # tab code -> (icon, heading, empty text)   (everything gets small caps when rendered)
+
+# ───────────────────────────── REQUEST PAGE (dashboard) ───────────────────────────── #
+
 TABS = {
     "p": ("⏳", "PENDING LIST",  sc("koi pending request nahi hai") + " 🎉"),
     "u": ("✅", "UPLOADED LIST", sc("abhi tak koi request upload nahi hui")),
@@ -554,47 +557,61 @@ TABS = {
 }
 MAX_TEXT = 3950          # Telegram hard limit is 4096
 
+W = "━" * 17                                   # change here if lines wrap on phone
+D_TOP = top("REQUEST PAGE", "📋", small=False) + "┓"   # bold title (small=False kept)
+D_MID = f"┣{W}┫"
+D_END = f"┗{W}┛"
 
-def _short(text, n=28) -> str:
+
+def _short(text, n=26) -> str:
     text = str(text)
     return text if len(text) <= n else text[: n - 1] + "…"
 
 
-def _item_box(tab, number, r) -> str:
+def _d_sum() -> str:
+    return f"┣━━━━📊 {sc('summary')} ━━━━┫"
+
+
+def _d_sep(number) -> str:
+    return f"┣━━━━━━━ {bs(f'{number:02d}')} ━━━━━━━┫"     # bold digits (small=False kept)
+
+
+def _item_lines(tab, r) -> list:
+    """Always exactly 5 lines (blank ┃ fills the gap), so layout never changes."""
     name = esc(_short(display_name(r)))
     link = r.get("post_link")
     name_html = f'<a href="{esc(link)}">{name}</a>' if link else name
     n = r.get("user_count", len(r.get("users") or []))
     icon, label = status_meta(r.get("status"))
-    lines = [f"🎬 <b>{name_html}</b>"]
+    lines = [f"┃ 🎬 {name_html}"]
 
     if tab == "p":
         hot = " 🔥" if n >= 5 else ""
-        lines.append(f"👥 {sc('users')} : <b>{n}</b>{hot}")
-        if r.get("langs"):
-            lines.append(f"🌐 {sc('lang')} : {esc(', '.join(r['langs']))}")
-        lines.append(f"📊 {sc('status')} : {icon} {label}")
-        lines.append(f"🕒 {sc('waiting')} : {ago(r.get('created_at'))}")
+        has_lang = bool(r.get("langs"))
+        if not has_lang:
+            lines.append("┃")
+        lines.append(f"┃ 👥 {sc('users')}  : {n}{hot}")
+        if has_lang:
+            lines.append(f"┃ 🌐 {sc('lang')}   : {esc(', '.join(r['langs']))}")
+        lines.append(f"┃ 📊 {sc('status')} : {icon} {label}")
+        lines.append(f"┃ 🕒 {sc('waiting')} : {ago(r.get('created_at'))}")
     elif tab == "u":
         nt = r.get("notified") or {}
-        sent, total, tail = _sent_line(nt, n) if nt else (0, n, sc("sent"))
+        sent, total, _ = _sent_line(nt, n) if nt else (0, n, "")
         q = (r.get("matched_file") or {}).get("quality")
-        if q:
-            lines.append(f"📀 {sc('quality')} : {esc(q)}")
-        lines.append(f"📨 <b>{sent}/{total}</b> {tail}")
-        if nt:
-            lines.append(f"💬 {sc('dm')} {nt.get('dm', 0)} • 👥 {sc('grp')} {nt.get('group', 0)} • ❌ {nt.get('failed', 0)}")
-        lines.append(f"🕒 {sc('uploaded')} : {ago(r.get('closed_at'))}")
+        lines.append(f"┃ 📀 {sc('quality')} : {esc(q)}" if q else "┃")
+        lines.append(f"┃ 📨 {sc('notified')} : {sent}/{total}")
+        lines.append(f"┃ 💬 {sc('dm')} {nt.get('dm', 0)} • 👥 {sc('grp')} {nt.get('group', 0)} • ❌ {nt.get('failed', 0)}")
+        lines.append(f"┃ 🕒 {sc('uploaded')} : {ago(r.get('closed_at'))}")
     else:
-        lines.append(f"📊 {sc('status')} : {icon} {label}")
-        lines.append(f"👥 {sc('users')} : <b>{n}</b>")
-        lines.append(f"🕒 {sc('closed')} : {ago(r.get('closed_at'))}")
+        lines.append("┃")
+        lines.append(f"┃ 👥 {sc('users')}  : {n}")
+        lines.append(f"┃ 📊 {sc('status')} : {icon} {label}")
+        lines.append(f"┃ 🕒 {sc('closed')} : {ago(r.get('closed_at'))}")
+    return lines
 
-    body = "\n".join(f"┃ {l}" for l in lines)
-    return f"{top(str(number), small=False)}\n{body}\n{BOX_END}"
 
-
-def _bar(done, total, width=8) -> str:
+def _bar(done, total, width=5) -> str:
     k = round(width * done / total) if total else 0
     return "▰" * k + "▱" * (width - k)
 
@@ -612,43 +629,39 @@ def render_dashboard(tab, page, pages, items, stats, now_text, skip=0) -> str:
     total = p + u + r
     rate = round(u * 100 / total) if total else 0
 
-    header = "\n".join([
-        top("REQUEST PAGE", "📋"),
-        f"┃ 🎬 {sc('all user requests live here')}",
+    head = [
+        D_TOP,
+        f"┃ 🎬 {sc('all user requests live here.')}",
         f"┃ 🔔 {sc('auto notification on upload')}",
-        BOX_END,
-    ])
-    summary = "\n".join([
-        top("SUMMARY", "📊"),
-        f"┃ 📦 {sc('total')}     : <b>{total}</b>",
-        f"┃ ⏳ {sc('pending')}   : <b>{p}</b>",
-        f"┃ ✅ {sc('uploaded')}  : <b>{u}</b>",
-        f"┃ ❌ {sc('rejected')}  : <b>{r}</b>",
-        f"┃ 📨 {sc('notified')}  : <b>{stats.get('notified', 0)}</b> {sc('users')}",
-        BOX_MID,
-        f"┃ 🎯 {sc('success')} : {_bar(u, total)} <b>{rate}%</b>",
-        BOX_END,
-    ])
-    section = f"{t_icon} <b>{sc(t_head)}</b>  <i>({page}/{pages})</i>"
-    footer = f"🕒 <i>{sc('updated')}: {now_text}</i>"
+        _d_sum(),
+        f"┃ 📦 {sc('total')}     : {total}",
+        f"┃ ⏳ {sc('pending')}   : {p}",
+        f"┃ ✅ {sc('uploaded')}  : {u}",
+        f"┃ ❌ {sc('rejected')}  : {r}",
+        f"┃ 📨 {sc('notified')}  : {stats.get('notified', 0)} {sc('users')}",
+        D_MID,
+        f"┃🎯{sc('success')}: {_bar(u, total)}{rate}%",
+        D_MID,
+        f"┃ {t_icon} {sc(t_head)}  ({page}/{pages})",
+    ]
+    footer = f"\n🕒 {sc('updated')}: {now_text}"
 
-    boxes = [_item_box(tab, skip + i, it) for i, it in enumerate(items, start=1)]
-    if not boxes:
-        boxes = [f"<i>{t_empty}</i>"]
+    blocks = [[_d_sep(skip + i)] + _item_lines(tab, it) for i, it in enumerate(items, start=1)]
+    if not blocks:
+        blocks = [[D_MID, f"┃ <i>{t_empty}</i>"]]
 
-    def build(bx, note=""):
-        parts = [header, summary, section, "\n\n".join(bx)]
-        if note:
-            parts.append(note)
-        parts.append(footer)
-        return "\n\n".join(parts)
+    def build(bl):
+        lines = list(head)
+        for b in bl:
+            lines += b
+        lines.append(D_END)
+        return "\n".join(lines) + "\n" + footer
 
-    text = build(boxes)
-    while len(text) > MAX_TEXT and len(boxes) > 1:      # never exceed Telegram's limit
-        boxes.pop()
-        text = build(boxes, f"<i>… {sc('page chhota kiya gaya (length limit)')}</i>")
+    text = build(blocks)
+    while len(text) > MAX_TEXT and len(blocks) > 1:     # never exceed Telegram's limit
+        blocks.pop()
+        text = build(blocks)
     return text
-
 
 # ───────────────────────────── DM text for requesters ───────────────────────────── #
 
@@ -656,8 +669,9 @@ def user_message(status, mention, title, n_users=1, finfo=None) -> str:
     t = esc(title)
     hello = f"👋 {sc('hey')} {mention},"
 
+    # Sabhi cards ke liye function (Isme upar ek line ka gap add kiya gaya hai)
     def card(head, icon):
-        return f"{top(head, icon)}\n┃ 🎬 <b>{t}</b>\n{BOX_END}"
+        return f"{top(head, icon)}\n┃ \n┃ 🎬 <b>{t}</b>\n┃ 👥 {sc('users')} : <b>{n_users}</b>\n{BOX_END}"
 
     if status == "uploaded":
         extra = []
@@ -667,37 +681,49 @@ def user_message(status, mention, title, n_users=1, finfo=None) -> str:
             if finfo.get("langs"):
                 extra.append(f"┃ 🌐 {sc('lang')} : <b>{esc(', '.join(sorted(finfo['langs'])))}</b>")
         extra.append(f"┃ 👥 {sc('users')} : <b>{n_users}</b>")
-        box = f"{top('REQ UPLOADED', '🎉')}\n┃ 🎬 <b>{t}</b>\n" + "\n".join(extra) + f"\n{BOX_END}"
+        
+        # Uploaded me bhi upar ek line ka gap add kiya gaya hai
+        box = f"{top('REQ MOVIE UPLOADED ✅', '🎉')}\n┃ \n┃ 🎬 <b>{t}</b>\n" + "\n".join(extra) + f"\n{BOX_END}"
         return (
             f"{box}\n\n{hello}\n"
             f"✅ {sc('aapki request')} <b>{sc('upload ho gayi')}</b> {sc('hai!')}\n"
             f"🔍 {sc('group me search karke download kar lo.')}\n"
             f"📨 {sc('sabhi users ko notification')} {sc('sent successfully')} ✅"
         )
+        
     if status == "cam_only":
-        return (f"{card('HDTC / LOW QUALITY', '🎥')}\n\n{hello}\n"
+        return (f"{card('HDTC / LOW QUALITY ✅', '🎥')}\n\n{hello}\n"
                 f"⚠️ {sc('abhi sirf')} <b>{sc('hdtc / low quality')}</b> {sc('print aaya hai.')}\n"
-                f"🔔 {sc('hd print aate hi aapko dobara notification mil jayegi.')}")
+                f"🔔 {sc('HD print aate hi aapko dobara notification mil jayegi.')}")
+                
     if status == "processing":
         return (f"{card('REQUEST ACCEPTED', '🛠')}\n\n{hello}\n"
                 f"⏳ {sc('is par kaam chalu hai.')}\n"
                 f"🔔 {sc('upload hote hi aapko notification mil jayegi.')}")
+                
     if status == "unavailable":
         return f"{card('UNAVAILABLE', '⚠️')}\n\n{hello}\n💔 {sc('ye abhi available nahi hai.')}"
+        
     if status == "already":
         return (f"{card('ALREADY AVAILABLE', '♻️')}\n\n{hello}\n"
                 f"✅ {sc('ye pehle se available hai.')}\n🔍 {sc('group me search karke dekho.')}")
+                
     if status == "not_released":
         return f"{card('NOT RELEASED', '📌')}\n\n{hello}\n🕊️ {sc('ye abhi release nahi hui hai.')}"
+        
     if status == "wrong_spelling":
         return (f"{card('WRONG SPELLING', '♨️')}\n\n{hello}\n"
                 f"❗ {sc('naam galat hai.')}\n✍️ {sc('sahi spelling ke saath dobara request karo.')}")
+                
     if status == "no_hindi":
         return f"{card('HINDI NOT AVAILABLE', '⚜️')}\n\n{hello}\n❌ {sc('ye hindi me abhi available nahi hai.')}"
+        
     if status == "no_dub":
-        return f"{card('DUB NOT AVAILABLE', '🎙')}\n\n{hello}\n❌ {sc('dubbed version abhi available nahi hai.')}"
+        return f"{card('DUB NOT AVAILABLE', '🎙')}\n\n{hello}\n❌ {sc('ye dubbed version abhi available nahi hai.')}"
+        
     if status == "need_details":
         return (f"{card('MORE DETAILS NEEDED', '📝')}\n\n{hello}\n"
                 f"✍️ {sc('naam + year + language ke saath dobara request karo:')}\n"
                 f"<code>/request Stree 2 2024 Hindi</code>")
+                
     return f"{card(str(status).replace('_', ' ').upper(), 'ℹ️')}\n\n{hello}"
