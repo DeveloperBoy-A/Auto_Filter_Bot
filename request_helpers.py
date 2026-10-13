@@ -29,12 +29,12 @@ _SC = dict(zip("abcdefghijklmnopqrstuvwxyz", "ᴀʙᴄᴅᴇꜰɢʜɪᴊᴋʟᴍ
 
 
 def sc(text) -> str:
-    """ꜱᴍᴀʟʟ ᴄᴀᴘꜱ (labels only – never use on user supplied titles)."""
+    """ꜱᴍᴀʟʟ ᴄᴀᴘꜱ (labels only – never use on user supplied titles or on strings containing HTML tags)."""
     return "".join(_SC.get(c, c) for c in str(text).lower())
 
 
 def bs(text) -> str:
-    """𝗕𝗼𝗹𝗱 𝗦𝗮𝗻𝘀 (headings only)."""
+    """𝗕𝗼𝗹𝗱 𝗦𝗮𝗻𝘀 (only used for numbers now)."""
     out = []
     for c in str(text):
         if "A" <= c <= "Z":
@@ -57,11 +57,12 @@ except ValueError:
 BAR = "━" * BAR_LEN
 
 
-def top(title="", icon=""):
-    """Top border. With title:  ┏━ 📊 𝗦𝗨𝗠𝗠𝗔𝗥𝗬 ━   (short, never wraps)"""
+def top(title="", icon="", small=True):
+    """Top border. With title:  ┏━ 📊 ꜱᴜᴍᴍᴀʀʏ ━   (short, never wraps). small=False -> bold digits."""
     if not title:
         return "┏" + BAR
-    head = f"{icon} {bs(title)}" if icon else bs(title)
+    f = sc if small else bs
+    head = f"{icon} {f(title)}" if icon else f(title)
     return f"┏━ {head} ━"
 
 
@@ -80,23 +81,23 @@ OPEN_STATUSES = ("pending", "processing", "cam_only")
 
 # status -> (icon, label)
 STATUS_META = {
-    "pending":        ("⏳", "Pending"),
-    "processing":     ("🛠", "Processing"),
-    "cam_only":       ("🎥", "CAM / Low Quality Only"),
-    "uploaded":       ("✅", "Uploaded"),
-    "unavailable":    ("⚠️", "Unavailable"),
-    "already":        ("♻️", "Already Available"),
-    "not_released":   ("📌", "Not Released"),
-    "wrong_spelling": ("♨️", "Wrong Spelling"),
-    "no_hindi":       ("⚜️", "Hindi Not Available"),
-    "no_dub":         ("🎙", "Dubbed Not Available"),
-    "need_details":   ("📝", "More Details Needed"),
-    "closed":         ("🔕", "Closed"),
+    "pending":        ("⏳", "ᴘᴇɴᴅɪɴɢ"),
+    "processing":     ("🛠", "ᴘʀᴏᴄᴇꜱꜱɪɴɢ"),
+    "cam_only":       ("🎥", "ʜᴅᴛᴄ / ʟᴏᴡ ǫᴜᴀʟɪᴛʏ"),
+    "uploaded":       ("✅", "ᴜᴘʟᴏᴀᴅᴇᴅ"),
+    "unavailable":    ("⚠️", "ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ"),
+    "already":        ("♻️", "ᴀʟʀᴇᴀᴅʏ ᴀᴠᴀɪʟᴀʙʟᴇ"),
+    "not_released":   ("📌", "ɴᴏᴛ ʀᴇʟᴇᴀꜱᴇᴅ"),
+    "wrong_spelling": ("♨️", "ᴡʀᴏɴɢ ꜱᴘᴇʟʟɪɴɢ"),
+    "no_hindi":       ("⚜️", "ʜɪɴᴅɪ ɴᴏᴛ ᴀᴠᴀɪʟᴀʙʟᴇ"),
+    "no_dub":         ("🎙", "ᴅᴜʙʙᴇᴅ ɴᴏᴛ ᴀᴠᴀɪʟᴀʙʟᴇ"),
+    "need_details":   ("📝", "ᴍᴏʀᴇ ᴅᴇᴛᴀɪʟꜱ ɴᴇᴇᴅᴇᴅ"),
+    "closed":         ("🔕", "ᴄʟᴏꜱᴇᴅ"),
 }
 
 
 def status_meta(status):
-    return STATUS_META.get(status, ("❔", str(status).title()))
+    return STATUS_META.get(status, ("❔", sc(str(status).replace("_", " "))))
 
 
 # Admin option buttons: code -> config
@@ -106,15 +107,16 @@ ADMIN_ACTIONS = {
     "up": {"status": "uploaded",       "open": False, "notify": True,  "btn": "✅ ᴜᴘʟᴏᴀᴅᴇᴅ ✅"},
     "un": {"status": "unavailable",    "open": False, "notify": True,  "btn": "⚠️ ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ ⚠️"},
     "aa": {"status": "already",        "open": False, "notify": True,  "btn": "♻️ ᴀʟʀᴇᴀᴅʏ ᴀᴠᴀɪʟᴀʙʟᴇ ♻️"},
-    "nr": {"status": "not_released",   "open": False, "notify": True,  "btn": "📌 Not Released"},
-    "ws": {"status": "wrong_spelling", "open": False, "notify": True,  "btn": "♨️ Wrong Spelling"},
-    "hn": {"status": "no_hindi",       "open": False, "notify": True,  "btn": "⚜️ Hindi Not Available"},
-    "dd": {"status": "no_dub",         "open": False, "notify": True,  "btn": "🎙 Dub Not Available"},
-    "pr": {"status": "processing",     "open": True,  "notify": True,  "btn": "🛠 Processing / Soon"},
-    "cm": {"status": "cam_only",       "open": True,  "notify": True,  "btn": "🎥 CAM Only"},
-    "dt": {"status": "need_details",   "open": False, "notify": True,  "btn": "📝 Need Details"},
-    "nu": {"status": "closed",         "open": False, "notify": False, "btn": "🔕 Close Silently"},
+    "nr": {"status": "not_released",   "open": False, "notify": True,  "btn": "📌 ɴᴏᴛ ʀᴇʟᴇᴀꜱᴇᴅ"},
+    "ws": {"status": "wrong_spelling", "open": False, "notify": True,  "btn": "♨️ ᴡʀᴏɴɢ ꜱᴘᴇʟʟɪɴɢ"},
+    "hn": {"status": "no_hindi",       "open": False, "notify": True,  "btn": "⚜️ ʜɪɴᴅɪ ɴᴏᴛ ᴀᴠᴀɪʟᴀʙʟᴇ"},
+    "dd": {"status": "no_dub",         "open": False, "notify": True,  "btn": "🎙 ᴅᴜʙ ɴᴏᴛ ᴀᴠᴀɪʟᴀʙʟᴇ"},
+    "pr": {"status": "processing",     "open": True,  "notify": True,  "btn": "🛠 ᴘʀᴏᴄᴇꜱꜱɪɴɢ / ꜱᴏᴏɴ"},
+    "cm": {"status": "cam_only",       "open": True,  "notify": True,  "btn": "🎥 ʜᴅᴛᴄ / ʟᴏᴡ ǫᴜᴀʟɪᴛʏ"},
+    "dt": {"status": "need_details",   "open": False, "notify": True,  "btn": "📝 ɴᴇᴇᴅ ᴅᴇᴛᴀɪʟꜱ"},
+    "nu": {"status": "closed",         "open": False, "notify": False, "btn": "🔕 ᴄʟᴏꜱᴇ ꜱɪʟᴇɴᴛʟʏ"},
 }
+
 
 # ───────────────────────────── tokenizing ───────────────────────────── #
 
@@ -405,14 +407,14 @@ def ago(dt, now=None) -> str:
         return "-"
     secs = int(((now or datetime.utcnow()) - dt).total_seconds())
     if secs < 60:
-        return "just now"
+        return sc("just now")
     m = secs // 60
     if m < 60:
-        return f"{m}m ago"
+        return sc(f"{m}m ago")
     h = m // 60
     if h < 24:
-        return f"{h}h ago"
-    return f"{h // 24}d ago"
+        return sc(f"{h}h ago")
+    return sc(f"{h // 24}d ago")
 
 
 def user_mention(u) -> str:
@@ -449,6 +451,17 @@ def _groups_of(users):
     return out
 
 
+def _sent_line(nt, n):
+    """'5/5 ꜱᴇɴᴛ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ✅' (or plain 'ꜱᴇɴᴛ' if some failed)."""
+    total = nt.get("total", n)
+    sent = nt.get("dm", 0) + nt.get("group", 0)
+    if sent > 0 and not nt.get("failed", 0):
+        tail = f"{sc('sent successfully')} ✅"
+    else:
+        tail = sc("sent")
+    return sent, total, tail
+
+
 def render_post(req, _max_names=None) -> str:
     status = req.get("status", "pending")
     icon, label = status_meta(status)
@@ -457,14 +470,20 @@ def render_post(req, _max_names=None) -> str:
     n = req.get("user_count", len(users))
     name = esc(display_name(req))
 
-    # closed -> EVERYTHING (labels + values) is struck through
-    def W(text):
-        return text if is_open else f"<s>{text}</s>"
+    # struck through when the request is closed, or when the HDTC / low-quality notice
+    # has already been sent (request itself stays open for the HD upload)
+    struck = (not is_open) or (status == "cam_only" and bool(req.get("notified")))
 
-    lines = [W(f"🎞 {sc('name')}  : {name}")]
+    def W(text):
+        return f"<s>{text}</s>" if struck else text
+
+    # title is tap-to-copy while the post is live; plain (struck) afterwards
+    title_val = name if struck else f"<code>{name}</code>"
+
+    lines = [W(f"🎞 {sc('title')}  : {title_val}")]
     if req.get("langs"):
         lines.append(W(f"🌐 {sc('lang')}  : {esc(', '.join(req['langs']))}"))
-    lines.append(W(f"👥 {sc('users')} : <b>{n}</b> {'users' if n != 1 else 'user'}"))
+    lines.append(W(f"👥 {sc('users')} : <b>{n}</b> {sc('users' if n != 1 else 'user')}"))
 
     head = "NEW REQUEST" if is_open else "REQUEST CLOSED"
     out = [box_top(head, "🎬")]
@@ -472,16 +491,17 @@ def render_post(req, _max_names=None) -> str:
 
     if users:
         out.append(BOX_MID)
-        out.append(f"┃ " + W(f"👤 {sc('requested by')}"))
+        out.append("┃ " + W(f"👤 {sc('requested by')}"))
         cap = _max_names or MAX_NAMES
         shown = users[:cap]
         for i, u in enumerate(shown, start=1):
             out.append("┃ " + W(f"{i}. {user_mention(u)}"))
         if len(users) > len(shown):
-            out.append("┃ " + W(f"+{len(users) - len(shown)} more"))
+            out.append("┃ " + W(f"+{len(users) - len(shown)} {sc('more')}"))
+        out.append("┃")                                   # gap between names and 🆔
         first = users[0]
-        out.append("┃ " + W(f"🆔 {sc('first id')} : <code>{first['id']}</code>") if is_open
-                   else "┃ " + W(f"🆔 {sc('first id')} : {first['id']}"))
+        id_val = first["id"] if struck else f"<code>{first['id']}</code>"
+        out.append("┃ " + W(f"🆔 {sc('first id')} : {id_val}"))
         groups = _groups_of(users)
         for idx, (title, url) in enumerate(groups):
             label_txt = f"🏘 {sc('group')} : " if idx == 0 else "🏘 "
@@ -503,17 +523,18 @@ def render_post(req, _max_names=None) -> str:
 
     nt = req.get("notified")
     if nt:
-        total = nt.get("total", n)
-        sent = nt.get("dm", 0) + nt.get("group", 0)
-        out.append("┃ " + W(f"📨 {sc('notified')} : <b>{sent}/{total} sent</b>"))
-        out.append("┃ " + W(f"💬 DM {nt.get('dm', 0)} • 👥 Grp {nt.get('group', 0)} • ❌ {nt.get('failed', 0)}"))
+        sent, total, tail = _sent_line(nt, n)
+        out.append("┃ " + W(f"📨 {sc('notified')} : <b>{sent}/{total}</b> {tail}"))
+        out.append("┃ " + W(
+            f"💬 {sc('dm')} {nt.get('dm', 0)} • 👥 {sc('grp')} {nt.get('group', 0)} • ❌ {nt.get('failed', 0)}"
+        ))
 
     if is_open:
-        out.append(f"┃ 🕒 {sc('requested')} : {ago(req.get('created_at'))}")
+        out.append("┃ " + W(f"🕒 {sc('requested')} : {ago(req.get('created_at'))}"))
     else:
         out.append("┃ " + W(f"🕒 {sc('closed')} : {ago(req.get('closed_at'))}"))
     out.append(BOX_END)
-    out.append(W(f"#ʀᴇǫᴜᴇꜱᴛ {'⚡️' if is_open else icon}"))
+    out.append(W(f"#ʀᴇǫᴜᴇꜱᴛ {'⚡️' if not struck else icon}"))
 
     text = "\n".join(out)
     # safety: Telegram hard limit 4096 -> shrink the name list instead of failing the edit
@@ -525,11 +546,11 @@ def render_post(req, _max_names=None) -> str:
 
 # ───────────────────────────── REQUEST PAGE (dashboard) ───────────────────────────── #
 
-# tab code -> (icon, heading, empty text)
+# tab code -> (icon, heading, empty text)   (everything gets small caps when rendered)
 TABS = {
-    "p": ("⏳", "PENDING LIST",  "Koi pending request nahi hai 🎉"),
-    "u": ("✅", "UPLOADED LIST", "Abhi tak koi request upload nahi hui."),
-    "r": ("❌", "REJECTED LIST", "Koi rejected request nahi hai."),
+    "p": ("⏳", "PENDING LIST",  sc("koi pending request nahi hai") + " 🎉"),
+    "u": ("✅", "UPLOADED LIST", sc("abhi tak koi request upload nahi hui")),
+    "r": ("❌", "REJECTED LIST", sc("koi rejected request nahi hai")),
 }
 MAX_TEXT = 3950          # Telegram hard limit is 4096
 
@@ -544,34 +565,38 @@ def _item_box(tab, number, r) -> str:
     link = r.get("post_link")
     name_html = f'<a href="{esc(link)}">{name}</a>' if link else name
     n = r.get("user_count", len(r.get("users") or []))
-    users_txt = f"<b>{n}</b> {'users' if n != 1 else 'user'}"
     icon, label = status_meta(r.get("status"))
     lines = [f"🎬 <b>{name_html}</b>"]
 
     if tab == "p":
-        info = f"👥 {users_txt}"
+        hot = " 🔥" if n >= 5 else ""
+        lines.append(f"👥 {sc('users')} : <b>{n}</b>{hot}")
         if r.get("langs"):
-            info += f" • 🌐 {esc(', '.join(r['langs']))}"
-        lines.append(info)
-        stat = "" if r.get("status") == "pending" else f"{icon} {label}  •  "
-        lines.append(f"{stat}🕒 {ago(r.get('created_at'))}")
+            lines.append(f"🌐 {sc('lang')} : {esc(', '.join(r['langs']))}")
+        lines.append(f"📊 {sc('status')} : {icon} {label}")
+        lines.append(f"🕒 {sc('waiting')} : {ago(r.get('created_at'))}")
     elif tab == "u":
         nt = r.get("notified") or {}
-        sent = nt.get("dm", 0) + nt.get("group", 0)
-        lines.append(f"📨 <b>{sent}/{nt.get('total', n)}</b> users notified")
-        if nt:
-            lines.append(f"💬 {nt.get('dm', 0)} • 👥 {nt.get('group', 0)} • ❌ {nt.get('failed', 0)}")
+        sent, total, tail = _sent_line(nt, n) if nt else (0, n, sc("sent"))
         q = (r.get("matched_file") or {}).get("quality")
         if q:
-            lines.append(f"📀 {esc(q)}")
-        lines.append(f"🕒 {ago(r.get('closed_at'))}")
+            lines.append(f"📀 {sc('quality')} : {esc(q)}")
+        lines.append(f"📨 <b>{sent}/{total}</b> {tail}")
+        if nt:
+            lines.append(f"💬 {sc('dm')} {nt.get('dm', 0)} • 👥 {sc('grp')} {nt.get('group', 0)} • ❌ {nt.get('failed', 0)}")
+        lines.append(f"🕒 {sc('uploaded')} : {ago(r.get('closed_at'))}")
     else:
-        lines.append(f"{icon} {label}")
-        lines.append(f"👥 {users_txt}")
-        lines.append(f"🕒 {ago(r.get('closed_at'))}")
+        lines.append(f"📊 {sc('status')} : {icon} {label}")
+        lines.append(f"👥 {sc('users')} : <b>{n}</b>")
+        lines.append(f"🕒 {sc('closed')} : {ago(r.get('closed_at'))}")
 
     body = "\n".join(f"┃ {l}" for l in lines)
-    return f"{top(str(number))}\n{body}\n{BOX_END}"
+    return f"{top(str(number), small=False)}\n{body}\n{BOX_END}"
+
+
+def _bar(done, total, width=8) -> str:
+    k = round(width * done / total) if total else 0
+    return "▰" * k + "▱" * (width - k)
 
 
 def render_dashboard(tab, page, pages, items, stats, now_text, skip=0) -> str:
@@ -583,25 +608,31 @@ def render_dashboard(tab, page, pages, items, stats, now_text, skip=0) -> str:
         tab = "p"
     t_icon, t_head, t_empty = TABS[tab]
 
+    p, u, r = stats.get("pending", 0), stats.get("uploaded", 0), stats.get("rejected", 0)
+    total = p + u + r
+    rate = round(u * 100 / total) if total else 0
+
     header = "\n".join([
-        top(),
-        f"┃ 📋 {bs('REQUEST PAGE')}",
-        f"┃ {sc('this is the request page')}",
-        f"┃ {sc('all user requests here')}",
+        top("REQUEST PAGE", "📋"),
+        f"┃ 🎬 {sc('all user requests live here')}",
+        f"┃ 🔔 {sc('auto notification on upload')}",
         BOX_END,
     ])
     summary = "\n".join([
         top("SUMMARY", "📊"),
-        f"┃ ⏳ {sc('pending')}   : <b>{stats.get('pending', 0)}</b>",
-        f"┃ ✅ {sc('uploaded')}  : <b>{stats.get('uploaded', 0)}</b>",
-        f"┃ ❌ {sc('rejected')}  : <b>{stats.get('rejected', 0)}</b>",
-        f"┃ 📨 {sc('notified')}  : <b>{stats.get('notified', 0)}</b> users",
+        f"┃ 📦 {sc('total')}     : <b>{total}</b>",
+        f"┃ ⏳ {sc('pending')}   : <b>{p}</b>",
+        f"┃ ✅ {sc('uploaded')}  : <b>{u}</b>",
+        f"┃ ❌ {sc('rejected')}  : <b>{r}</b>",
+        f"┃ 📨 {sc('notified')}  : <b>{stats.get('notified', 0)}</b> {sc('users')}",
+        BOX_MID,
+        f"┃ 🎯 {sc('success')} : {_bar(u, total)} <b>{rate}%</b>",
         BOX_END,
     ])
-    section = f"{t_icon} {bs(t_head)}  <i>({page}/{pages})</i>"
+    section = f"{t_icon} <b>{sc(t_head)}</b>  <i>({page}/{pages})</i>"
     footer = f"🕒 <i>{sc('updated')}: {now_text}</i>"
 
-    boxes = [_item_box(tab, skip + i, r) for i, r in enumerate(items, start=1)]
+    boxes = [_item_box(tab, skip + i, it) for i, it in enumerate(items, start=1)]
     if not boxes:
         boxes = [f"<i>{t_empty}</i>"]
 
@@ -613,11 +644,9 @@ def render_dashboard(tab, page, pages, items, stats, now_text, skip=0) -> str:
         return "\n\n".join(parts)
 
     text = build(boxes)
-    trimmed = False
     while len(text) > MAX_TEXT and len(boxes) > 1:      # never exceed Telegram's limit
         boxes.pop()
-        trimmed = True
-        text = build(boxes, "<i>… page chhota kiya gaya (length limit)</i>")
+        text = build(boxes, f"<i>… {sc('page chhota kiya gaya (length limit)')}</i>")
     return text
 
 
@@ -634,40 +663,41 @@ def user_message(status, mention, title, n_users=1, finfo=None) -> str:
         extra = []
         if finfo:
             if finfo.get("quality"):
-                extra.append(f"┃ 📀 <b>{esc(finfo['quality'])}</b>")
+                extra.append(f"┃ 📀 {sc('quality')} : <b>{esc(finfo['quality'])}</b>")
             if finfo.get("langs"):
-                extra.append(f"┃ 🌐 <b>{esc(', '.join(sorted(finfo['langs'])))}</b>")
+                extra.append(f"┃ 🌐 {sc('lang')} : <b>{esc(', '.join(sorted(finfo['langs'])))}</b>")
         extra.append(f"┃ 👥 {sc('users')} : <b>{n_users}</b>")
-        box = f"{top('UPLOADED', '🎉')}\n┃ 🎬 <b>{t}</b>\n" + "\n".join(extra) + f"\n{BOX_END}"
+        box = f"{top('REQ UPLOADED', '🎉')}\n┃ 🎬 <b>{t}</b>\n" + "\n".join(extra) + f"\n{BOX_END}"
         return (
             f"{box}\n\n{hello}\n"
-            f"✅ Aapki request <b>upload ho gayi</b> hai!\n"
-            f"🔍 Group me search karke download kar lo.\n"
-            f"📨 Sabhi users ko notification bhej di gayi."
+            f"✅ {sc('aapki request')} <b>{sc('upload ho gayi')}</b> {sc('hai!')}\n"
+            f"🔍 {sc('group me search karke download kar lo.')}\n"
+            f"📨 {sc('sabhi users ko notification')} {sc('sent successfully')} ✅"
         )
     if status == "cam_only":
-        return (f"{card('CAM / LOW QUALITY', '🎥')}\n\n{hello}\n"
-                f"⚠️ Abhi sirf <b>CAM / low-quality</b> print aaya hai.\n"
-                f"🔔 HD print aate hi aapko dobara notification mil jayegi.")
+        return (f"{card('HDTC / LOW QUALITY', '🎥')}\n\n{hello}\n"
+                f"⚠️ {sc('abhi sirf')} <b>{sc('hdtc / low quality')}</b> {sc('print aaya hai.')}\n"
+                f"🔔 {sc('hd print aate hi aapko dobara notification mil jayegi.')}")
     if status == "processing":
         return (f"{card('REQUEST ACCEPTED', '🛠')}\n\n{hello}\n"
-                f"⏳ Is par kaam chalu hai.\n🔔 Upload hote hi aapko notification mil jayegi.")
+                f"⏳ {sc('is par kaam chalu hai.')}\n"
+                f"🔔 {sc('upload hote hi aapko notification mil jayegi.')}")
     if status == "unavailable":
-        return f"{card('UNAVAILABLE', '⚠️')}\n\n{hello}\n💔 Ye abhi available nahi hai."
+        return f"{card('UNAVAILABLE', '⚠️')}\n\n{hello}\n💔 {sc('ye abhi available nahi hai.')}"
     if status == "already":
         return (f"{card('ALREADY AVAILABLE', '♻️')}\n\n{hello}\n"
-                f"✅ Ye pehle se available hai.\n🔍 Group me search karke dekho.")
+                f"✅ {sc('ye pehle se available hai.')}\n🔍 {sc('group me search karke dekho.')}")
     if status == "not_released":
-        return f"{card('NOT RELEASED', '📌')}\n\n{hello}\n🕊️ Ye abhi release nahi hui hai."
+        return f"{card('NOT RELEASED', '📌')}\n\n{hello}\n🕊️ {sc('ye abhi release nahi hui hai.')}"
     if status == "wrong_spelling":
         return (f"{card('WRONG SPELLING', '♨️')}\n\n{hello}\n"
-                f"❗ Naam galat hai.\n✍️ Sahi spelling ke saath dobara request karo.")
+                f"❗ {sc('naam galat hai.')}\n✍️ {sc('sahi spelling ke saath dobara request karo.')}")
     if status == "no_hindi":
-        return f"{card('HINDI NOT AVAILABLE', '⚜️')}\n\n{hello}\n❌ Ye Hindi me abhi available nahi hai."
+        return f"{card('HINDI NOT AVAILABLE', '⚜️')}\n\n{hello}\n❌ {sc('ye hindi me abhi available nahi hai.')}"
     if status == "no_dub":
-        return f"{card('DUB NOT AVAILABLE', '🎙')}\n\n{hello}\n❌ Dubbed version abhi available nahi hai."
+        return f"{card('DUB NOT AVAILABLE', '🎙')}\n\n{hello}\n❌ {sc('dubbed version abhi available nahi hai.')}"
     if status == "need_details":
         return (f"{card('MORE DETAILS NEEDED', '📝')}\n\n{hello}\n"
-                f"✍️ Naam + Year + Language ke saath dobara request karo:\n"
+                f"✍️ {sc('naam + year + language ke saath dobara request karo:')}\n"
                 f"<code>/request Stree 2 2024 Hindi</code>")
-    return f"{card(str(status).upper(), 'ℹ️')}\n\n{hello}"
+    return f"{card(str(status).replace('_', ' ').upper(), 'ℹ️')}\n\n{hello}"
