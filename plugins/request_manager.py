@@ -265,7 +265,8 @@ def post_markup(req):
     first = f"{icon} {label}" + (f" • 📨 {sent}/{nt.get('total', req.get('user_count', 0))}" if req.get("notified") else "")
     ok = req.get("status") == "uploaded"
     return [[B(first, "success" if ok else None, callback_data=f"rq#info#{rid}"),
-             B("🔄 Reopen", "primary", callback_data=f"rq#reo#{rid}")]]
+             B("🔄 ʀᴇᴏᴘᴇɴ", "primary", callback_data=f"rq#reo#{rid}")]]
+
 
 
 def options_markup(req):
@@ -281,7 +282,7 @@ def options_markup(req):
         [b("hn"), b("dd")],
         [b("pr"), b("cm")],
         [b("dt"), b("nu")],
-        [B("🗑 Delete", "danger", callback_data=f"rq#del#{rid}"), B("⬅️ Back", None, callback_data=f"rq#back#{rid}")],
+        [B("🗑 ᴅᴇʟᴇᴛᴇ", "danger", callback_data=f"rq#del#{rid}"), B("⬅️ ʙᴀᴄᴋ", None, callback_data=f"rq#back#{rid}")],
     ]
 
 
@@ -291,12 +292,13 @@ def user_markup(req):
     if MOVIE_UPDATE_CHANNEL_LINK:
         first.append(B("📢 ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ", "primary", url=MOVIE_UPDATE_CHANNEL_LINK))
     if GRP_LNK:
-        first.append(B("🔍 Search", "success", url=GRP_LNK))
+        first.append(B("🔍 ꜱᴇᴀʀᴄʜ ɴᴏᴡ 🔍", "success", url=GRP_LNK))
     if first:
         rows.append(first)
     if req.get("post_link"):
-        rows.append([B("👁 View Request", "primary", url=req["post_link"])])
+        rows.append([B("👁 ᴠɪᴇᴡ ʀᴇǫᴜᴇꜱᴛ", "primary", url=req["post_link"])])
     return rows or None
+
 
 
 # ═════════════════════════════ safe telegram helpers ═════════════════════════════ #
@@ -397,7 +399,7 @@ async def notify_users(bot, req, status, finfo=None):
                 chunk = ulist[i:i + 10]
                 tags = " ".join(user_mention(u) for u in chunk)
                 body = user_message(status, tags, title, n, finfo)
-                body += "\n\n<i>💡 Bot ko PM me /start kar do — agli baar seedha DM milega.</i>"
+                body += f"\n\n<i>💡 {sc('bot ko pm me /start kar do — agli baar seedha dm milega.')}</i>"
                 msg = await _send(bot, gid, body, markup)
                 if msg:
                     grp += len(chunk)
@@ -414,7 +416,7 @@ async def deliver(bot, req, status, finfo=None, notify=True):
         if notify:
             stats = await notify_users(bot, req, status, finfo)
             await rq.save_notified(req["_id"], stats)
-            await refresh_post(bot, req["_id"])      # now with "📨 5/5 sent"
+            await refresh_post(bot, req["_id"])      # now with "📨 5/5 sent successfully ✅" (+ strikethrough for HDTC)
         schedule_dashboard_refresh(bot)
     except Exception:
         logger.exception("[REQ] deliver failed")
@@ -464,7 +466,7 @@ async def notify_on_upload(bot, file_name, caption=""):
 # ═════════════════════════════ /request command ═════════════════════════════ #
 
 USAGE = (
-    f"{top('REQUEST FORMAT', '❌')}\n"
+    f"{top('ʀᴇǫᴜᴇꜱᴛ ꜰᴏʀᴍᴀᴛ', '❌')}\n"
     "┃ अपनी मूवी या सीरीज का नाम तो लिखिये!\n"
     f"{BOX_END}\n\n"
     f"📝 <b>{sc('format')}</b>\n"
@@ -473,7 +475,7 @@ USAGE = (
     "<blockquote><code>/request Stree 2 2024 Hindi</code></blockquote>\n"
     f"📺 <b>{sc('series example')}</b>\n"
     "<blockquote><code>/request Mirzapur S03 Hindi</code></blockquote>\n"
-    "✨ <i>Tip: Msg par Reply karke bhi request kar sakte ho.</i>"
+    "✨ <i>ᴛɪᴘ: ᴍꜱɢ ᴘᴀʀ ʀᴇᴘʟʏ ᴋᴀʀᴋᴇ ʙʜɪ ʀᴇǫᴜᴇꜱᴛ ᴋᴀʀ ꜱᴀᴋᴛᴇ ʜᴏ.</i>"
 )
 
 request_filter = filters.regex(r"(?i)(?<!\w)[/#]request(?:@\w+)?(?!\w)")
@@ -590,7 +592,7 @@ async def request_command(bot, message):
     name = esc(display_name(parsed))
 
     bot_btn = (
-        B("🤖 Start Bot (DM alerts)", "success", url=f"https://t.me/{temp.U_NAME}")
+        B("🤖 ꜱᴛᴀʀᴛ ʙᴏᴛ (ᴅᴍ ᴀʟᴇʀᴛꜱ)", "success", url=f"https://t.me/{temp.U_NAME}")
         if temp.U_NAME
         else None
     )
@@ -640,13 +642,14 @@ async def request_command(bot, message):
             return
 
         text = (
-            f"{top('RECEIVED', '✅')}\n"
+            f"{top('ʀᴇǫᴜᴇꜱᴛ ʀᴇᴄᴇɪᴠᴇᴅ', '✅')}\n"
+            f"┃ ✅ ʀᴇǫᴜᴇꜱᴛ ʀᴇᴄᴇɪᴠᴇᴅ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ\n"
             f"┃ 🎬 <b>{name}</b>\n"
-            f"┃ 📊 {sc('status')} : ⏳ Pending\n"
+            f"┃ 📊 {sc('status')} : ⏳ ᴘᴇɴᴅɪɴɢ\n"
             f"┃ 👥 {sc('users')}  : <b>1</b>\n"
             f"{BOX_END}\n\n"
-            "🔔 Upload hote hi aapko <b>auto notification</b> mil jayegi.\n"
-            "💡 Bot ko PM me start kar lo taaki seedha DM aaye."
+            "🔔 ᴜᴘʟᴏᴀᴅ ʜᴏᴛᴇ ʜɪ ᴀᴀᴘᴋᴏ ᴀᴜᴛᴏ ɴᴏᴛɪꜰɪᴄᴀᴛɪᴏɴ ᴍɪʟ ᴊᴀʏᴇɢɪ.\n"
+            "💡 ʙᴏᴛ ᴋᴏ ᴘᴍ ᴍᴇ ꜱᴛᴀʀᴛ ᴋᴀʀ ʟᴏ ᴛᴀᴀᴋɪ ꜱᴇᴇᴅʜᴀ ᴅᴍ ᴀᴀʏᴇ."
         )
 
     elif state == "joined":
@@ -654,12 +657,12 @@ async def request_command(bot, message):
         n = doc.get("user_count", 1)
 
         text = (
-            f"{top('ADDED', '✅')}\n"
+            f"{top('ʀᴇǫᴜᴇꜱᴛ ᴀᴅᴅᴇᴅ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ', '✅')}\n"
             f"┃ 🎬 <b>{name}</b>\n"
-            f"┃ 👥 {sc('waiting')} : <b>{n}</b> users\n"
+            f"┃ 👥 {sc('waiting')} : <b>{n}</b> {sc('users' if n != 1 else 'user')}\n"
             f"{BOX_END}\n\n"
-            "📌 Ye request pehle se maangi ja rahi thi.\n"
-            "🔔 Upload hote hi aapko bhi notification milegi."
+            "📌 ʏᴇ ʀᴇǫᴜᴇꜱᴛ ᴘᴇʜʟᴇ ꜱᴇ ᴍᴀᴀɴɢɪ ᴊᴀ ʀᴀʜɪ ᴛʜɪ.\n"
+            "🔔 ᴜᴘʟᴏᴀᴅ ʜᴏᴛᴇ ʜɪ ᴀᴀᴘᴋᴏ ʙʜɪ ɴᴏᴛɪꜰɪᴄᴀᴛɪᴏɴ ᴍɪʟᴇɢɪ."
         )
 
         schedule_post_refresh(
@@ -674,42 +677,39 @@ async def request_command(bot, message):
         )
 
         text = (
-            f"{top('ALREADY REQUESTED', '⚠️')}\n"
+            f"{top('ᴀʟʀᴇᴀᴅʏ ʀᴇǫᴜᴇꜱᴛᴇᴅ', '⚠️')}\n"
             f"┃ 🎬 <b>{esc(display_name(doc))}</b>\n"
             f"┃ 📊 {sc('status')} : {icon} {label}\n"
             f"┃ 👥 {sc('users')}  : "
             f"<b>{doc.get('user_count', 1)}</b>\n"
             f"{BOX_END}\n\n"
-            "✅ Dobara bhejne ki zaroorat nahi — "
-            "duplicate count nahi hoti."
+            "✅ ᴅᴏʙᴀʀᴀ ʙʜᴇᴊɴᴇ ᴋɪ ᴢᴀʀᴏᴏʀᴀᴛ ɴᴀʜɪ — ᴅᴜᴘʟɪᴄᴀᴛᴇ ᴄᴏᴜɴᴛ ɴᴀʜɪ ʜᴏᴛɪ.\n"
+            "🔔 ᴜᴘʟᴏᴀᴅ ʜᴏᴛᴇ ʜɪ ᴀᴀᴘᴋᴏ ᴀᴜᴛᴏ ɴᴏᴛɪꜰɪᴄᴀᴛɪᴏɴ ᴍɪʟ ᴊᴀʏᴇɢɪ."
         )
 
     elif state == "uploaded":
 
         text = (
-            f"{top('ALREADY UPLOADED', '✅')}\n"
+            f"{top('ᴀʟʀᴇᴀᴅʏ ᴜᴘʟᴏᴀᴅᴇᴅ', '✅')}\n"
             f"┃ 🎬 <b>{esc(display_name(doc))}</b>\n"
             f"{BOX_END}\n\n"
-            "🔍 Ye haal hi me upload ho chuki hai — "
-            "group me search karke download kar lo."
+            "🔍 ʏᴇ ʜᴀᴀʟ ʜɪ ᴍᴇ ᴜᴘʟᴏᴀᴅ ʜᴏ ᴄʜᴜᴋɪ ʜᴀɪ — ɢʀᴏᴜᴘ ᴍᴇ ꜱᴇᴀʀᴄʜ ᴋᴀʀᴋᴇ ᴅᴏᴡɴʟᴏᴀᴅ ᴋᴀʀ ʟᴏ.."
         )
 
     elif state == "limit":
 
         text = (
-            f"{top('REQUEST LIMIT', '🚫')}\n"
+            f"{top('ʀᴇǫᴜᴇꜱᴛ ʟɪᴍɪᴛ', '🚫')}\n"
             f"┃ 📌 {sc('pending')} : "
             f"<b>{MAX_OPEN_PER_USER}</b> / {MAX_OPEN_PER_USER}\n"
             f"{BOX_END}\n\n"
-            "⏳ Kuch requests upload hone ke baad "
-            "nayi request karo."
+            "⏳ ᴋᴜᴄʜ ʀᴇǫᴜᴇꜱᴛꜱ ᴜᴘʟᴏᴀᴅ ʜᴏɴᴇ ᴋᴇ ʙᴀᴀᴅ ɴᴀʏɪ ʀᴇǫᴜᴇꜱᴛ ᴋᴀʀᴏ."
         )
 
     else:
 
         text = (
-            "<b>⚠️ Request abhi process nahi ho payi, "
-            "thodi der baad try karo.</b>"
+            "<b>⚠️ ʀᴇǫᴜᴇꜱᴛ ᴀʙʜɪ ᴘʀᴏᴄᴇꜱꜱ ɴᴀʜɪ ʜᴏ ᴘᴀʏɪ, ᴛʜᴏᴅɪ ᴅᴇʀ ʙᴀᴀᴅ ᴛʀʏ ᴋᴀʀᴏ.</b>"
         )
 
     # ───────────── buttons ───────────── #
@@ -735,7 +735,7 @@ async def request_command(bot, message):
         rows.append([bot_btn])
 
     if state == "uploaded" and GRP_LNK:
-        rows.append([B("🔍 Search", "success", url=GRP_LNK)])
+        rows.append([B("🔍 ꜱᴇᴀʀᴄʜ ɴᴏᴡ 🔍", "success", url=GRP_LNK)])
 
     # ───────────── THIS IS THE IMPORTANT CHANGE ───────────── #
 
@@ -777,7 +777,7 @@ async def _handle_rq(bot, query):
 
     req = await rq.get(rid)
     if not req:
-        return await query.answer("❌ Request DB me nahi mili (delete ho chuki hai).", show_alert=True)
+        return await query.answer("❌ ʀᴇǫᴜᴇꜱᴛ ᴅʙ ᴍᴇ ɴᴀʜɪ ᴍɪʟɪ (ᴅᴇʟᴇᴛᴇ ʜᴏ ᴄʜᴜᴋɪ ʜᴀɪ).", show_alert=True)
 
     # ── read-only info: everybody ──
     if act == "info":
@@ -786,22 +786,22 @@ async def _handle_rq(bot, query):
         if nt:
             txt = (
                 f"{icon} {label}\n"
-                f"📨 Notified {nt.get('dm', 0) + nt.get('group', 0)}/{nt.get('total', 0)}\n"
-                f"💬 DM {nt.get('dm', 0)} • 👥 Group {nt.get('group', 0)} • ❌ Failed {nt.get('failed', 0)}"
+                f"📨 {sc('sent successfully')} ✅ {nt.get('dm', 0) + nt.get('group', 0)}/{nt.get('total', 0)}\n"
+                f"💬 {sc('dm')} {nt.get('dm', 0)} • 👥 {sc('group')} {nt.get('group', 0)} • ❌ {sc('failed')} {nt.get('failed', 0)}"
             )
         else:
-            txt = f"{icon} {label}\n👥 {req.get('user_count', 0)} users"
+            txt = f"{icon} {label}\n👥 {req.get('user_count', 0)} {sc('users')}"
         return await query.answer(txt[:200], show_alert=True)
 
     # ── everything below: admins only ──
     if not _is_admin(query):
-        return await query.answer("No permission ❌", show_alert=True)
+        return await query.answer("ɴᴏ ᴘᴇʀᴍɪꜱꜱɪᴏɴ ❌", show_alert=True)
 
     if act == "opt":
         if not req.get("open", True):
-            return await query.answer("Ye request already close hai. Pehle Reopen karo.", show_alert=True)
+            return await query.answer("ʏᴇ ʀᴇǫᴜᴇꜱᴛ ᴀʟʀᴇᴀᴅʏ ᴄʟᴏꜱᴇ ʜᴀɪ. ᴘᴇʜʟᴇ ʀᴇᴏᴘᴇɴ ᴋᴀʀᴏ.", show_alert=True)
         await edit_rows(bot, query.message.chat.id, query.message.id, render_post(req), options_markup(req))
-        return await query.answer("Here are the options!")
+        return await query.answer("ʜᴇʀᴇ ᴀʀᴇ ᴛʜᴇ ᴏᴘᴛɪᴏɴꜱ!")
 
     if act == "back":
         await edit_rows(bot, query.message.chat.id, query.message.id, render_post(req), post_markup(req))
@@ -811,21 +811,21 @@ async def _handle_rq(bot, query):
         try:
             doc = await rq.reopen(rid)
         except DuplicateKeyError:
-            return await query.answer("Same request already open hai, reopen nahi ho sakti.", show_alert=True)
+            return await query.answer("ꜱᴀᴍᴇ ʀᴇǫᴜᴇꜱᴛ ᴀʟʀᴇᴀᴅʏ ᴏᴘᴇɴ ʜᴀɪ, ʀᴇᴏᴘᴇɴ ɴᴀʜɪ ʜᴏ ꜱᴀᴋᴛɪ.", show_alert=True)
         if not doc:
-            return await query.answer("Request pehle se open hai.", show_alert=True)
+            return await query.answer("ʀᴇǫᴜᴇꜱᴛ ᴘᴇʜʟᴇ ꜱᴇ ᴏᴘᴇɴ ʜᴀɪ.", show_alert=True)
         temp.RQ_MATCH_CACHE = (0.0, [])
         await _safe_edit_post(bot, doc)
         schedule_dashboard_refresh(bot)
-        return await query.answer("🔄 Reopened!")
+        return await query.answer("🔄 ʀᴇᴏᴘᴇɴᴇᴅ!")
 
     if act == "del":
         kb = [[
-            B("✅ Haan, Delete", "danger", callback_data=f"rq#delok#{rid}"),
-            B("❌ Cancel", "success", callback_data=f"rq#back#{rid}"),
+            B("✅ ʜᴀᴀɴ, ᴅᴇʟᴇᴛᴇ", "danger", callback_data=f"rq#delok#{rid}"),
+            B("❌ ᴄᴀɴᴄᴇʟ", "success", callback_data=f"rq#back#{rid}"),
         ]]
         await edit_rows(bot, query.message.chat.id, query.message.id, render_post(req), kb)
-        return await query.answer("Pakka delete karna hai? (users ko kuch nahi bheja jayega)", show_alert=True)
+        return await query.answer("ᴘᴀᴋᴋᴀ ᴅᴇʟᴇᴛᴇ ᴋᴀʀɴᴀ ʜᴀɪ? (ᴜꜱᴇʀꜱ ᴋᴏ ᴋᴜᴄʜ ɴᴀʜɪ ʙʜᴇᴊᴀ ᴊᴀʏᴇɢᴀ)", show_alert=True)
 
     if act == "delok":
         await rq.delete(rid)
@@ -835,7 +835,7 @@ async def _handle_rq(bot, query):
         except Exception:
             pass
         schedule_dashboard_refresh(bot)
-        return await query.answer("🗑 Deleted")
+        return await query.answer("🗑 ᴅᴇʟᴇᴛᴇᴅ")
 
     cfg = ADMIN_ACTIONS.get(act)
     if not cfg:
@@ -846,13 +846,13 @@ async def _handle_rq(bot, query):
         extra=None,
     )
     if not doc:
-        return await query.answer("⚠️ Ye request already handle ho chuki hai.", show_alert=True)
+        return await query.answer("⚠️ ʏᴇ ʀᴇǫᴜᴇꜱᴛ ᴀʟʀᴇᴀᴅʏ ʜᴀɴᴅʟᴇ ʜᴏ ᴄʜᴜᴋɪ ʜᴀɪ.", show_alert=True)
 
     temp.RQ_MATCH_CACHE = (0.0, [])
     icon, label = status_meta(cfg["status"])
     n = doc.get("user_count", 0)
     if cfg["notify"]:
-        await query.answer(f"{icon} {label} — {n} users ko notification bhej raha hu…")
+        await query.answer(f"{icon} {label} — {n} ᴜꜱᴇʀꜱ ᴋᴏ ɴᴏᴛɪꜰɪᴄᴀᴛɪᴏɴ ʙʜᴇᴊ ʀᴀʜᴀ ʜᴜ…")
     else:
         await query.answer(f"{icon} {label}")
     _spawn(deliver(bot, doc, cfg["status"], notify=cfg["notify"]))
@@ -867,7 +867,7 @@ async def rq_callbacks(bot, query):
     except Exception:
         logger.exception("[REQ] callback failed")
         try:
-            await query.answer("⚠️ Error, logs check karo.", show_alert=True)
+            await query.answer("⚠️ ᴇʀʀᴏʀ, ʟᴏɢꜱ ᴄʜᴇᴄᴋ ᴋᴀʀᴏ.", show_alert=True)
         except Exception:
             pass
     raise StopPropagation
@@ -877,9 +877,9 @@ async def rq_callbacks(bot, query):
 
 def _dash_markup(tab, page, pages, stats):
     labels = {
-        "p": f"⏳ Pending ({stats['pending']})",
-        "u": f"✅ Uploaded ({stats['uploaded']})",
-        "r": f"❌ Rejected ({stats['rejected']})",
+        "p": f"⏳ ᴘᴇɴᴅɪɴɢ ({stats['pending']})",
+        "u": f"✅ ᴜᴘʟᴏᴀᴅᴇᴅ ({stats['uploaded']})",
+        "r": f"❌ ʀᴇᴊᴇᴄᴛᴇᴅ ({stats['rejected']})",
     }
     labels[tab] = "• " + labels[tab]
     prev_p = page - 1 if page > 1 else pages
@@ -888,12 +888,13 @@ def _dash_markup(tab, page, pages, stats):
         [B(labels["p"], "primary", callback_data="rqpg#p#1")],
         [B(labels["u"], "success", callback_data="rqpg#u#1"), B(labels["r"], "danger", callback_data="rqpg#r#1")],
         [
-            B("◀️ Prev", None, callback_data=f"rqpg#{tab}#{prev_p}"),
+            B("◀️ ᴘʀᴇᴠ", None, callback_data=f"rqpg#{tab}#{prev_p}"),
             B(f"📄 {page}/{pages}", None, callback_data="rq#noop#x"),
-            B("Next ▶️", None, callback_data=f"rqpg#{tab}#{next_p}"),
+            B("ɴᴇxᴛ ▶️", None, callback_data=f"rqpg#{tab}#{next_p}"),
         ],
-        [B("🔄 Refresh", "primary", callback_data=f"rqpg#{tab}#{page}")],
+        [B("🔄 ʀᴇꜰʀᴇꜱʜ", "primary", callback_data=f"rqpg#{tab}#{page}")],
     ]
+
 
 
 async def build_dashboard(tab="p", page=1):
@@ -971,9 +972,9 @@ async def dashboard_nav(bot, query):
         text, markup, page = await build_dashboard(tab, int(page))
         res = await edit_rows(bot, query.message.chat.id, query.message.id, text, markup)
         if res == "same":
-            await query.answer("Already up to date ✅")
+            await query.answer("ᴀʟʀᴇᴀᴅʏ ᴜᴘ ᴛᴏ ᴅᴀᴛᴇ ✅")
         else:
-            await query.answer("🔄 Updated")
+            await query.answer("🔄 ᴜᴘᴅᴀᴛᴇᴅ")
 
         meta = await rq.get_meta("dashboard") or {}
         if meta.get("message_id") == query.message.id and query.message.chat.id == REQST_CHANNEL:
@@ -983,7 +984,7 @@ async def dashboard_nav(bot, query):
     except Exception:
         logger.exception("[REQ] dashboard nav failed")
         try:
-            await query.answer("⚠️ Error", show_alert=True)
+            await query.answer("⚠️ ᴇʀʀᴏʀ", show_alert=True)
         except Exception:
             pass
     raise StopPropagation
@@ -996,14 +997,14 @@ _chan_filter = filters.chat(REQST_CHANNEL) if REQST_CHANNEL else filters.create(
 async def reqpage_cmd(bot, message):
     """/reqpage = refresh dashboard   |   /reqpage new = create a fresh dashboard message"""
     if REQST_CHANNEL is None:
-        await message.reply_text("⚠️ REQST_CHANNEL set nahi hai.")
+        await message.reply_text("⚠️ ʀᴇǫꜱᴛ_ᴄʜᴀɴɴᴇʟ ꜱᴇᴛ ɴᴀʜɪ ʜᴀɪ.")
         raise StopPropagation
     force = len(message.command) > 1 and message.command[1].lower() in ("new", "reset")
     await rq.ensure_indexes()
     try:
         mid = await refresh_dashboard(bot, force_new=force)
     except Exception as e:
-        await message.reply_text(f"❌ Dashboard error: <code>{esc(e)}</code>", parse_mode=HTML)
+        await message.reply_text(f"❌ {sc('dashboard error')}: <code>{esc(e)}</code>", parse_mode=HTML)
         raise StopPropagation
     if message.chat.id == REQST_CHANNEL:
         try:
@@ -1011,7 +1012,10 @@ async def reqpage_cmd(bot, message):
         except Exception:
             pass
     else:
-        await message.reply_text(f"✅ Dashboard ready (message id <code>{mid}</code>) — request channel check karo.", parse_mode=HTML)
+        await message.reply_text(
+            f"✅ ᴅᴀꜱʜʙᴏᴀʀᴅ ʀᴇᴀᴅʏ ({sc('message id')} <code>{mid}</code>) — {sc('request channel check karo.')}",
+            parse_mode=HTML,
+        )
     raise StopPropagation
 
 
