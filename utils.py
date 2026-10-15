@@ -183,12 +183,17 @@ async def enforce_daily_limit(client, message):
             # Agar bot me limit ki value DB se aati hai, tab status.get("limit", DAILY_DOWNLOAD_LIMIT) bhi use kar sakte hain.
             total_limit = status.get("daily_limit", DAILY_DOWNLOAD_LIMIT)
 
-            await client.send_message(
+            _limit_msg = await client.send_message(
                 chat_id=user_id,
                 text=script.DOWNLOAD_LIMIT_TXT.format(total_limit),
                 reply_markup=InlineKeyboardMarkup(buttons),
                 parse_mode=enums.ParseMode.HTML
             )
+            try:
+                from plugins.Dreamxfutures.button_style import colorize_later   # lazy: circular import se bachne ke liye
+                colorize_later(_limit_msg, InlineKeyboardMarkup(buttons), default="primary")
+            except Exception:
+                pass
             break
         except FloodWait as e:
             # Added 1 second extra buffer for safety
