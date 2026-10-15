@@ -18,6 +18,7 @@ from pyrogram import Client, filters, enums, StopPropagation
 from pyrogram.errors import FloodWait, ChatAdminRequired, UserNotParticipant
 from database.ia_filterdb import Media, Media2, MEDIA_DBS, delete_file_by_id, delete_files_by_query, get_file_details, unpack_new_file_id, get_bad_files, get_cover_url, backfill_media_type
 from database.users_chats_db import db
+from database.manual_media_db import get_manual_cover
 from info import *
 from utils import get_settings, save_group_settings, is_subscribed, is_req_subscribed, get_size, get_shortlink, is_check_admin, temp, get_readable_time, get_time, generate_settings_text, log_error, clean_filename, extract_caption_meta, enforce_daily_limit
 
@@ -25,6 +26,95 @@ from utils import get_settings, save_group_settings, is_subscribed, is_req_subsc
 
 logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
+
+# ======================= 🎨 COLOURED BUTTONS (Telegram Bot API) =======================
+# Pyrogram button `style` bhej nahi sakta, isliye message pyrogram se jaata hai aur turant baad
+# Bot API (editMessageReplyMarkup) se uske buttons coloured ho jaate hain. Fail ho to plain buttons
+# waise hi rehte hain (kuch toot'ta nahi). Band karne ke liye env: BUTTON_COLORS=False
+# Colours: "success" = hara, "primary" = neela, "danger" = laal
+from plugins.Dreamxfutures.button_style import COLORS_ENABLED, _call as _bot_api_call, markup_json as _markup_json
+
+# (callback_data ka shuruaat) -> colour
+_CB_STYLES = {
+    "generate_stream_link": "success",
+    "prestream": "success",
+    "audio_subs_info": "primary",
+    "checksub#": "success",
+    "help": "primary",
+    "about": "primary",
+    "topsearch": "success",
+    "premium_info": "danger",
+    "close_data": "danger",
+}
+# (url / button text me ye likha ho) -> colour
+_TEXT_STYLES = [
+    ("startgroup=true", "success"),
+    ("start=file_", "success"),
+    ("start=allfiles_", "success"),
+    ("ᴄʟɪᴄᴋ ʜᴇʀᴇ ᴛᴏ ᴠᴇʀɪꜰʏ", "success"),
+    ("ʜᴏᴡ ᴛᴏ ᴠᴇʀɪꜰʏ", "primary"),
+    ("ꜱᴇɴᴅ ᴘᴀʏᴍᴇɴᴛ", "success"),
+]
+
+
+def _btn_style(text, url, cb, default=None):
+    if cb:
+        for prefix, st in _CB_STYLES.items():
+            if cb.startswith(prefix):
+                return st
+    if url:
+        if UPDATE_CHNL_LNK and url == UPDATE_CHNL_LNK:
+            return "primary"
+        for key, st in _TEXT_STYLES:
+            if key in url:
+                return st
+    for key, st in _TEXT_STYLES:
+        if key in (text or ""):
+            return st
+    return default
+
+
+def _styled_rows(markup, default=None):
+    rows = []
+    for row in markup.inline_keyboard:
+        out = []
+        for b in row:
+            cb = b.callback_data
+            if isinstance(cb, bytes):
+                cb = cb.decode("utf-8", "ignore")
+            d = {"text": b.text}
+            if b.url:
+                d["url"] = b.url
+            elif cb:
+                d["callback_data"] = cb
+            else:
+                out.append(d)
+                continue
+            st = _btn_style(b.text, b.url, cb, default)
+            if st:
+                d["style"] = st
+            out.append(d)
+        rows.append(out)
+    return rows
+
+
+async def colorize_markup(client, msg, markup, default=None):
+    """Bheje ja chuke message (photo/file/text) ke buttons ko coloured bana do. Kabhi raise nahi karta."""
+    try:
+        if msg is None or markup is None or not (COLORS_ENABLED and getattr(client, "bot_token", None)):
+            return
+        await _bot_api_call(client, "editMessageReplyMarkup", {
+            "chat_id": msg.chat.id,
+            "message_id": msg.id,
+            "reply_markup": _markup_json(_styled_rows(markup, default)),
+        })
+    except Exception as e:
+        logger.debug(f"[COLOR] colour lagane me dikkat (plain buttons rahenge): {e}")
+
+
+def colorize_later(client, msg, markup, default=None):
+    """Background me chalao taaki file bhejne ka loop slow na ho."""
+    asyncio.create_task(colorize_markup(client, msg, markup, default))
 
 TIMEZONE = "Asia/Kolkata"
 BATCH_FILES = {}
@@ -77,6 +167,7 @@ async def start(client, message):
             reply_markup=reply_markup,
             parse_mode=enums.ParseMode.HTML
         )
+        colorize_later(client, dlt, reply_markup)
         await asyncio.sleep(300)
         await dlt.delete()
         return         
@@ -87,7 +178,8 @@ async def start(client, message):
                     InlineKeyboardButton('🍁 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 🍁', url=UPDATE_CHNL_LNK)
                   ]]
         reply_markup = InlineKeyboardMarkup(buttons)
-        await message.reply(script.GSTART_TXT.format(message.from_user.mention if message.from_user else message.chat.title, temp.U_NAME, temp.B_NAME), reply_markup=reply_markup, disable_web_page_preview=True)
+        _sm = await message.reply(script.GSTART_TXT.format(message.from_user.mention if message.from_user else message.chat.title, temp.U_NAME, temp.B_NAME), reply_markup=reply_markup, disable_web_page_preview=True)
+        colorize_later(client, _sm, reply_markup)
         await asyncio.sleep(2) 
         if not await db.get_chat(message.chat.id):
             total=await client.get_chat_members_count(message.chat.id)
@@ -121,12 +213,13 @@ async def start(client, message):
         m=await message.reply_text("⏳")
         await asyncio.sleep(0.4)
         await m.delete()        
-        await message.reply_photo(
+        _sm = await message.reply_photo(
             photo=random.choice(PICS),
             caption=script.START_TXT.format(message.from_user.mention, gtxt, temp.U_NAME, temp.B_NAME),
             reply_markup=reply_markup,
             parse_mode=enums.ParseMode.HTML
         )
+        colorize_later(client, _sm, reply_markup)
         return
 
     if len(message.command) == 2 and message.command[1] in ["subscribe", "error", "okay", "help"]:
@@ -153,12 +246,13 @@ async def start(client, message):
         m=await message.reply_text("⏳")
         await asyncio.sleep(0.4)
         await m.delete()        
-        await message.reply_photo(
+        _sm = await message.reply_photo(
             photo=random.choice(PICS),
             caption=script.START_TXT.format(message.from_user.mention, gtxt, temp.U_NAME, temp.B_NAME),
             reply_markup=reply_markup,
             parse_mode=enums.ParseMode.HTML
         )
+        colorize_later(client, _sm, reply_markup)
         return
     if message.command[1].startswith("reff_"):
         try:
@@ -209,12 +303,13 @@ async def start(client, message):
                     InlineKeyboardButton('❌ ᴄʟᴏꜱᴇ ❌', callback_data='close_data')
                   ]]
         reply_markup = InlineKeyboardMarkup(buttons)
-        await message.reply_photo(
+        _sm = await message.reply_photo(
             photo=(SUBSCRIPTION),
             caption=script.PREPLANS_TXT.format(message.from_user.mention, OWNER_UPI_ID, QR_CODE),
             reply_markup=reply_markup,
             parse_mode=enums.ParseMode.HTML
         )
+        colorize_later(client, _sm, reply_markup)
         return  
 
     if len(message.command) == 2 and message.command[1].startswith('getfile'):
@@ -260,12 +355,13 @@ async def start(client, message):
                     "👉 ᴊᴏɪɴ ᴀʟʟ ᴛʜᴇ ʙᴇʟᴏᴡ ᴄʜᴀɴɴᴇʟs ᴀɴᴅ ᴛʀʏ ᴀɢᴀɪɴ.\n"
                     "⚠️पहले ʙᴀᴄᴋᴜᴘ ᴄʜᴀɴɴᴇʟ ज्वॉइन करो फिर वापस 🔙 आ कर ᴛʀʏ ᴀɢᴀɪɴ पर क्लिक करें।"
                 )
-                await message.reply_photo(
+                _sm = await message.reply_photo(
                     photo=photo,
                     caption=caption,
                     reply_markup=reply_markup,
                     parse_mode=enums.ParseMode.HTML
                 )
+                colorize_later(client, _sm, reply_markup, default='primary')
                 return
 
         except Exception as e:
@@ -310,6 +406,7 @@ async def start(client, message):
                     reply_markup=reply_markup,
                     parse_mode=enums.ParseMode.HTML
                 )
+                colorize_later(client, n, reply_markup)
                 await asyncio.sleep(300) 
                 await n.delete()
                 await m.delete()
@@ -385,7 +482,7 @@ async def start(client, message):
                 else:
                     btn = [[InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]]
 
-                cover_url = getattr(files1, 'cover', None) if COVERX else None
+                cover_url = await get_manual_cover(files1) or (getattr(files1, 'cover', None) if COVERX else None)
 
                 # FloodWait fix: retry up to 3 times if Telegram asks us to slow down,
                 # instead of letting the whole batch crash out on the first FloodWait.
@@ -405,6 +502,7 @@ async def start(client, message):
                         await asyncio.sleep(e.value + 1)
 
                 if msg is not None:
+                    colorize_later(client, msg, InlineKeyboardMarkup(btn))
                     filesarr.append(msg)
                 await asyncio.sleep(0.3) # यहाँ लूप खत्म हो रहा है
 
@@ -475,6 +573,7 @@ async def start(client, message):
                 file_id=file_id,
                 protect_content=settings.get('file_secure', PROTECT_CONTENT),
                 reply_markup=InlineKeyboardMarkup(btn))
+            colorize_later(client, msg, InlineKeyboardMarkup(btn))
 
             if not is_premium_user:
                 await db.increase_download(message.from_user.id)
@@ -558,7 +657,7 @@ async def start(client, message):
             ]
     else:
         btn = [[InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]]
-    cover_url = getattr(files, 'cover', None) if COVERX else None
+    cover_url = await get_manual_cover(files) or (getattr(files, 'cover', None) if COVERX else None)
     msg = await client.send_cached_media(
         chat_id=message.from_user.id,
         file_id=file_id,
@@ -567,6 +666,7 @@ async def start(client, message):
         reply_markup=InlineKeyboardMarkup(btn),
         cover=cover_url
     )
+    colorize_later(client, msg, InlineKeyboardMarkup(btn))
     if not is_premium_user:
         await db.increase_download(message.from_user.id)
     k = await msg.reply(script.DEL_MSG.format(get_time(DELETE_TIME)),
