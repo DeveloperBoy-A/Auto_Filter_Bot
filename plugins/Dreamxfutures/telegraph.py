@@ -24,7 +24,7 @@ async def c_upload(client, message: Message):
                 files={"image": f}
             )
         os.remove(downloaded_media)
-        
+
         if resp.status_code == 200:
             result = resp.json()
             if result["success"]:
