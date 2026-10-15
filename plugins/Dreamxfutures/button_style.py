@@ -16,6 +16,7 @@ url | callback_data | switch_inline_query_current_chat | switch_inline_query
 Note: colour sirf un users ko dikhega jinka Telegram app Feb 2026 ke baad ka hai.
 """
 import os
+import asyncio
 import json
 import logging
 import aiohttp
@@ -258,3 +259,110 @@ async def edit_styled(client, message, text, rows, *, plain_text=None):
     if media:
         return await message.edit_caption(body, reply_markup=_pyro_markup(rows))
     return await message.edit_text(body, reply_markup=_pyro_markup(rows))
+
+
+# ---------------------------------------------------------------- auto colour for pyrogram messages
+# Pyrogram se bheje/edit kiye message ke buttons ko turant baad Bot API (editMessageReplyMarkup)
+# se coloured bana deta hai. Kabhi raise nahi karta; fail ho to plain buttons rehte hain.
+# Use: colorize_later(msg, InlineKeyboardMarkup(btn))   (utils.py / pmfilter.py me laga hai)
+# Rang badalne ho to neeche _CB_STYLES / _URL_STYLES me badlo.
+# callback_data ka shuruaat -> colour (jo yahan nahi hai wo plain rahega)
+_CB_STYLES = [
+    ("file#", "success"),          # result ki file buttons
+    ("sendfiles#", "success"),     # Send All
+    ("next_", "success"),          # Next page
+    ("qualities#", "primary"),
+    ("languages#", "primary"),
+    ("seasons#", "primary"),
+    ("mtype#", "primary"),         # Movie / Series
+    ("fq#homepage", "danger"),     # back buttons
+    ("fl#homepage", "danger"),
+    ("fs#homepage", "danger"),
+    ("fq#", "primary"),
+    ("fl#", "primary"),
+    ("fs#", "primary"),
+    ("checksub#", "success"),      # Try again
+    ("premium_info", "danger"),
+    ("buy_", "success"),
+    ("topsearch", "success"),
+    ("generate_stream_link", "success"),
+    ("audio_subs_info", "primary"),
+    ("help", "primary"),
+    ("about", "primary"),
+    ("start", "primary"),
+    ("close_data", "danger"),
+]
+# url me ye likha ho -> colour
+_URL_STYLES = [
+    ("start=premium", "danger"),   # Remove ads
+    ("start=file_", "success"),
+    ("start=allfiles_", "success"),
+    ("startgroup=true", "success"),
+]
+
+
+def _btn_pick(text, url, cb, default):
+    if cb:
+        for prefix, st in _CB_STYLES:
+            if cb.startswith(prefix):
+                return st
+    if url:
+        for key, st in _URL_STYLES:
+            if key in url:
+                return st
+    return default
+
+
+def _btn_rows(markup, default=None):
+    rows = []
+    for row in markup.inline_keyboard:
+        out = []
+        for b in row:
+            cb = b.callback_data
+            if isinstance(cb, bytes):
+                cb = cb.decode("utf-8", "ignore")
+            d = {"text": b.text}
+            if b.url:
+                d["url"] = b.url
+            elif cb:
+                d["callback_data"] = cb
+            elif getattr(b, "switch_inline_query_current_chat", None) is not None:
+                d["switch_inline_query_current_chat"] = b.switch_inline_query_current_chat
+            elif getattr(b, "switch_inline_query", None) is not None:
+                d["switch_inline_query"] = b.switch_inline_query
+            else:
+                out.append(d)
+                continue
+            st = _btn_pick(b.text, b.url, cb, default)
+            if st:
+                d["style"] = st
+            out.append(d)
+        rows.append(out)
+    return rows
+
+
+async def colorize(msg, markup, default=None):
+    try:
+        client = getattr(msg, "_client", None)
+        if msg is None or markup is None or client is None:
+            return
+        if not (COLORS_ENABLED and getattr(client, "bot_token", None)):
+            return
+        rows = _btn_rows(markup, default)
+        if not any(b.get("style") for row in rows for b in row):
+            return                      # koi button coloured hona hi nahi hai -> API call bachao
+        await _call(client, "editMessageReplyMarkup", {
+            "chat_id": msg.chat.id,
+            "message_id": msg.id,
+            "reply_markup": markup_json(rows),
+        })
+    except Exception as e:
+        logger.debug(f"[COLOR] colour nahi lag paya (plain buttons rahenge): {e}")
+
+
+def colorize_later(msg, markup, default=None):
+    """Background me chalao taaki handler slow na ho."""
+    try:
+        asyncio.create_task(colorize(msg, markup, default))
+    except RuntimeError:
+        pass
