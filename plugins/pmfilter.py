@@ -8,6 +8,7 @@ import logging
 from database.ia_filterdb import Media, Media2, MEDIA_DBS, delete_file_by_id, get_file_details, get_search_results, get_bad_files,normalize_for_search
 from html import escape as _html_escape
 from plugins.Dreamxfutures.button_style import reply_styled, edit_styled, html_mention
+from plugins.Dreamxfutures.button_style import colorize_later
 from plugins.auto_buttons import PENDING_BUTTONS
 from plugins.rename_db_files import _single_states
 
@@ -571,6 +572,7 @@ async def refercall(bot, query):
         reply_markup=reply_markup,
         parse_mode=enums.ParseMode.HTML
     )
+    colorize_later(query.message, reply_markup)
     await query.answer()
 
 
@@ -735,11 +737,13 @@ async def next_page(bot, query):
         cap = await get_cap(settings, remaining_seconds, files, query, total, dreamx_title, offset+1)
         try:
             await query.message.edit_text(text=cap, reply_markup=InlineKeyboardMarkup(btn), disable_web_page_preview=True)
+            colorize_later(query.message, InlineKeyboardMarkup(btn))
         except MessageNotModified:
             pass
     else:
         try:
             await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(btn))
+            colorize_later(query.message, InlineKeyboardMarkup(btn))
         except MessageNotModified:
             pass
     await query.answer()
@@ -847,6 +851,7 @@ async def qualities_cb_handler(client: Client, query: CallbackQuery):
     ])
 
     await query.edit_message_reply_markup(InlineKeyboardMarkup(btn))
+    colorize_later(query.message, InlineKeyboardMarkup(btn))
 
 
 @Client.on_callback_query(filters.regex(r"^fq#"))
@@ -961,11 +966,13 @@ async def filter_qualities_cb_handler(client: Client, query: CallbackQuery):
         cap = await get_cap(settings, remaining_seconds, files, query, total_results, dreamx_title, offset=1)
         try:
             await query.message.edit_text(text=cap, reply_markup=InlineKeyboardMarkup(btn), disable_web_page_preview=True)
+            colorize_later(query.message, InlineKeyboardMarkup(btn))
         except MessageNotModified:
             pass
     else:
         try:
             await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(btn))
+            colorize_later(query.message, InlineKeyboardMarkup(btn))
         except MessageNotModified:
             pass
     await query.answer()
@@ -1008,6 +1015,7 @@ async def languages_cb_handler(client: Client, query: CallbackQuery):
                callback_data=f"fl#homepage#{key}")])
 
     await query.edit_message_reply_markup(InlineKeyboardMarkup(btn))
+    colorize_later(query.message, InlineKeyboardMarkup(btn))
 
 
 @Client.on_callback_query(filters.regex(r"^fl#"))
@@ -1118,11 +1126,13 @@ async def filter_languages_cb_handler(client: Client, query: CallbackQuery):
         cap = await get_cap(settings, remaining_seconds, files, query, total_results, dreamx_title, offset=1)
         try:
             await query.message.edit_text(text=cap, reply_markup=InlineKeyboardMarkup(btn), disable_web_page_preview=True)
+            colorize_later(query.message, InlineKeyboardMarkup(btn))
         except MessageNotModified:
             pass
     else:
         try:
             await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(btn))
+            colorize_later(query.message, InlineKeyboardMarkup(btn))
         except MessageNotModified:
             pass
     await query.answer()
@@ -1158,6 +1168,7 @@ async def seasons_cb_handler(client: Client, query: CallbackQuery):
     btn.append([InlineKeyboardButton(text="↭ ʙᴀᴄᴋ ᴛᴏ ꜰɪʟᴇs ↭",
                callback_data=f"next_{req}_{key}_{offset}")])
     await query.edit_message_reply_markup(InlineKeyboardMarkup(btn))
+    colorize_later(query.message, InlineKeyboardMarkup(btn))
     await query.answer()
 
 
@@ -1261,11 +1272,13 @@ async def filter_seasons_cb_handler(client: Client, query: CallbackQuery):
                 reply_markup=InlineKeyboardMarkup(btn),
                 disable_web_page_preview=True,
             )
+            colorize_later(query.message, InlineKeyboardMarkup(btn))
         except MessageNotModified:
             pass
     else:
         try:
             await query.edit_message_reply_markup(InlineKeyboardMarkup(btn))
+            colorize_later(query.message, InlineKeyboardMarkup(btn))
         except MessageNotModified:
             pass
     await query.answer()
@@ -1475,6 +1488,7 @@ async def media_type_cb_handler(client: Client, query: CallbackQuery):
                 reply_markup=InlineKeyboardMarkup(btn),
                 disable_web_page_preview=True
             )
+            colorize_later(query.message, InlineKeyboardMarkup(btn))
         except MessageNotModified:
             pass
 
@@ -1483,6 +1497,7 @@ async def media_type_cb_handler(client: Client, query: CallbackQuery):
             await query.edit_message_reply_markup(
                 reply_markup=InlineKeyboardMarkup(btn)
             )
+            colorize_later(query.message, InlineKeyboardMarkup(btn))
         except MessageNotModified:
             pass
 
@@ -1494,6 +1509,7 @@ async def media_type_cb_handler(client: Client, query: CallbackQuery):
 async def send_auto_delete(client, chat_id, text, reply_markup, seconds=60):  
     try:  
         msg = await client.send_message(chat_id, text, reply_markup=reply_markup)  
+        colorize_later(msg, reply_markup)
         await asyncio.sleep(seconds)  
         await msg.delete()  
     except Exception as e:  
@@ -1607,6 +1623,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 btn.append([InlineKeyboardButton("♻️ ᴛʀʏ ᴀɢᴀɪɴ ♻️", callback_data=f"checksub#{kk}#{file_id}")])
                 try:
                     await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(btn))
+                    colorize_later(query.message, InlineKeyboardMarkup(btn))
                 except MessageNotModified:
                     pass
                 await query.answer(
@@ -1670,6 +1687,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 parse_mode=enums.ParseMode.HTML
             )
             await query.message.edit_reply_markup(reply_markup)
+            colorize_later(query.message, reply_markup)
 
     elif query.data.startswith("opnsetpm"):
         ident, grp_id = query.data.split("#")
@@ -1691,6 +1709,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         reply_markup = InlineKeyboardMarkup(btn2)
         await query.message.edit_text(f"<b>ʏᴏᴜʀ sᴇᴛᴛɪɴɢs ᴍᴇɴᴜ ғᴏʀ {title} ʜᴀs ʙᴇᴇɴ sᴇɴᴛ ᴛᴏ ʏᴏᴜ ʙʏ ᴅᴍ.</b>")
         await query.message.edit_reply_markup(reply_markup)
+        colorize_later(query.message, reply_markup)
         if settings is not None:
             btn = await group_setting_buttons(int(grp_id))
             reply_markup = InlineKeyboardMarkup(btn)
@@ -1720,6 +1739,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
         if query.from_user.id in ADMINS:
             await query.message.edit_reply_markup(InlineKeyboardMarkup(btn))
+            colorize_later(query.message, InlineKeyboardMarkup(btn))
             await query.answer("Here are the options!")
         else:
             await query.answer("No permission ❌", show_alert=True)
@@ -1741,6 +1761,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
             await query.message.edit_text(f"<b><strike>{query.message.text}</strike></b>")
             await query.message.edit_reply_markup(InlineKeyboardMarkup(btn))
+            colorize_later(query.message, InlineKeyboardMarkup(btn))
 
             msg = f"<b>Hey {user.mention},</b>\n\n<u>{content}</u> marked unavailable 💔"
 
@@ -1764,6 +1785,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
             await query.message.edit_text(f"<b><strike>{query.message.text}</strike></b>")
             await query.message.edit_reply_markup(InlineKeyboardMarkup(btn))
+            colorize_later(query.message, InlineKeyboardMarkup(btn))
 
             msg = f"<b>Hey {user.mention}\n\n<code>{content}</code> not released yet 🕊️</b>"
 
@@ -1787,6 +1809,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
             await query.message.edit_text(f"<b><strike>{query.message.text}</strike></b>")
             await query.message.edit_reply_markup(InlineKeyboardMarkup(btn))
+            colorize_later(query.message, InlineKeyboardMarkup(btn))
 
             msg = f"<b>Hey {user.mention}\n\nWrong spelling: <code>{content}</code> ❗</b>"
 
@@ -1810,6 +1833,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
             await query.message.edit_text(f"<b><strike>{query.message.text}</strike></b>")
             await query.message.edit_reply_markup(InlineKeyboardMarkup(btn))
+            colorize_later(query.message, InlineKeyboardMarkup(btn))
 
             msg = f"<b>Hey {user.mention}\n\n<code>{content}</code> not available in Hindi ❌</b>"
 
@@ -1835,6 +1859,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
             await query.message.edit_text(f"<b><strike>{query.message.text}</strike></b>")
             await query.message.edit_reply_markup(InlineKeyboardMarkup(btn))
+            colorize_later(query.message, InlineKeyboardMarkup(btn))
 
             msg = f"<b>Hey {user.mention},\n\n<u>{content}</u> uploaded ✅</b>"
 
@@ -1860,6 +1885,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
             await query.message.edit_text(f"<b><strike>{query.message.text}</strike></b>")
             await query.message.edit_reply_markup(InlineKeyboardMarkup(btn))
+            colorize_later(query.message, InlineKeyboardMarkup(btn))
 
             msg = f"<b>Hey {user.mention},\n\n<u>{content}</u> already available ✅</b>"
 
@@ -2033,6 +2059,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
             try:
                 if original_markup:
                     await query.edit_message_reply_markup(reply_markup=original_markup)
+                    colorize_later(query.message, original_markup)
             except Exception:
                 pass
 
@@ -2136,6 +2163,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
             reply_markup=reply_markup,
             parse_mode=enums.ParseMode.HTML
         )
+        colorize_later(query.message, reply_markup)
         await query.answer(MSG_ALRT)
 
     elif query.data == "donation":
@@ -2159,6 +2187,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
             reply_markup=reply_markup,
             parse_mode=enums.ParseMode.HTML
         )
+        colorize_later(query.message, reply_markup)
 
     elif query.data == "help":
         buttons = [[
@@ -2170,6 +2199,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
             reply_markup=reply_markup,
             parse_mode=enums.ParseMode.HTML
         )
+        colorize_later(query.message, reply_markup)
 
     elif query.data == "about":
         buttons = [[
@@ -2187,6 +2217,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
             disable_web_page_preview=True,
             parse_mode=enums.ParseMode.HTML
         )
+        colorize_later(query.message, reply_markup)
 
     elif query.data == "give_trial":
         try:
@@ -2233,6 +2264,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
             reply_markup=reply_markup,
             parse_mode=enums.ParseMode.HTML
         )
+        colorize_later(query.message, reply_markup)
 
     elif query.data == "ref_point":
         await query.answer(f'You Have: {referdb.get_refer_points(query.from_user.id)} Refferal points.', show_alert=True)
@@ -2247,6 +2279,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 reply_markup=reply_markup,
                 parse_mode=enums.ParseMode.HTML 
             )
+            colorize_later(query.message, reply_markup)
 
     elif query.data == "premium_info":
         try:
@@ -2338,6 +2371,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         btn = await group_setting_buttons(int(grp_id))
         dreamx = await client.get_chat(int(grp_id))
         await query.message.edit(text=f"ᴄʜᴀɴɢᴇ ʏᴏᴜʀ ɢʀᴏᴜᴘ ꜱᴇᴛᴛɪɴɢꜱ ✅\nɢʀᴏᴜᴘ ɴᴀᴍᴇ - '{dreamx.title}'</b>⚙", reply_markup=InlineKeyboardMarkup(btn))
+        colorize_later(query.message, InlineKeyboardMarkup(btn))
 
     elif query.data.startswith("removegrp"):
         user_id = query.from_user.id
@@ -2386,6 +2420,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
             btn = await group_setting_buttons(int(grp_id))
             reply_markup = InlineKeyboardMarkup(btn)
             await query.message.edit_reply_markup(reply_markup)
+            colorize_later(query.message, reply_markup)
     await query.answer(MSG_ALRT)
 
 #________________________________
@@ -2649,25 +2684,30 @@ async def auto_filter(client, msg, spoll=False):
     if imdb and imdb.get('poster'):
         try:
             hehe = await message.reply_photo(photo=imdb.get('poster'), caption=cap, reply_markup=InlineKeyboardMarkup(btn), parse_mode=enums.ParseMode.HTML)
+            colorize_later(hehe, InlineKeyboardMarkup(btn))
             await m.delete()
             await handle_auto_delete(hehe)
         except (MediaEmpty, PhotoInvalidDimensions, WebpageMediaEmpty):
             poster = imdb.get('poster').replace('.jpg', "._V1_UX360.jpg")
             try:
                 hmm = await message.reply_photo(photo=poster, caption=cap, reply_markup=InlineKeyboardMarkup(btn), parse_mode=enums.ParseMode.HTML)
+                colorize_later(hmm, InlineKeyboardMarkup(btn))
                 await m.delete()
                 await handle_auto_delete(hmm)
             except Exception:
                 dxb = await message.reply_text(text=cap, reply_markup=InlineKeyboardMarkup(btn), parse_mode=enums.ParseMode.HTML)
+                colorize_later(dxb, InlineKeyboardMarkup(btn))
                 await m.delete()
                 await handle_auto_delete(dxb)
         except Exception as e:
             logger.exception(e)
             dxb = await message.reply_text(text=cap, reply_markup=InlineKeyboardMarkup(btn), parse_mode=enums.ParseMode.HTML)
+            colorize_later(dxb, InlineKeyboardMarkup(btn))
             await m.delete()
             await handle_auto_delete(dxb)
     else:
         dxb = await message.reply_text(text=cap, reply_markup=InlineKeyboardMarkup(btn), disable_web_page_preview=True, parse_mode=enums.ParseMode.HTML)
+        colorize_later(dxb, InlineKeyboardMarkup(btn))
         await m.delete()
         await handle_auto_delete(dxb)
 
