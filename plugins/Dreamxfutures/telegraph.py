@@ -8,7 +8,7 @@ from pyrogram.types import Message
 
 IMGBB_API_KEY = os.getenv(
     "IMGBB_API_KEY",
-    "d4cc3d793cb68b2c6cdc2197588e895c"
+    "e8c4cb6e8f0a8ba3c056feacafc98f41"
 )
 
 MAX_FILE_SIZE = 5 * 1024 * 1024
