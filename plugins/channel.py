@@ -6,6 +6,7 @@ from datetime import datetime
 from collections import defaultdict
 from plugins.Dreamxfutures.Imdbposter import get_movie_detailsx, fetch_image, get_movie_details
 from database.users_chats_db import db
+from database.manual_media_db import get_poster_override
 from plugins.quality_manager import extract_quality_info, is_high_quality, run_quality_cleanup_background
 from plugins.request_manager import notify_on_upload
 
@@ -558,6 +559,12 @@ async def _process_with_lock(bot, filename, caption, media_info, base_name, proc
             selected_poster = details.get("poster_url") or ""
             is_backdrop = False
 
+        # 🖼️ Manual poster (/setposter) ho to wahi use hoga - TMDB/IMDB wala nahi
+        _manual = await get_poster_override(base_name)
+        if _manual and _manual.get("url"):
+            selected_poster = _manual["url"]
+            is_backdrop = bool(_manual.get("is_backdrop"))
+
         movie_doc = {
             "_id": base_name,
             "files": [file_data],
@@ -709,6 +716,22 @@ async def _reset_and_resend(bot, base_name):
         {"$set": {"message_id": None, "is_photo": False}}
     )
     await send_movie_update(bot, base_name)
+
+
+async def refresh_update_post(bot, base_name):
+    """/setposter ke baad: naya post (naye poster ke saath) bhejo, purana delete karo."""
+    movie_doc = await db.movie_updates.find_one({"_id": base_name})
+    if not movie_doc:
+        return False
+    old_id = movie_doc.get("message_id")
+    async with locks[base_name]:
+        new_id = await send_movie_update(bot, base_name)   # DB me message_id naya ho jata hai
+    if new_id and old_id and new_id != old_id:
+        try:
+            await bot.delete_messages(chat_id=MOVIE_UPDATE_CHANNEL, message_ids=old_id)
+        except Exception as e:
+            logger.warning(f"Purana update post delete nahi hua ({base_name}, id={old_id}): {e}")
+    return bool(new_id)
 
 
 async def update_movie_message(bot, base_name):
