@@ -7,7 +7,7 @@ Admin commands:
       (blank), uske liye bhi set ho jata hai.
 
   Update channel me hi: kisi update post par REPLY karke photo bhejo jiske caption me /setposter
-      likha ho (ya reply me text "/setposter <image-url>"). Bot post ka naam khud pehchan leta hai,
+      likha ho (ya reply me text "/setposter <image-url>" ya "/setposter <photo-file_id>"). Bot post ka naam khud pehchan leta hai,
       poster set karke naya post bhejta hai aur purana delete kar deta hai.
 
   /setcover <naam> [year]   (photo pe reply / photo+caption / ya image URL)
@@ -56,15 +56,17 @@ HTML = enums.ParseMode.HTML
 USAGE_POSTER = (
     "<b>🖼️ Poster set karne ka tareeka:</b>\n\n"
     "Photo pe reply karke:\n<code>/setposter Pushpa 2 2024</code>\n"
-    "ya photo bhejte time caption me wahi command, ya image URL:\n"
-    "<code>/setposter Pushpa 2 2024 https://site/img.jpg</code>\n\n"
+    "ya photo bhejte time caption me wahi command, ya image URL / photo ki file_id:\n"
+    "<code>/setposter Pushpa 2 2024 https://site/img.jpg</code>\n"
+    "<code>/setposter Pushpa 2 2024 AgACAgUAAxk...</code>\n\n"
     "Naam wahi likho jaisa update post me aata hai."
 )
 USAGE_COVER = (
     "<b>🎞️ Cover set karne ka tareeka:</b>\n\n"
     "Photo pe reply karke:\n<code>/setcover Pushpa 2 2024</code>\n"
-    "ya photo bhejte time caption me wahi command, ya image URL:\n"
-    "<code>/setcover Pushpa 2 2024 https://site/img.jpg</code>\n\n"
+    "ya photo bhejte time caption me wahi command, ya image URL / photo ki file_id:\n"
+    "<code>/setcover Pushpa 2 2024 https://site/img.jpg</code>\n"
+    "<code>/setcover Pushpa 2 2024 AgACAgUAAxk...</code>\n\n"
     "Year optional hai (same title ke multiple year ho to bot poochega).\n"
     "Cover hatane ke liye: <code>/delcover Pushpa 2 2024</code>"
 )
@@ -90,17 +92,29 @@ def _get_pending(token, admin_id):
     return d
 
 
+FILE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{40,}$")
+
+
 def _parse_args(message):
-    """'/cmd Pushpa 2 2024 https://x/y.jpg' -> ('Pushpa 2 2024', 'https://x/y.jpg')"""
+    """
+    '/cmd Pushpa 2 2024 https://x/y.jpg'   -> ('Pushpa 2 2024', 'https://x/y.jpg', None)
+    '/cmd Pushpa 2 2024 AgACAgUAAx...'     -> ('Pushpa 2 2024', None, 'AgACAgUAAx...')   (photo ki file_id)
+    """
     raw = message.text or message.caption or ""
     parts = raw.split(None, 1)
     arg = parts[1].strip() if len(parts) > 1 else ""
     url = None
+    fid = None
     m = re.search(r"(https?://\S+)", arg)
     if m:
         url = m.group(1)
         arg = (arg[:m.start()] + " " + arg[m.end():]).strip()
-    return arg, url
+    else:
+        tokens = arg.split()
+        if tokens and FILE_ID_RE.match(tokens[-1]):
+            fid = tokens[-1]
+            arg = " ".join(tokens[:-1])
+    return arg, url, fid
 
 
 async def _download_url(url):
@@ -141,7 +155,7 @@ async def _upload_imgbb(data: bytes):
     return None
 
 
-async def _resolve_image(client, message, url_arg, allow_reply=True):
+async def _resolve_image(client, message, url_arg, allow_reply=True, fid_arg=None):
     """
     Return (url, is_landscape) ya (None, error_text) ya (None, None) agar image di hi nahi gayi.
     Image imgbb pe upload hoti hai (permanent URL) taaki baaki poora code URL se hi chale.
@@ -158,6 +172,15 @@ async def _resolve_image(client, message, url_arg, allow_reply=True):
         raw = await _download_url(url_arg)
         if not raw:
             return None, "❌ URL se image download nahi hui."
+    elif fid_arg:
+        try:
+            bio = await client.download_media(fid_arg, in_memory=True)
+        except Exception as e:
+            logger.warning(f"[PCM] file_id se download fail: {e}")
+            bio = None
+        raw = bytes(bio.getbuffer()) if bio else None
+        if not raw:
+            return None, "❌ Is file_id se image nahi mili. Is bot ko mili hui photo ki valid file_id do."
     elif src:
         bio = await client.download_media(src, in_memory=True)
         raw = bytes(bio.getbuffer()) if bio else None
@@ -198,12 +221,12 @@ async def setposter_cmd(client, message):
 
 
 async def _setposter(client, message):
-    title_text, url_arg = _parse_args(message)
+    title_text, url_arg, fid_arg = _parse_args(message)
     if not title_text or not title_regex(title_text):
         return await message.reply_text(USAGE_POSTER, parse_mode=HTML)
 
     wait = await message.reply_text("⏳ Image process ho rahi hai...")
-    url, extra = await _resolve_image(client, message, url_arg)
+    url, extra = await _resolve_image(client, message, url_arg, fid_arg=fid_arg)
     if not url:
         return await wait.edit_text(extra or USAGE_POSTER, parse_mode=HTML)
     is_bd = bool(extra)
@@ -275,13 +298,13 @@ async def channel_setposter(client, message):
             asyncio.create_task(_del_later(message))
             raise StopPropagation
 
-        _, url_arg = _parse_args(message)
+        _, url_arg, fid_arg = _parse_args(message)
         # allow_reply=False: reply wale post ki photo (purana galat poster) galti se na uth jaye
-        url, extra = await _resolve_image(client, message, url_arg, allow_reply=False)
+        url, extra = await _resolve_image(client, message, url_arg, allow_reply=False, fid_arg=fid_arg)
         if not url:
             note = await message.reply_text(
                 extra or "📸 Post par reply karke photo bhejo jiske caption me <code>/setposter</code> ho, "
-                         "ya <code>/setposter &lt;image-url&gt;</code> likho.", parse_mode=HTML)
+                         "ya <code>/setposter &lt;image-url ya file_id&gt;</code> likho.", parse_mode=HTML)
             asyncio.create_task(_del_later(note, 10))
             asyncio.create_task(_del_later(message, 10))
             raise StopPropagation
@@ -410,12 +433,12 @@ async def setcover_cmd(client, message):
 
 
 async def _setcover(client, message):
-    title_text, url_arg = _parse_args(message)
+    title_text, url_arg, fid_arg = _parse_args(message)
     if not title_text or not title_regex(title_text):
         return await message.reply_text(USAGE_COVER, parse_mode=HTML)
 
     wait = await message.reply_text("⏳ Image process ho rahi hai...")
-    url, extra = await _resolve_image(client, message, url_arg)
+    url, extra = await _resolve_image(client, message, url_arg, fid_arg=fid_arg)
     if not url:
         return await wait.edit_text(extra or USAGE_COVER, parse_mode=HTML)
 
@@ -507,7 +530,7 @@ async def specific_file_cover(client, message):
 @Client.on_message(filters.private & filters.command("delcover") & filters.user(ADMINS), group=-4)
 async def delcover_cmd(client, message):
     try:
-        title_text, _ = _parse_args(message)
+        title_text, _, _ = _parse_args(message)
         if not title_text or not title_regex(title_text):
             await message.reply_text("<b>Use:</b> <code>/delcover Pushpa 2 2024</code>", parse_mode=HTML)
         else:
