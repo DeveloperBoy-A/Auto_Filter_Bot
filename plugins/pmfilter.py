@@ -3155,86 +3155,59 @@ async def _imdb_lookup(title, year=None):
     )
 
 
-async def ai_spell_check(chat_id, wrong_name):
-"""DB query string deta hai (auto-correct) ya None (-> suggestions dikhao)."""
-title, meta_suffix, year = split_query_parts(wrong_name)
-if not title:
-return None
 
-try:
-    result = await _imdb_lookup(title, year)
-except Exception as e:
-    logger.exception("ai_spell_check: imdb search failed for %r: %s", wrong_name, e)
-    return None
+async def ai_spell_check(chat_id, wrong_name): 
+    """DB query string deta hai (auto-correct) ya None (-> suggestions dikhao).""" 
+    title, meta_suffix, year = split_query_parts(wrong_name) 
+    if not title: 
+        return None
 
-# IMDBKit se mile sabhi titles.
-all_titles = list(result.titles if result else [])
+    try: 
+        result = await _imdb_lookup(title, year) 
+    except Exception as e: 
+        logger.exception("ai_spell_check: imdb search failed for %r: %s", wrong_name, e) 
+        return None 
+        
+    # IMDBKit se mile sabhi titles. 
+    all_titles = list(result.titles if result else []) 
+    
+    # Pehle exact aur phonetic matches try karo. 
+    exact = [t for t in all_titles if t.match_type in AUTO_CORRECT_TYPES] 
+    if year: 
+        # User ne year diya hai to year match hona chahiye. 
+        exact = [t for t in exact if t.year_match in ("exact", "within", "near")] 
+        
+    # Exact/phonetic match na mile to unique close match try karo. 
+    if not exact: 
+        close = [t for t in all_titles if t.match_type == "close"] 
+        if year: 
+            close = [t for t in close if t.year_match in ("exact", "within", "near")] 
+        if len(close) == 1: 
+            exact = close 
+            
+    if not exact: 
+        return None 
+        
+    tried = set() 
+    for t in exact[:4]: 
+        title_with_year = f"{t.title} {year}".strip() if year else t.title 
+        queries = [] 
+        
+        if meta_suffix: 
+            queries.append(re.sub(r"\s+", " ", f"{title_with_year} {meta_suffix}").strip()) 
+        queries.append(title_with_year) 
+        
+        for q in queries: 
+            if q.lower() in tried: 
+                continue 
+            tried.add(q.lower()) 
+            files, _, _ = await get_search_results(chat_id=chat_id, query=q) 
+            if files: 
+                return q 
+                
+    # DB mein file nahi mili to suggestions dikhane do. 
+    return None 
 
-# Pehle exact aur phonetic matches try karo.
-exact = [
-    t for t in all_titles
-    if t.match_type in AUTO_CORRECT_TYPES
-]
-
-if year:
-    # User ne year diya hai to year match hona chahiye.
-    exact = [
-        t for t in exact
-        if t.year_match in ("exact", "within", "near")
-    ]
-
-# Exact/phonetic match na mile to unique close match try karo.
-if not exact:
-    close = [
-        t for t in all_titles
-        if t.match_type == "close"
-    ]
-
-    if year:
-        close = [
-            t for t in close
-            if t.year_match in ("exact", "within", "near")
-        ]
-
-    if len(close) == 1:
-        exact = close
-
-if not exact:
-    return None
-
-tried = set()
-
-for t in exact[:4]:
-    title_with_year = f"{t.title} {year}".strip() if year else t.title
-    queries = []
-
-    if meta_suffix:
-        queries.append(
-            re.sub(
-                r"\s+",
-                " ",
-                f"{title_with_year} {meta_suffix}"
-            ).strip()
-        )
-
-    queries.append(title_with_year)
-
-    for q in queries:
-        if q.lower() in tried:
-            continue
-
-        tried.add(q.lower())
-
-        files, _, _ = await get_search_results(
-            chat_id=chat_id,
-            query=q
-        )
-
-        if files:
-            return q
-
-# DB mein file nahi mili to suggestions dikhane do.
-return None
 
 
 async def advantage_spell_chok(client, message):
@@ -3263,7 +3236,7 @@ async def advantage_spell_chok(client, message):
         return
 
     request_btn = [{
-        "text": f"📝 Request Original: {search[:40]}",
+        "text": f"📝 𝐑ᴇǫᴜᴇsᴛ Oʀɪɢɪɴᴀʟ Tᴇxᴛ: {search[:40]}",
         "switch_inline_query_current_chat": f"/request {search}",
         "style": "warning",
     }]
