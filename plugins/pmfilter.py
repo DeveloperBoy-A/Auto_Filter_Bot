@@ -748,12 +748,12 @@ async def next_page(bot, query):
             pass
     await query.answer()
 
+#----------------suggetation handler---------------# 
 
 def _clean_name(name):
     name = re.sub(r"[-:.,&]", " ", name or "")
     name = re.sub(r"[!@#$%^*()_+=\[\]{};\"<>?/\\|]", " ", name)
     return re.sub(r"\s+", " ", name).strip()
-
 
 @Client.on_callback_query(filters.regex(r"^spol"))
 async def advantage_spoll_choker(bot, query):
@@ -768,7 +768,10 @@ async def advantage_spoll_choker(bot, query):
         )
 
     movies = await get_poster(id, id=True) or {}
-    year = movies.get('year')
+
+    # year ko 4 digit me saaf karo (series me "2019-2023" jaisa aa sakta hai)
+    year_match = re.search(r"\b(19|20)\d{2}\b", str(movies.get('year') or ""))
+    year = year_match.group(0) if year_match else None
 
     # Code ke hisaab se naam ki priority: clicked naam pehle, baaki fallback
     keys_by_code = {
@@ -787,15 +790,22 @@ async def advantage_spoll_choker(bot, query):
 
     await query.answer(script.TOP_ALRT_MSG)
 
-    # Pehle clicked naam, result na mile to agla naam
+    # Har naam ke liye pehle "naam + year", phir sirf "naam"
+    tried = set()
     for name in candidates:
-        files, offset, total_results = await get_search_results(
-            query.message.chat.id, name, offset=0, filter=True
-        )
-        if files:
-            k = (name, files, offset, total_results)
-            await auto_filter(bot, query, k)
-            return  # result mil gaya, "not found" mat dikhao
+        queries = [f"{name} {year}"] if year else []
+        queries.append(name)
+        for q in queries:
+            if q.lower() in tried:
+                continue
+            tried.add(q.lower())
+            files, offset, total_results = await get_search_results(
+                query.message.chat.id, q, offset=0, filter=True
+            )
+            if files:
+                k = (q, files, offset, total_results)
+                await auto_filter(bot, query, k)
+                return  # result mil gaya, "not found" mat dikhao
 
     # Kisi bhi naam se result nahi mila
     reqstr1 = query.from_user.id if query.from_user else 0
