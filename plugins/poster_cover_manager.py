@@ -44,9 +44,6 @@ from database.manual_media_db import (
 
 logger = logging.getLogger(__name__)
 
-# plugins/Dreamxfutures/telegraph.py me jo key hai wahi default; chaho to env me IMGBB_API_KEY daal do
-IMGBB_API_KEY = os.environ.get("IMGBB_API_KEY", "d4cc3d793cb68b2c6cdc2197588e895c")
-
 PENDING = {}        # token -> state dict
 AWAIT_FILE = {}     # admin_id -> token  (specific-file cover ke liye file ka intezaar)
 PENDING_TTL = 600   # 10 min
@@ -138,27 +135,24 @@ def _normalize_image(data: bytes):
     return out.getvalue(), (w, h)
 
 
-async def _upload_imgbb(data: bytes):
+async def _dims_from_bytes(raw):
+    """Image bytes se (w, h) nikalo; fail ho to None."""
+    if not raw:
+        return None
     try:
-        form = aiohttp.FormData()
-        form.add_field("key", IMGBB_API_KEY)
-        form.add_field("image", data, filename="image.jpg", content_type="image/jpeg")
-        async with aiohttp.ClientSession() as s:
-            async with s.post("https://api.imgbb.com/1/upload", data=form,
-                              timeout=aiohttp.ClientTimeout(total=60)) as r:
-                j = await r.json(content_type=None)
-                if r.status == 200 and j.get("success"):
-                    return j["data"]["url"]
-                logger.warning(f"[PCM] imgbb upload failed: {r.status} {j}")
-    except Exception as e:
-        logger.warning(f"[PCM] imgbb upload error: {e}")
-    return None
+        _, (w, h) = await asyncio.to_thread(_normalize_image, raw)
+        return w, h
+    except Exception:
+        return None
 
 
 async def _resolve_image(client, message, url_arg, allow_reply=True, fid_arg=None):
     """
-    Return (url, is_landscape) ya (None, error_text) ya (None, None) agar image di hi nahi gayi.
-    Image imgbb pe upload hoti hai (permanent URL) taaki baaki poora code URL se hi chale.
+    Return (ref, is_landscape) ya (None, error_text) ya (None, None) agar image di hi nahi gayi.
+
+    imgbb use NAHI hota. DB me wahi Telegram photo ki file_id save hoti hai (jo pehle URL
+    wali field me jati thi) - post/cover/update me wahi file_id use hoti hai.
+    Agar image URL di gayi ho to wahi URL save hoga.
     """
     src = None
     for m in ((message, message.reply_to_message) if allow_reply else (message,)):
@@ -168,39 +162,38 @@ async def _resolve_image(client, message, url_arg, allow_reply=True, fid_arg=Non
             src = m
             break
 
-    if url_arg:
-        raw = await _download_url(url_arg)
-        if not raw:
-            return None, "❌ URL se image download nahi hui."
-    elif fid_arg:
+    # 1) Command ke saath seedhi file_id -> wahi save
+    if fid_arg:
+        dims = None
         try:
             bio = await client.download_media(fid_arg, in_memory=True)
+            dims = await _dims_from_bytes(bytes(bio.getbuffer()) if bio else None)
         except Exception as e:
-            logger.warning(f"[PCM] file_id se download fail: {e}")
-            bio = None
-        raw = bytes(bio.getbuffer()) if bio else None
-        if not raw:
-            return None, "❌ Is file_id se image nahi mili. Is bot ko mili hui photo ki valid file_id do."
-    elif src:
-        bio = await client.download_media(src, in_memory=True)
-        raw = bytes(bio.getbuffer()) if bio else None
-        if not raw:
-            return None, "❌ Photo download nahi hui."
-    else:
-        return None, None
+            logger.warning(f"[PCM] file_id se orientation check fail (ignore): {e}")
+        return fid_arg, bool(dims and dims[0] > dims[1])
 
-    try:
-        jpg, (w, h) = await asyncio.to_thread(_normalize_image, raw)
-    except Exception:
-        return None, "❌ Ye valid image nahi hai."
+    # 2) Image URL -> wahi URL save
+    if url_arg:
+        raw = await _download_url(url_arg)
+        dims = await _dims_from_bytes(raw)
+        if not dims:
+            return None, "❌ URL se valid image download nahi hui."
+        return url_arg, dims[0] > dims[1]
 
-    url = await _upload_imgbb(jpg)
-    if not url:
-        if url_arg:
-            url = url_arg          # upload fail ho gaya to direct URL hi use kar lo
-        else:
-            return None, "❌ Image upload (imgbb) fail hua, thodi der baad try karo."
-    return url, (w > h)
+    # 3) Photo reply / photo + caption -> us photo ki file_id save
+    if src:
+        if src.photo:
+            return src.photo.file_id, src.photo.width > src.photo.height
+        media = src.document
+        dims = None
+        try:
+            bio = await client.download_media(src, in_memory=True)
+            dims = await _dims_from_bytes(bytes(bio.getbuffer()) if bio else None)
+        except Exception as e:
+            logger.warning(f"[PCM] document orientation check fail (ignore): {e}")
+        return media.file_id, bool(dims and dims[0] > dims[1])
+
+    return None, None
 
 
 def _cancel_btn(token):
