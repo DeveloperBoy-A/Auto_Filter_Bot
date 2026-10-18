@@ -3170,7 +3170,7 @@ except Exception as e:
 # IMDBKit se mile sabhi titles.
 all_titles = list(result.titles if result else [])
 
-# SIRF exact aur phonetic matches ko pehle try karo.
+# Pehle exact aur phonetic matches try karo.
 exact = [
     t for t in all_titles
     if t.match_type in AUTO_CORRECT_TYPES
@@ -3178,14 +3178,12 @@ exact = [
 
 if year:
     # User ne year diya hai to year match hona chahiye.
-    # Unknown ya galat year par guess nahi karna.
     exact = [
         t for t in exact
         if t.year_match in ("exact", "within", "near")
     ]
 
-# Exact/phonetic match na mile to ek unique close match try karo.
-# Multiple close matches hone par galat title auto-select nahi hoga.
+# Exact/phonetic match na mile to unique close match try karo.
 if not exact:
     close = [
         t for t in all_titles
@@ -3206,7 +3204,7 @@ if not exact:
 
 tried = set()
 
-for t in exact[:4]:  # Same title ke alag year / remake.
+for t in exact[:4]:
     title_with_year = f"{t.title} {year}".strip() if year else t.title
     queries = []
 
@@ -3235,8 +3233,7 @@ for t in exact[:4]:  # Same title ke alag year / remake.
         if files:
             return q
 
-# DB mein file nahi mili to guess nahi karna.
-# Existing suggestion system ko control mil jayega.
+# DB mein file nahi mili to suggestions dikhane do.
 return None
 
 
