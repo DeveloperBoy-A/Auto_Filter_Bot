@@ -749,70 +749,85 @@ async def next_page(bot, query):
     await query.answer()
 
 
+def _clean_name(name):
+    name = re.sub(r"[-:.,&]", " ", name or "")
+    name = re.sub(r"[!@#$%^*()_+=\[\]{};\"<>?/\\|]", " ", name)
+    return re.sub(r"\s+", " ", name).strip()
+
+
 @Client.on_callback_query(filters.regex(r"^spol"))
 async def advantage_spoll_choker(bot, query):
-    _, id, user = query.data.split('#')
-    
-    # Check if only the intended user can use this
+    parts = query.data.split('#')
+    id, user = parts[1], parts[2]
+
     if int(user) != 0 and query.from_user.id != int(user):
-        return await query.answer(script.ALRT_TXT.format(query.from_user.first_name), show_alert=True)
-    
-    # Get movie details
-    movies = await get_poster(id, id=True)
-    movie = movies.get('title') or "Unknown Movie"
-    movie = re.sub(r"[-:.,&]", " ", movie)
-    movie = re.sub(r"[!@#$%^*()_+=\[\]{};\"<>?/\\|]", " ", movie)
-    movie = re.sub(r"\s+", " ", movie).strip()
-    year = movies.get('year')  # Optional: get year if available
-    
+        return await query.answer(
+            script.ALRT_TXT.format(query.from_user.first_name), show_alert=True
+        )
+
+    movies = await get_poster(id, id=True) or {}
+    year = movies.get('year')
+
+    # Saare possible naam: IMDb, TMDB, original (jo mile)
+    candidates = []
+    for key in ("title", "imdb_title", "tmdb_title", "original_title"):
+        n = _clean_name(movies.get(key))
+        if n and n.lower() not in [c.lower() for c in candidates]:
+            candidates.append(n)
+    if not candidates:
+        candidates = ["Unknown Movie"]
+    movie = candidates[0]
+
     await query.answer(script.TOP_ALRT_MSG)
-    
-    # Search results
-    files, offset, total_results = await get_search_results(query.message.chat.id, movie, offset=0, filter=True)
-    
-    if files:
-        k = (movie, files, offset, total_results)
-        await auto_filter(bot, query, k)
-    else:
-        # Log to BIN_CHANNEL
-        reqstr1 = query.from_user.id if query.from_user else 0
+
+    # Pehle naam se search, result na mile to agle naam par jao
+    for name in candidates:
+        files, offset, total_results = await get_search_results(
+            query.message.chat.id, name, offset=0, filter=True
+        )
+        if files:
+            k = (name, files, offset, total_results)
+            await auto_filter(bot, query, k)
+            return  # result mil gaya, aage "not found" mat dikhao
+
+    # Kisi naam se result nahi mila
+    reqstr1 = query.from_user.id if query.from_user else 0
+    try:
+        reqstr = await bot.get_users(reqstr1)
+    except Exception:
+        reqstr = None
+    if NO_RESULTS_MSG and reqstr:
         try:
-            reqstr = await bot.get_users(reqstr1)
-        except Exception:
-            reqstr = None
-        if NO_RESULTS_MSG and reqstr:
-            try:
-                await bot.send_message(
-                    chat_id=BIN_CHANNEL,
-                    text=script.NORSLTS.format(reqstr.id, reqstr.mention, movie)
-                )
-            except Exception as e:
-                print(f"Error In Spol - {e}   Make Sure Bot Admin BIN CHANNEL")
-    
-    # Prepare auto-fill request button (always show to user)
+            await bot.send_message(
+                chat_id=BIN_CHANNEL,
+                text=script.NORSLTS.format(reqstr.id, reqstr.mention, movie)
+            )
+        except Exception as e:
+            print(f"Error In Spol - {e}   Make Sure Bot Admin BIN CHANNEL")
+
     auto_fill_text = f"/request {movie}"
     if year:
         auto_fill_text += f" {year}"
-    
+
     rows = [
         [{
             "text": "📝Sᴇɴᴅ Rᴇǫᴜᴇsᴛ Tᴏ Aᴅᴍɪɴ📝",
             "switch_inline_query_current_chat": auto_fill_text,
-            "style": "success",      # hara
+            "style": "success",
         }],
         [{
             "text": "💬 Jᴏɪɴ Sᴜᴘᴘᴏʀᴛ Gʀᴏᴜᴘ 💬",
             "url": SUPPORT_CHAT,
-            "style": "primary",      # neela
+            "style": "primary",
         }],
     ]
 
-    # Edit message to show guide + buttons (coloured)
     k = await edit_styled(bot, query.message, script.MVE_NT_FND, rows)
-    
-    # Auto-delete after 30 sec
     await asyncio.sleep(30)
-    await k.delete()
+    try:
+        await k.delete()
+    except Exception:
+        pass
 
 # Qualities
 @Client.on_callback_query(filters.regex(r"^qualities#"))
@@ -3176,23 +3191,15 @@ async def ai_spell_check(chat_id, wrong_name):
         logger.exception("ai_spell_check: imdb search failed for %r: %s", wrong_name, e)
         return None
 
-    # SIRF wahi titles jo user ne sach me likhe hain.
-    # "the mongoose" -> "The Mouse", "full house with rohit" -> "Full House",
-    # "mr bachachhan" -> "Bol Bachchan" jaise look-alike kabhi auto nahi honge.
-    exact = [
-        t for t in (result.titles if result else [])
-        if getattr(t, "similarity", 0) >= AUTO_CORRECT_MIN_SIMILARITY
-    ]
+    exact = [t for t in (result.titles if result else []) if t.match_type in AUTO_CORRECT_TYPES]
     if year:
-        # year fit hona chahiye (same year / chalti series / +-1). Galat year -> guess nahi,
-        # suggestions + year note dikhao.
         exact = [t for t in exact if t.year_match in ("exact", "within", "near", None)]
     if not exact:
         return None
 
     tried = set()
-    for t in exact[:4]:                       # same title ke alag year / remake
-        # IMDb naam + TMDB naam + original title (alag spelling) - sab try honge
+    for t in exact[:4]:
+        # IMDb + TMDB + original naam, sab try honge
         for name in (getattr(t, "names", None) or [t.title]):
             title_with_year = f"{name} {year}".strip() if year else name
             queries = []
@@ -3211,14 +3218,7 @@ async def ai_spell_check(chat_id, wrong_name):
 
 
 def suggestion_rows(movies, user, limit=10):
-    """
-    Suggestion buttons: har film ke IMDb / TMDB / original naam ke ALAG button.
-
-    Duplicate nahi aate:
-      * ek film ke andar same naam (case / spacing ka fark ignore) -> ek button
-      * same imdb_id do baar -> ek hi film
-      * alag imdb_id par bhi (naam + saal + type) same -> ek button
-    """
+    """Har film ke IMDb / TMDB / original naam ke alag button. Callback purana (3 part)."""
     rows, seen_ids, seen_labels = [], set(), set()
     for movie in movies:
         if movie.imdb_id in seen_ids:
@@ -3232,12 +3232,12 @@ def suggestion_rows(movies, user, limit=10):
         if getattr(movie, "is_upcoming", False):
             meta += " • Upcoming"
 
-        sources = (
-            ("i", getattr(movie, "imdb_title", None) or movie.title),
-            ("t", getattr(movie, "tmdb_title", None)),
-            ("o", getattr(movie, "original_title", None)),
+        names = (
+            getattr(movie, "imdb_title", None) or getattr(movie, "label", None) or movie.title,
+            getattr(movie, "tmdb_title", None),
+            getattr(movie, "original_title", None),
         )
-        for code, name in sources:
+        for name in names:
             key = re.sub(r"[^a-z0-9]", "", str(name or "").lower())
             label_key = (key, year_text, getattr(movie, "kind", None))
             if not key or label_key in seen_labels:
@@ -3245,7 +3245,7 @@ def suggestion_rows(movies, user, limit=10):
             seen_labels.add(label_key)
             rows.append([{
                 "text": f"{name}{meta}"[:60],
-                "callback_data": f"spol#{movie.imdb_id}#{user}#{code}",
+                "callback_data": f"spol#{movie.imdb_id}#{user}",
                 "style": "success",
             }])
     return rows[:limit]
@@ -3282,7 +3282,6 @@ async def advantage_spell_chok(client, message):
         "style": "warning",
     }]
 
-    # IMDb ke paas sach me kuch nahi (relaxed word-level search bhi khaali)
     if not movies:
         google = quote_plus(search)
         button = [
@@ -3308,9 +3307,6 @@ async def advantage_spell_chok(client, message):
         return
 
     user = message.from_user.id if message.from_user else 0
-
-    # Library pehle hi rank kar chuki hai (exact > phonetic > close > partial > weak,
-    # sahi year pehle). Yahan dobara sort / filter MAT karo.
     movies_to_show = movies[:6]
 
     buttons = suggestion_rows(movies_to_show, user)
@@ -3323,7 +3319,6 @@ async def advantage_spell_chok(client, message):
 
     text = script.CUDNT_FND.format(message.from_user.mention)
     if year and result.year_found is False:
-        # likha hua year kisi title se match nahi hua -> user ko batao
         text += f"\n\nℹ️ <b>{year}</b> saal ki is naam ki koi entry nahi mili, closest titles neeche hain."
 
     d = await reply_styled(client, message, text=text, rows=buttons)
@@ -3333,5 +3328,8 @@ async def advantage_spell_chok(client, message):
         try:
             await obj.delete()
         except Exception:
-            pass
-
+            pass      
+            
+            
+            
+            
