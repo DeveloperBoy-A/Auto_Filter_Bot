@@ -1,5 +1,5 @@
 from pyrogram.errors import MessageNotModified
-from utils import get_size, is_subscribed, is_req_subscribed, group_setting_buttons, get_poster, temp, get_settings, get_time, save_group_settings, get_cap, imdb, is_check_admin, extract_request_content, log_error, clean_filename, generate_season_variations, clean_search_text, extract_caption_meta
+from utils import get_size, is_subscribed, is_req_subscribed, group_setting_buttons, get_poster, other_poster, temp, get_settings, get_time, save_group_settings, get_cap, imdb, is_check_admin, extract_request_content, log_error, clean_filename, generate_season_variations, clean_search_text, extract_caption_meta
 import tracemalloc
 from rapidfuzz import process, fuzz
 from dreamxbotz.util.file_properties import get_name, get_hash
@@ -3067,7 +3067,16 @@ async def old_advantage_spell_chok(client, message):
 
 # Inme se kisi title par hi auto-correct hoga. ("close" = chhota typo jaise
 # "intersteler". Typo bhi auto karwana ho to "close" yahan jod do.)
-AUTO_CORRECT_TYPES = ("exact", "phonetic")
+# ============================================================
+# AUTO CORRECTION (control yahin se - library sirf similarity score deti hai)
+# ============================================================
+# Title.similarity (0-100) >= is value  ->  bot khud sahi naam laga ke DB me search karta hai.
+# Kam hai to user ko suggestion buttons dikhte hain.
+#   * 100 = bilkul same, 98 = same pronunciation (pathan/pathaan)
+#   * sequel number alag ho (tiger 3 vs tiger 2) to score 0 -> kabhi auto-correct nahi
+#   * score IMDb / TMDB / original, sab naamon me se sabse achhe naam ka hota hai
+# Ise badalna ho to sirf yeh number badlo (zyada = safe, kam = zyada guess).
+AUTO_CORRECT_MIN_SIMILARITY = 80
 
 YEAR_PATTERN = re.compile(r"(?<![A-Za-z0-9])((?:19|20)\d{2})(?![A-Za-z0-9])")
 
@@ -3155,7 +3164,6 @@ async def _imdb_lookup(title, year=None):
     )
 
 
-
 async def ai_spell_check(chat_id, wrong_name):
     """DB query string deta hai (auto-correct) ya None (-> suggestions dikhao)."""
     title, meta_suffix, year = split_query_parts(wrong_name)
@@ -3168,21 +3176,13 @@ async def ai_spell_check(chat_id, wrong_name):
         logger.exception("ai_spell_check: imdb search failed for %r: %s", wrong_name, e)
         return None
 
-    titles = list(result.titles) if result else []
-
-    # 1) Jo titles user ne sach me likhe hain (exact / phonetic)
-    exact = [t for t in titles if t.match_type in AUTO_CORRECT_TYPES]
-
-    # 2) exact/phonetic na mile to hi "close" (80%+) try karo.
-    #    Sirf tab jab ek hi close title ho aur naam kam se kam 5 letters ka ho.
-    if not exact:
-        close = [
-            t for t in titles
-            if t.match_type == "close"
-            and len(re.sub(r"\W", "", t.title)) >= 5
-        ]
-        exact = close if len(close) == 1 else []
-
+    # SIRF wahi titles jo user ne sach me likhe hain.
+    # "the mongoose" -> "The Mouse", "full house with rohit" -> "Full House",
+    # "mr bachachhan" -> "Bol Bachchan" jaise look-alike kabhi auto nahi honge.
+    exact = [
+        t for t in (result.titles if result else [])
+        if getattr(t, "similarity", 0) >= AUTO_CORRECT_MIN_SIMILARITY
+    ]
     if year:
         # year fit hona chahiye (same year / chalti series / +-1). Galat year -> guess nahi,
         # suggestions + year note dikhao.
@@ -3192,24 +3192,63 @@ async def ai_spell_check(chat_id, wrong_name):
 
     tried = set()
     for t in exact[:4]:                       # same title ke alag year / remake
-        title_with_year = f"{t.title} {year}".strip() if year else t.title
-        queries = []
-        if meta_suffix:
-            queries.append(re.sub(r"\s+", " ", f"{title_with_year} {meta_suffix}").strip())
-        queries.append(title_with_year)
+        # IMDb naam + TMDB naam + original title (alag spelling) - sab try honge
+        for name in (getattr(t, "names", None) or [t.title]):
+            title_with_year = f"{name} {year}".strip() if year else name
+            queries = []
+            if meta_suffix:
+                queries.append(re.sub(r"\s+", " ", f"{title_with_year} {meta_suffix}").strip())
+            queries.append(title_with_year)
 
-        for q in queries:
-            if q.lower() in tried:
-                continue
-            tried.add(q.lower())
-            files, _, _ = await get_search_results(chat_id=chat_id, query=q)
-            if files:
-                return q
-
-    # Title asli hai par DB me file nahi (ya year match nahi): guess mat karo,
-    # advantage_spell_chok Request button ke saath dikhayega.
+            for q in queries:
+                if q.lower() in tried:
+                    continue
+                tried.add(q.lower())
+                files, _, _ = await get_search_results(chat_id=chat_id, query=q)
+                if files:
+                    return q
     return None
 
+
+def suggestion_rows(movies, user, limit=10):
+    """
+    Suggestion buttons: har film ke IMDb / TMDB / original naam ke ALAG button.
+
+    Duplicate nahi aate:
+      * ek film ke andar same naam (case / spacing ka fark ignore) -> ek button
+      * same imdb_id do baar -> ek hi film
+      * alag imdb_id par bhi (naam + saal + type) same -> ek button
+    """
+    rows, seen_ids, seen_labels = [], set(), set()
+    for movie in movies:
+        if movie.imdb_id in seen_ids:
+            continue
+        seen_ids.add(movie.imdb_id)
+
+        year_text = getattr(movie, "year_text", "") or ""
+        meta = f" ({year_text})" if year_text else ""
+        if getattr(movie, "kind", None):
+            meta += f" • {movie.kind}"
+        if getattr(movie, "is_upcoming", False):
+            meta += " • Upcoming"
+
+        sources = (
+            ("i", getattr(movie, "imdb_title", None) or movie.title),
+            ("t", getattr(movie, "tmdb_title", None)),
+            ("o", getattr(movie, "original_title", None)),
+        )
+        for code, name in sources:
+            key = re.sub(r"[^a-z0-9]", "", str(name or "").lower())
+            label_key = (key, year_text, getattr(movie, "kind", None))
+            if not key or label_key in seen_labels:
+                continue
+            seen_labels.add(label_key)
+            rows.append([{
+                "text": f"{name}{meta}"[:60],
+                "callback_data": f"spol#{movie.imdb_id}#{user}#{code}",
+                "style": "success",
+            }])
+    return rows[:limit]
 
 
 async def advantage_spell_chok(client, message):
@@ -3238,7 +3277,7 @@ async def advantage_spell_chok(client, message):
         return
 
     request_btn = [{
-        "text": f"📝 𝐑ᴇǫᴜᴇsᴛ Oʀɪɢɪɴᴀʟ Tᴇxᴛ: {search[:40]}",
+        "text": f"📝𝐑ᴇǫᴜᴇsᴛ Oʀɪɢɪɴᴀʟ Tᴇxᴛ: {search[:40]}",
         "switch_inline_query_current_chat": f"/request {search}",
         "style": "warning",
     }]
@@ -3274,14 +3313,7 @@ async def advantage_spell_chok(client, message):
     # sahi year pehle). Yahan dobara sort / filter MAT karo.
     movies_to_show = movies[:6]
 
-    buttons = [
-        [{
-            "text": (getattr(movie, "label", None) or movie.title)[:60],
-            "callback_data": f"spol#{movie.imdb_id}#{user}",
-            "style": "success",
-        }]
-        for movie in movies_to_show
-    ]
+    buttons = suggestion_rows(movies_to_show, user)
     buttons.append(request_btn)
     buttons.append([{
         "text": "🚫 ᴄʟᴏsᴇ 🚫",
@@ -3302,3 +3334,4 @@ async def advantage_spell_chok(client, message):
             await obj.delete()
         except Exception:
             pass
+
