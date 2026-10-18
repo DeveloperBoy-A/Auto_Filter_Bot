@@ -3156,57 +3156,59 @@ async def _imdb_lookup(title, year=None):
 
 
 
-async def ai_spell_check(chat_id, wrong_name): 
-    """DB query string deta hai (auto-correct) ya None (-> suggestions dikhao).""" 
-    title, meta_suffix, year = split_query_parts(wrong_name) 
-    if not title: 
+async def ai_spell_check(chat_id, wrong_name):
+    """DB query string deta hai (auto-correct) ya None (-> suggestions dikhao)."""
+    title, meta_suffix, year = split_query_parts(wrong_name)
+    if not title:
         return None
 
-    try: 
-        result = await _imdb_lookup(title, year) 
-    except Exception as e: 
-        logger.exception("ai_spell_check: imdb search failed for %r: %s", wrong_name, e) 
-        return None 
-        
-    # IMDBKit se mile sabhi titles. 
-    all_titles = list(result.titles if result else []) 
-    
-    # Pehle exact aur phonetic matches try karo. 
-    exact = [t for t in all_titles if t.match_type in AUTO_CORRECT_TYPES] 
-    if year: 
-        # User ne year diya hai to year match hona chahiye. 
-        exact = [t for t in exact if t.year_match in ("exact", "within", "near")] 
-        
-    # Exact/phonetic match na mile to unique close match try karo. 
-    if not exact: 
-        close = [t for t in all_titles if t.match_type == "close"] 
-        if year: 
-            close = [t for t in close if t.year_match in ("exact", "within", "near")] 
-        if len(close) == 1: 
-            exact = close 
-            
-    if not exact: 
-        return None 
-        
-    tried = set() 
-    for t in exact[:4]: 
-        title_with_year = f"{t.title} {year}".strip() if year else t.title 
-        queries = [] 
-        
-        if meta_suffix: 
-            queries.append(re.sub(r"\s+", " ", f"{title_with_year} {meta_suffix}").strip()) 
-        queries.append(title_with_year) 
-        
-        for q in queries: 
-            if q.lower() in tried: 
-                continue 
-            tried.add(q.lower()) 
-            files, _, _ = await get_search_results(chat_id=chat_id, query=q) 
-            if files: 
-                return q 
-                
-    # DB mein file nahi mili to suggestions dikhane do. 
-    return None 
+    try:
+        result = await _imdb_lookup(title, year)
+    except Exception as e:
+        logger.exception("ai_spell_check: imdb search failed for %r: %s", wrong_name, e)
+        return None
+
+    titles = list(result.titles) if result else []
+
+    # 1) Jo titles user ne sach me likhe hain (exact / phonetic)
+    exact = [t for t in titles if t.match_type in AUTO_CORRECT_TYPES]
+
+    # 2) exact/phonetic na mile to hi "close" (80%+) try karo.
+    #    Sirf tab jab ek hi close title ho aur naam kam se kam 5 letters ka ho.
+    if not exact:
+        close = [
+            t for t in titles
+            if t.match_type == "close"
+            and len(re.sub(r"\W", "", t.title)) >= 5
+        ]
+        exact = close if len(close) == 1 else []
+
+    if year:
+        # year fit hona chahiye (same year / chalti series / +-1). Galat year -> guess nahi,
+        # suggestions + year note dikhao.
+        exact = [t for t in exact if t.year_match in ("exact", "within", "near", None)]
+    if not exact:
+        return None
+
+    tried = set()
+    for t in exact[:4]:                       # same title ke alag year / remake
+        title_with_year = f"{t.title} {year}".strip() if year else t.title
+        queries = []
+        if meta_suffix:
+            queries.append(re.sub(r"\s+", " ", f"{title_with_year} {meta_suffix}").strip())
+        queries.append(title_with_year)
+
+        for q in queries:
+            if q.lower() in tried:
+                continue
+            tried.add(q.lower())
+            files, _, _ = await get_search_results(chat_id=chat_id, query=q)
+            if files:
+                return q
+
+    # Title asli hai par DB me file nahi (ya year match nahi): guess mat karo,
+    # advantage_spell_chok Request button ke saath dikhayega.
+    return None
 
 
 
