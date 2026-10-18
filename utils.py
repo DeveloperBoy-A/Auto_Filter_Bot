@@ -417,6 +417,21 @@ def _title_matches(candidate_title, expected_title) -> bool:
     return _strip_leading_article(c) == _strip_leading_article(e)
 
 
+def other_poster(imdb_data):
+    """
+    Main poster kaam na kare (MediaEmpty / bad dimensions) to dusre source ka poster.
+    TMDB poster main hai to IMDb wala, IMDb main hai to TMDB wala. Nahi hai to None.
+    """
+    if not imdb_data:
+        return None
+    main = imdb_data.get('poster')
+    for key in ('tmdb_poster', 'imdb_poster'):
+        url = imdb_data.get(key)
+        if url and url != main:
+            return url
+    return None
+
+
 async def get_poster(query, bulk=False, id=False, file=None):
     if not id:
         query = (query.strip()).lower()
@@ -470,11 +485,19 @@ async def get_poster(query, bulk=False, id=False, file=None):
     plot = movie.plot[0] if isinstance(movie.plot, list) else movie.plot or ""
     if len(plot) > 800:
         plot = plot[:800] + "..."
-    imdb_id = movie.imdb_id
-    if not imdb_id.startswith(("tt", "tmdb:")):
+    imdb_id = movie.imdb_id or ""
+    if imdb_id and not imdb_id.startswith(("tt", "tmdb:")):
         imdb_id = f"tt{imdb_id}"
     return {
         'title': movie.title,
+        # IMDb aur TMDB dono ke naam / poster (dono alag spelling de sakte hain)
+        'imdb_title': getattr(movie, "imdb_title", None) or movie.title,
+        'tmdb_title': getattr(movie, "tmdb_title", None),
+        'original_title': getattr(movie, "original_title", None),
+        'names': list(getattr(movie, "names", None) or [movie.title]),
+        'imdb_poster': getattr(movie, "imdb_poster_url", None),
+        'tmdb_poster': getattr(movie, "tmdb_poster_url", None),
+        'backdrop': getattr(movie, "backdrop_url", None),
         'votes': movie.votes,
         "aka": listx_to_str(movie.title_akas),
         "seasons": (
