@@ -146,7 +146,10 @@ async def get_movie_details(query, id=False, file=None, kind=None):
 
             def _pick(cands):
                 for m in _ordered(cands):
-                    if _title_matches(getattr(m, "title", "") or "", title):
+                    # IMDb name, TMDB name, original title ... any of them may be what
+                    # the file / user wrote.
+                    names = list(getattr(m, "names", None) or [getattr(m, "title", "") or ""])
+                    if any(_title_matches(n, title) for n in names):
                         return m
                 return None
 
@@ -199,6 +202,12 @@ async def get_movie_details(query, id=False, file=None, kind=None):
 
         return {
             'title': movie.title,
+            'imdb_title': getattr(movie, "imdb_title", None) or movie.title,
+            'tmdb_title': getattr(movie, "tmdb_title", None),
+            'original_title': getattr(movie, "original_title", None),
+            'names': list(getattr(movie, "names", None) or [movie.title]),
+            'imdb_poster_url': getattr(movie, "imdb_poster_url", None),
+            'tmdb_poster_url': getattr(movie, "tmdb_poster_url", None),
             'votes': movie.votes,
             "aka": list_to_str(getattr(movie, "title_akas", None)),
             "seasons": (
@@ -276,7 +285,11 @@ def _normalize_title_for_match(t) -> str:
     
     # ✅ [NEW] Neutralize 'a' and 'e' vowels to bridge Mere vs Mera differences
     t = t.replace('a', 'x').replace('e', 'x')
-    
+
+    # ✅ IMDb / TMDB spell the same film with single/double letters:
+    #    "Nayi Naveli" (IMDb)  vs  "Nayyi NAVELLI" (TMDB)  -> nxyi nxvxli
+    t = re.sub(r'([a-z0-9])\1+', r'\1', t)
+
     t = re.sub(r'\s+', ' ', t).strip()
     return t
 
@@ -312,26 +325,46 @@ async def _tmdb_search_best(session, media_type, title, year, strict_year):
     """
     Search TMDB (media_type: 'movie' | 'tv') and return the single best result that
     actually matches the title (and year when it makes sense). Returns None otherwise.
-    """
-    params = {"api_key": TMDB_API_KEY, "query": title, "include_adult": "false"}
-    async with session.get(f"https://api.themoviedb.org/3/search/{media_type}", params=params) as resp:
-        if resp.status != 200:
-            return None
-        data = await resp.json()
 
-    results = data.get("results") or []
+    TMDB's search is not spelling tolerant: "nayi naveli" finds nothing while
+    "nayyi navelli" does.  So if the typed spelling gives no matching result we retry
+    with single/double-letter respellings.
+    """
     name_key = "title" if media_type == "movie" else "name"
     date_key = "release_date" if media_type == "movie" else "first_air_date"
 
-    matches = [
-        r for r in results
-        if _title_matches(r.get(name_key), title)
-        or _title_matches(r.get("original_" + name_key), title)
-    ]
+    queries = [title]
+    try:
+        from imdbkit.textutils import double_letter_variants
+        queries += double_letter_variants(re.sub(r"\s+", " ", title.lower()).strip(), 3)
+    except Exception:
+        pass
+
+    matches = []
+    for q in queries:
+        params = {"api_key": TMDB_API_KEY, "query": q, "include_adult": "false"}
+        async with session.get(f"https://api.themoviedb.org/3/search/{media_type}", params=params) as resp:
+            if resp.status != 200:
+                continue
+            data = await resp.json()
+
+        results = data.get("results") or []
+        # compare with what the USER typed (title), not with the respelled query
+        matches = [
+            r for r in results
+            if _title_matches(r.get(name_key), title)
+            or _title_matches(r.get("original_" + name_key), title)
+        ]
+        if matches:
+            break
+
     if not matches:
         return None
 
-    # ✅ [NEW] Strict year verification enforces boundary check for both series and films
+    # most popular first when TMDB has several films with the same name
+    matches.sort(key=lambda r: r.get("popularity") or 0, reverse=True)
+
+    # ✅ Strict year verification enforces boundary check for both series and films
     if year:
         for tol in (0, 1):
             for r in matches:
@@ -339,16 +372,8 @@ async def _tmdb_search_best(session, media_type, title, year, strict_year):
                     return r
         return None
 
-    return matches
-
-    # Series: the year in the filename is the season's year. A show can't have
-    # started AFTER that, so prefer a show whose first_air_date <= that year.
-    if year:
-        for r in matches:
-            fa = (r.get(date_key) or "")[:4]
-            if fa and fa.isdigit() and abs(int(fa) - int(year)) <= 1:
-                return r
-
+    # (old code returned the whole LIST here -> chosen.get("id") crashed -> TMDB was
+    #  silently skipped for every query without a year)
     return matches[0]
 
 
@@ -389,6 +414,8 @@ async def _tmdb_full_details(session, media_type, tmdb_id):
 
     return {
         "title": full.get("name") if is_tv else full.get("title"),
+        "tmdb_title": full.get("name") if is_tv else full.get("title"),
+        "original_title": full.get("original_name") if is_tv else full.get("original_title"),
         "kind": "tv series" if is_tv else "movie",
         "year": (date or "")[:4] or None,
         "release_date": date,
@@ -414,8 +441,35 @@ async def _tmdb_full_details(session, media_type, tmdb_id):
         "imdb_id": imdb_id,
         "tmdb_id": tmdb_id,
         "poster_url": f"https://image.tmdb.org/t/p/w1280{poster_path}" if poster_path else None,
+        "tmdb_poster_url": f"https://image.tmdb.org/t/p/w1280{poster_path}" if poster_path else None,
         "backdrop_url": f"https://image.tmdb.org/t/p/w1280{backdrop_path}" if backdrop_path else None,
     }
+
+
+async def _attach_imdb_side(details: dict):
+    """TMDB result -> also add IMDb's own name + poster (so the bot has BOTH)."""
+    names = [details.get("tmdb_title") or details.get("title"), details.get("original_title")]
+    details["imdb_title"] = None
+    details["imdb_poster_url"] = None
+    imdb_id = details.get("imdb_id")
+    if imdb_id and str(imdb_id).startswith("tt"):
+        try:
+            m = await asyncio.to_thread(ia.get_movie, imdb_id)
+            if m:
+                details["imdb_title"] = m.title
+                details["imdb_poster_url"] = getattr(m, "imdb_poster_url", None)
+                if getattr(m, "rating", None) and getattr(m, "rating_source", None) == "IMDb":
+                    details["imdb_rating"] = m.rating
+                names = [m.title] + names + list(getattr(m, "names", []) or [])
+        except Exception as e:
+            logger.warning(f"[IMDb] could not add IMDb data for {imdb_id}: {e}")
+    seen, out = set(), []
+    for n in names:
+        k = re.sub(r"[^a-z0-9]", "", str(n or "").lower())
+        if k and k not in seen:
+            seen.add(k)
+            out.append(str(n).strip())
+    details["names"] = out
 
 
 async def _search_official_tmdb(title: str, year: str | None, kind: str | None = None):
@@ -439,6 +493,7 @@ async def _search_official_tmdb(title: str, year: str | None, kind: str | None =
                 continue
             details = await _tmdb_full_details(session, media_type, chosen.get("id"))
             if details and (details.get("poster_url") or details.get("backdrop_url")):
+                await _attach_imdb_side(details)
                 return details
 
         logger.info(f"[TMDB] No exact title/year match for '{title}' ({year}, kind={kind})")
