@@ -3076,7 +3076,7 @@ async def old_advantage_spell_chok(client, message):
 #   * sequel number alag ho (tiger 3 vs tiger 2) to score 0 -> kabhi auto-correct nahi
 #   * score IMDb / TMDB / original, sab naamon me se sabse achhe naam ka hota hai
 # Ise badalna ho to sirf yeh number badlo (zyada = safe, kam = zyada guess).
-AUTO_CORRECT_MIN_SIMILARITY = 80
+AUTO_CORRECT_MIN_SIMILARITY = 86
 
 YEAR_PATTERN = re.compile(r"(?<![A-Za-z0-9])((?:19|20)\d{2})(?![A-Za-z0-9])")
 
