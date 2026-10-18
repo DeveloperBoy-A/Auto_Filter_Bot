@@ -632,6 +632,15 @@ def _colors_on(bot):
     return COLORS_ENABLED and bool(getattr(bot, "bot_token", None))
 
 
+_FID_RE = re.compile(r"[A-Za-z0-9_-]{40,}")
+
+
+def is_tg_file_id(value):
+    """/setposter se save hui Telegram file_id (http URL nahi) hai ya nahi."""
+    return (isinstance(value, str) and not value.lower().startswith(("http://", "https://"))
+            and _FID_RE.fullmatch(value) is not None)
+
+
 async def send_movie_update(bot, base_name):
     max_retries = 3
     for attempt in range(max_retries):
@@ -645,11 +654,15 @@ async def send_movie_update(bot, base_name):
 
             # Poster fetch fail ho jaye to pehle post hi nahi jaata tha - ab text post jayega.
             poster = None
-            if movie_doc.get("poster_url") and not LINK_PREVIEW:
+            _is_fid = is_tg_file_id(movie_doc.get("poster_url"))   # /setposter wali file_id
+            if movie_doc.get("poster_url") and (_is_fid or not LINK_PREVIEW):
                 # Landscape (backdrop) ho to 16:9 size, warna portrait - pehle backdrop bhi
                 # 860x1200 me kheench jata tha (stretch)
                 size = (1280, 720) if movie_doc.get("is_backdrop") else (860, 1200)
-                poster = await fetch_image(movie_doc["poster_url"], size)
+                if _is_fid:
+                    poster = movie_doc["poster_url"]        # file_id seedha Telegram ko
+                else:
+                    poster = await fetch_image(movie_doc["poster_url"], size)
             is_photo = poster is not None
 
             msg_id = None
@@ -681,10 +694,22 @@ async def send_movie_update(bot, base_name):
                 if is_photo:
                     if hasattr(poster, "seek"):
                         poster.seek(0)
-                    msg = await bot.send_photo(
-                        chat_id=MOVIE_UPDATE_CHANNEL, photo=poster, caption=text,
-                        reply_markup=markup, parse_mode=enums.ParseMode.HTML, has_spoiler=True
-                    )
+                    try:
+                        msg = await bot.send_photo(
+                            chat_id=MOVIE_UPDATE_CHANNEL, photo=poster, caption=text,
+                            reply_markup=markup, parse_mode=enums.ParseMode.HTML, has_spoiler=True
+                        )
+                    except FloodWait:
+                        raise
+                    except Exception as e:
+                        if not _is_fid:
+                            raise
+                        # file_id is bot ki nahi / invalid -> post to jaye (text), error log me
+                        logger.error(f"Poster file_id se send fail ({base_name}): {e} - text post bhej raha hu")
+                        is_photo = False
+                        msg = await bot.send_message(
+                            chat_id=MOVIE_UPDATE_CHANNEL, text=text,
+                            reply_markup=markup, parse_mode=enums.ParseMode.HTML)
                 else:
                     send_params = {
                         "chat_id": MOVIE_UPDATE_CHANNEL, "text": text,
