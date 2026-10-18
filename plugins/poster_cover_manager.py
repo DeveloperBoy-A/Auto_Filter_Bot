@@ -229,7 +229,7 @@ async def _setposter(client, message):
     exact = [d["_id"] async for d in db.movie_updates.find(
         {"_id": {"$regex": exact_rx, "$options": "i"}}, {"_id": 1}).limit(10)]
     if len(exact) == 1:
-        return await _apply_poster(wait, exact[0], url, is_bd, admin)
+        return await _apply_poster(client, wait, exact[0], url, is_bd, admin)
 
     cands = exact
     if not cands:
@@ -252,18 +252,31 @@ async def _setposter(client, message):
                          reply_markup=InlineKeyboardMarkup(rows), parse_mode=HTML)
 
 
-async def _apply_poster(msg, base_name, url, is_bd, admin_id):
+async def _apply_poster(client, msg, base_name, url, is_bd, admin_id):
+    """Poster DB me save karo (override + update post doc) aur channel ka post turant refresh karo."""
     await set_poster_override(base_name, url, is_bd, admin_id)
     await db.movie_updates.update_one(
         {"_id": base_name}, {"$set": {"poster_url": url, "is_backdrop": bool(is_bd)}})
+
+    ok = False
+    try:
+        from plugins.channel import refresh_update_post      # lazy import
+        ok = await refresh_update_post(client, base_name)     # naya post (photo ke saath) + purana delete
+    except Exception:
+        logger.exception("[PCM] auto refresh failed")
+
+    if ok:
+        return await msg.edit_text(
+            f"✅ <b>Poster set + update post refresh ho gaya:</b> <code>{escape(base_name)}</code>\n\n"
+            "Ab is naam ki har nayi file ke update post me yahi poster aayega.",
+            parse_mode=HTML)
+
     token = _new_token({"kind": "refresh", "admin": admin_id, "base": base_name})
     await msg.edit_text(
-        f"✅ <b>Poster set:</b> <code>{escape(base_name)}</code>\n\n"
-        "Ab is naam ki har nayi file ke update post me yahi poster aayega.\n"
-        "Channel ka purana post abhi badalna ho to neeche button dabao "
-        "(naya post jayega, purana delete ho jayega).",
+        f"⚠️ <b>Poster DB me save ho gaya:</b> <code>{escape(base_name)}</code>\n"
+        "Par channel ka post auto-refresh nahi hua (logs check karo). Neeche button se dobara try karo.",
         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(
-            "🔄 Abhi update post refresh karo", callback_data=f"pcm_rf:{token}")]]),
+            "🔄 Update post refresh karo", callback_data=f"pcm_rf:{token}")]]),
         parse_mode=HTML)
 
 
@@ -579,7 +592,7 @@ async def _pcm_callbacks(client, query):
         base = d["cands"][int(parts[2])]
         await query.answer()
         PENDING.pop(token, None)
-        return await _apply_poster(query.message, base, d["url"], d["bd"], uid)
+        return await _apply_poster(client, query.message, base, d["url"], d["bd"], uid)
 
     if action == "pcm_rf":                                   # poster: post refresh
         from plugins.channel import refresh_update_post      # lazy import
