@@ -51,7 +51,7 @@ BUTTONS1 = {}
 BUTTONS2 = {}
 SPELL_CHECK = {}
 MEDIA_TYPE = {}  # key -> "movie" | "series"  (Movie/Series filter selection)
-_AUDIO_SCAN_LOCKS = {}  # file_id -> asyncio.Lock  (prevents double-click double-scan)
+
 
 
 # ============================
@@ -222,37 +222,115 @@ def dedupe_preserve_order(items):
     return result
 
 
+AUDIO_SUBS_INFLIGHT = {}
+SCAN_WAIT_SECONDS = 7
 
-async def scan_audio_subtitle_tracks(client, file_id):
-    """
-    Fast + safe scan. Downloads only PART of the real Telegram file and runs
-    ffprobe on it. Hard timeouts on every network call so the bot never hangs.
-    Reads real embedded stream tags only - never filename/caption.
-    """
+_SMALL_CAPS = str.maketrans(
+    "abcdefghijklmnopqrstuvwxyz",
+    "ᴀʙᴄᴅᴇꜰɢʜɪᴊᴋʟᴍɴᴏᴘǫʀsᴛᴜᴠᴡxʏᴢ"
+)
 
+
+def sc(text):
+    """hindi -> Hɪɴᴅɪ"""
+    words = []
+    for w in str(text).split(" "):
+        words.append(w[:1].upper() + w[1:].lower().translate(_SMALL_CAPS) if w else w)
+    return " ".join(words)
+
+
+def build_popup_text(result):
+    video = result.get("video", [])
+    audio = result.get("audio", [])
+    subs = result.get("subs", [])
+
+    lines = [f"🎬 {sc('Available Tracks')}"]
+    if video:
+        lines.append("")
+        lines.append(f"📹 {sc('Video')}")
+        for v in video[:1]:
+            lines.append(f"• {v}")
+    lines.append("")
+    lines.append(f"🔊 {sc('Audio Tracks')} ({len(audio)})")
+    lines.extend([f"• {sc(a)}" for a in audio] or [f"• {sc('None')}"])
+    lines.append("")
+    lines.append(f"💬 {sc('Subtitle Tracks')} ({len(subs)})")
+    lines.extend([f"• {sc(s)}" for s in subs] or [f"• {sc('None')}"])
+
+    text = "\n".join(lines)
+    if len(text) <= 200:
+        return text
+
+    # 200 char limit ke liye compact style
+    def fit(prefix, items, max_len=70):
+        if not items:
+            return f"{prefix}: {sc('None')}"
+        shown = []
+        for it in items:
+            s = sc(it)
+            if len(f"{prefix}: " + ", ".join(shown + [s])) > max_len:
+                break
+            shown.append(s)
+        if not shown:
+            shown = [sc(items[0])[:max_len - len(prefix) - 2]]
+        hidden = len(items) - len(shown)
+        line = f"{prefix}: " + ", ".join(shown)
+        return line + (f" +{hidden}" if hidden > 0 else "")
+
+    compact = [f"🎬 {sc('Available Tracks')}"]
+    if video:
+        compact.append(f"📹 {video[0][:30]}")
+    compact.append(fit(f"🔊 {sc('Audio')} ({len(audio)})", audio))
+    compact.append(fit(f"💬 {sc('Subs')} ({len(subs)})", subs))
+    text = "\n".join(compact)
+    return text if len(text) <= 200 else text[:197] + "..."
+
+
+def _cache_get(file_id):
     cached = AUDIO_SUBS_CACHE.get(file_id)
     if cached:
         cached_time, cached_result = cached
         if time.time() - cached_time < AUDIO_SUBS_CACHE_TTL:
             return cached_result
         AUDIO_SUBS_CACHE.pop(file_id, None)
+    return None
 
-        CHUNK_SIZE = 1024 * 1024
-    FRONT_CHUNKS = 3
-    TAIL_CHUNKS = 2
-    DOWNLOAD_TIMEOUT = 6
-    FFPROBE_TIMEOUT = 3
-    
-    temp_path = os.path.join(
-        tempfile.gettempdir(),
-        f"avscan_{uuid.uuid4().hex}.tmp"
-    )
+
+def _start_scan(client, file_id):
+    """Ek file ka ek hi scan chalega."""
+    task = AUDIO_SUBS_INFLIGHT.get(file_id)
+    if task and not task.done():
+        return task
+
+    task = asyncio.create_task(scan_audio_subtitle_tracks(client, file_id))
+    AUDIO_SUBS_INFLIGHT[file_id] = task
+
+    def _done(t):
+        AUDIO_SUBS_INFLIGHT.pop(file_id, None)
+        if not t.cancelled():
+            t.exception()
+
+    task.add_done_callback(_done)
+    return task
+
+
+async def scan_audio_subtitle_tracks(client, file_id):
+    cached = _cache_get(file_id)
+    if cached:
+        return cached
+
+    CHUNK_SIZE = 1024 * 1024
+    FRONT_CHUNKS = 2
+    TAIL_CHUNKS = 1
+
+    temp_path = os.path.join(tempfile.gettempdir(), f"avscan_{uuid.uuid4().hex}.tmp")
+    file_details_task = None
 
     async def run_ffprobe(path):
         process = await asyncio.create_subprocess_exec(
             "ffprobe",
-            "-probesize", "3000000",
-            "-analyzeduration", "3000000",
+            "-probesize", "2000000",
+            "-analyzeduration", "2000000",
             "-v", "error",
             "-show_entries",
             "stream=index,codec_type,codec_name,width,height:stream_tags=language,title",
@@ -262,17 +340,12 @@ async def scan_audio_subtitle_tracks(client, file_id):
             stderr=asyncio.subprocess.PIPE
         )
         try:
-            stdout, stderr = await asyncio.wait_for(
-                process.communicate(),
-                timeout=FFPROBE_TIMEOUT
-            )
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=10)
         except asyncio.TimeoutError:
-            try:
-                process.kill()
-                await process.wait()
-            except Exception:
-                pass
+            process.kill()
+            await process.wait()
             return None, "ffprobe scan timed out."
+
         if process.returncode != 0:
             return None, stderr.decode("utf-8", errors="ignore").strip()
         try:
@@ -280,59 +353,25 @@ async def scan_audio_subtitle_tracks(client, file_id):
         except Exception:
             return None, "ffprobe returned invalid output."
 
-    async def download_front():
-        f = open(temp_path, "wb")
-        try:
-            async for chunk in client.stream_media(file_id, limit=FRONT_CHUNKS):
-                try:
-                    await asyncio.to_thread(f.write, chunk)
-                except ValueError:
-                    # file closed due to outer timeout/cancel
-                    return
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            return
-        finally:
-            try:
-                f.flush()
-            except Exception:
-                pass
-            try:
-                f.close()
-            except Exception:
-                pass
-
     try:
-        # ---- Attempt 1: front ----
-        try:
-            await asyncio.wait_for(download_front(), timeout=DOWNLOAD_TIMEOUT)
-        except asyncio.TimeoutError:
-            # partial file may still be usable -> let ffprobe try it
-            pass
-        except asyncio.CancelledError:
-            raise
-        except Exception as e:
-            if "closed file" not in str(e).lower():
-                raise RuntimeError(f"Download failed: {e}")
+        file_details_task = asyncio.create_task(get_file_details(file_id))
 
-        if not os.path.exists(temp_path) or os.path.getsize(temp_path) == 0:
+        # Attempt 1: front
+        with open(temp_path, "wb") as f:
+            async for chunk in client.stream_media(file_id, limit=FRONT_CHUNKS):
+                f.write(chunk)
+
+        if os.path.getsize(temp_path) == 0:
             raise RuntimeError("Could not download any data for this file.")
 
         data, err = await run_ffprobe(temp_path)
         streams = data.get("streams", []) if data else []
+        has_tracks = any(s.get("codec_type") in ("audio", "subtitle") for s in streams)
 
-        has_tracks = any(
-            s.get("codec_type") in ("audio", "subtitle")
-            for s in streams
-        )
-
-        # ---- Attempt 2: tail fallback (only if front found nothing) ----
+        # Attempt 2: tail fallback
         if not has_tracks:
             try:
-                details = await asyncio.wait_for(
-                    get_file_details(file_id), timeout=10
-                )
+                details = await file_details_task
                 file_size = details[0].get("file_size") if details else None
             except Exception:
                 file_size = None
@@ -340,57 +379,37 @@ async def scan_audio_subtitle_tracks(client, file_id):
             if file_size and file_size > (FRONT_CHUNKS * CHUNK_SIZE):
                 total_chunks = math.ceil(file_size / CHUNK_SIZE)
                 tail_chunks = min(TAIL_CHUNKS, total_chunks - FRONT_CHUNKS)
-
                 if tail_chunks > 0:
                     tail_offset_chunks = total_chunks - tail_chunks
-
-                    async def download_tail():
-                        with open(temp_path, "r+b") as f:
-                            await asyncio.to_thread(f.truncate, file_size)
-                            await asyncio.to_thread(
-                                f.seek, tail_offset_chunks * CHUNK_SIZE
-                            )
-                            async for chunk in client.stream_media(
-                                file_id,
-                                offset=tail_offset_chunks,
-                                limit=tail_chunks
-                            ):
-                                await asyncio.to_thread(f.write, chunk)
-
                     try:
-                        await asyncio.wait_for(
-                            download_tail(), timeout=DOWNLOAD_TIMEOUT
-                        )
-                        data2, err2 = await run_ffprobe(temp_path)
+                        with open(temp_path, "r+b") as f:
+                            f.truncate(file_size)
+                            f.seek(tail_offset_chunks * CHUNK_SIZE)
+                            async for chunk in client.stream_media(
+                                file_id, offset=tail_offset_chunks, limit=tail_chunks
+                            ):
+                                f.write(chunk)
+                        data2, _ = await run_ffprobe(temp_path)
                         if data2 and data2.get("streams"):
                             data, err = data2, None
                             streams = data.get("streams", [])
                     except Exception:
-                        pass  # best-effort
+                        pass
 
         if data is None:
             raise RuntimeError(err or "ffprobe failed to scan the media.")
 
-        video_tracks = []
-        audio_tracks = []
-        subtitle_tracks = []
-
+        video_tracks, audio_tracks, subtitle_tracks = [], [], []
         for stream in streams:
             codec_type = stream.get("codec_type")
             tags = stream.get("tags") or {}
 
             if codec_type == "video":
                 codec_name = (stream.get("codec_name") or "Unknown").upper()
-                width = stream.get("width")
-                height = stream.get("height")
-                if width and height:
-                    video_tracks.append(f"{codec_name} {width}x{height}")
-                else:
-                    video_tracks.append(codec_name)
-
+                w, h = stream.get("width"), stream.get("height")
+                video_tracks.append(f"{codec_name} {w}x{h}" if w and h else codec_name)
             elif codec_type == "audio":
                 audio_tracks.append(get_stream_language(tags))
-
             elif codec_type == "subtitle":
                 subtitle_tracks.append(get_stream_language(tags))
 
@@ -402,21 +421,118 @@ async def scan_audio_subtitle_tracks(client, file_id):
 
         AUDIO_SUBS_CACHE[file_id] = (time.time(), result)
         if len(AUDIO_SUBS_CACHE) > AUDIO_SUBS_CACHE_MAX:
-            oldest_key = min(
-                AUDIO_SUBS_CACHE,
-                key=lambda k: AUDIO_SUBS_CACHE[k][0]
-            )
+            oldest_key = min(AUDIO_SUBS_CACHE, key=lambda k: AUDIO_SUBS_CACHE[k][0])
             AUDIO_SUBS_CACHE.pop(oldest_key, None)
 
         return result
 
     finally:
+        if file_details_task and not file_details_task.done():
+            file_details_task.cancel()
         try:
             if os.path.exists(temp_path):
                 os.remove(temp_path)
         except Exception:
             pass
 
+
+async def _handle_audio_subs(client, query):
+    async def safe_answer(text):
+        try:
+            await query.answer(text, show_alert=True)
+        except Exception:
+            pass
+
+    original_markup = query.message.reply_markup if query.message else None
+
+    async def restore_button():
+        try:
+            if original_markup:
+                await query.edit_message_reply_markup(reply_markup=original_markup)
+                colorize_later(query.message, original_markup)
+        except Exception:
+            pass
+
+    restore_later = False
+
+    try:
+        if PREMIUM_STREAM_MODE:
+            if not await db.has_premium_access(query.from_user.id):
+                return await safe_answer(script.PRE_STREAM_ALERT)
+
+        file_id = query.data.split(":", 1)[1]
+
+        # Cache hit = instant popup
+        cached = _cache_get(file_id)
+        if cached:
+            return await safe_answer(build_popup_text(cached))
+
+        # Button ko "please wait" me badlo
+        if original_markup:
+            new_rows = []
+            for row in original_markup.inline_keyboard:
+                new_row = []
+                for b in row:
+                    if b.callback_data == query.data:
+                        new_row.append(
+                            InlineKeyboardButton(
+                                "ᴘʟᴇᴀꜱᴇ ᴡᴀɪᴛ...⏳",
+                                callback_data="please_wait_noop"
+                            )
+                        )
+                    else:
+                        new_row.append(b)
+                new_rows.append(new_row)
+            try:
+                await query.edit_message_reply_markup(
+                    reply_markup=InlineKeyboardMarkup(new_rows)
+                )
+            except Exception:
+                pass
+
+        task = _start_scan(client, file_id)
+        try:
+            result = await asyncio.wait_for(asyncio.shield(task), timeout=SCAN_WAIT_SECONDS)
+        except asyncio.TimeoutError:
+            restore_later = True
+
+            async def _restore_after_scan():
+                try:
+                    await asyncio.shield(task)
+                except Exception:
+                    pass
+                await restore_button()
+
+            asyncio.create_task(_restore_after_scan())
+            return await safe_answer(
+                f"⏳ {sc('Scanning in background')}\n{sc('Click again in 5 seconds')}"
+            )
+
+        await safe_answer(build_popup_text(result))
+
+    except FileNotFoundError:
+        logger.error("ffprobe is not installed on the server.")
+        await safe_answer("❌ ffprobe is not installed on the server.")
+    except Exception as e:
+        logger.exception("Audio/Subs scan failed: %s", e)
+        await safe_answer(f"❌ {sc('Could not scan audio/subs')}")
+    finally:
+        if not restore_later:
+            await restore_button()
+
+
+# ye dono handler cb_handler (catch-all) se UPAR rahenge
+@Client.on_callback_query(filters.regex(r"^audio_subs_info:"))
+async def audio_subs_info_handler(client: Client, query: CallbackQuery):
+    asyncio.create_task(_handle_audio_subs(client, query))
+
+
+@Client.on_callback_query(filters.regex(r"^please_wait_noop$"))
+async def please_wait_noop_handler(client: Client, query: CallbackQuery):
+    try:
+        await query.answer("🔍 Already scanning, please wait...", show_alert=False)
+    except Exception:
+        pass
 
 
 def movie_series_row(key):
@@ -1969,151 +2085,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
             await query.answer(f"Hey {query.from_user.first_name}, Wrong Spelling ❗", show_alert=True)
         else:
             await query.answer("No permission ❌", show_alert=True)
-
-
-
-    elif DreamxData.startswith("audio_subs_info:"):
-
-        if PREMIUM_STREAM_MODE:
-            if not await db.has_premium_access(query.from_user.id):
-                await query.answer(
-                    text=script.PRE_STREAM_ALERT,
-                    show_alert=True
-                )
-                return
-
-        _, file_id = DreamxData.split(":", 1)
-
-        # IMPORTANT: NO query.answer() here. The single callback answer is
-        # reserved for the final popup at the end. Calling answer() twice
-        # -> second one fails because callback expires ~15s.
-
-        scan_lock = _AUDIO_SCAN_LOCKS.setdefault(file_id, asyncio.Lock())
-
-        if scan_lock.locked():
-            try:
-                await query.answer(
-                    "🔍 ꜱᴄᴀɴ ɪɴ ᴘʀᴏɢʀᴇꜱꜱ, ᴘʟᴇᴀꜱᴇ ᴡᴀɪᴛ...",
-                    show_alert=True
-                )
-            except Exception:
-                pass
-            return
-
-        async with scan_lock:
-            original_markup = query.message.reply_markup
-            waiting_markup = None
-
-            if original_markup:
-                new_rows = []
-                for row in original_markup.inline_keyboard:
-                    new_row = []
-                    for btn in row:
-                        if btn.callback_data == DreamxData:
-                            new_row.append(
-                                InlineKeyboardButton(
-                                    "ᴘʟᴇᴀꜱᴇ ᴡᴀɪᴛ...⏳",
-                                    callback_data="please_wait_noop"
-                                )
-                            )
-                        else:
-                            new_row.append(btn)
-                    new_rows.append(new_row)
-                waiting_markup = InlineKeyboardMarkup(new_rows)
-
-            try:
-                if waiting_markup:
-                    await query.edit_message_reply_markup(reply_markup=waiting_markup)
-            except Exception:
-                pass
-
-            popup_text = "❌ Could not scan Audio/Subs information."
-
-            try:
-                # Hard cap = 12s so single answer stays within callback window
-                result = await asyncio.wait_for(
-                    scan_audio_subtitle_tracks(client, file_id),
-                    timeout=12
-                )
-
-                video_tracks = result.get("video", [])
-                audio_tracks = result.get("audio", [])
-                subtitle_tracks = result.get("subs", [])
-
-                # ---------- small caps helper ----------
-                def sc(text):
-                    normal = "abcdefghijklmnopqrstuvwxyz"
-                    small  = "ᴀʙᴄᴅᴇꜰɢʜɪᴊᴋʟᴍɴᴏᴘǫʀꜱᴛᴜᴠᴡxʏᴢ"
-                    table = str.maketrans(normal + normal.upper(), small + small)
-                    return str(text).translate(table)
-
-                # Popup is PLAIN TEXT only (Telegram alert doesn't render HTML).
-                # Small caps unicode works, bold <b> does NOT work in popup.
-                plain_lines = [f"🎬 {sc('AVAILABLE TRACKS')}"]
-                if video_tracks:
-                    plain_lines.append("")
-                    plain_lines.append(f"📹 {sc('VIDEO')}")
-                    for v in video_tracks:
-                        plain_lines.append(f"• {sc(v)}")
-                plain_lines.append("")
-                plain_lines.append(f"🔊 {sc('AUDIO TRACKS')} ({len(audio_tracks)})")
-                if audio_tracks:
-                    for a in audio_tracks:
-                        plain_lines.append(f"• {sc(a)}")
-                else:
-                    plain_lines.append(f"• {sc('NONE')}")
-                plain_lines.append("")
-                plain_lines.append(f"💬 {sc('SUBTITLE TRACKS')} ({len(subtitle_tracks)})")
-                if subtitle_tracks:
-                    for s in subtitle_tracks:
-                        plain_lines.append(f"• {sc(s)}")
-                else:
-                    plain_lines.append(f"• {sc('NONE')}")
-
-                result_text = "\n".join(plain_lines)
-                if len(result_text) <= 200:
-                    popup_text = result_text
-                else:
-                    popup_text = result_text[:197].rstrip() + "..."
-
-            except asyncio.TimeoutError:
-                logger.error("Audio/Subs scan exceeded 12s.")
-                popup_text = "⏳ ꜱᴄᴀɴ ᴛᴏᴏᴋ ᴛᴏᴏ ʟᴏɴɢ. ᴘʟᴇᴀꜱᴇ ᴛʀʏ ᴀɢᴀɪɴ."
-
-            except FileNotFoundError:
-                logger.error("ffprobe is not installed on the server.")
-                popup_text = "❌ ffprobe is not installed on the server."
-
-            except Exception as e:
-                logger.exception("Audio/Subs scan failed: %s", e)
-                popup_text = "❌ Could not scan Audio/Subs information."
-
-            finally:
-                try:
-                    if original_markup:
-                        await query.edit_message_reply_markup(
-                            reply_markup=original_markup
-                        )
-                        colorize_later(query.message, original_markup)
-                except Exception:
-                    pass
-
-            # SINGLE, final answer - shows the popup
-            try:
-                await query.answer(popup_text, show_alert=True)
-            except Exception as e:
-                logger.exception("Final query.answer failed: %s", e)
-
-        return
-
-    elif DreamxData == "please_wait_noop":
-        await query.answer(
-            "🔍 ᴀʟʀᴇᴀᴅʏ ꜱᴄᴀɴɴɪɴɢ, ᴘʟᴇᴀꜱᴇ ᴡᴀɪᴛ...",
-            show_alert=False
-        )
-        return
     
-
     
     elif DreamxData.startswith("generate_stream_link"):
         _, file_id = DreamxData.split(":")
