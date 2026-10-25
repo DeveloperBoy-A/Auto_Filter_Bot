@@ -917,7 +917,7 @@ def extract_episode_title(text):
         # Reject range artifacts like "21 To 25" ya "To 05"
         if re.fullmatch(r'\s*\d{0,4}\s*(?:to|and|&|-)?\s*\d{1,4}\s*', title, flags=re.IGNORECASE):
             return None
-        return title.title()
+        return re.sub(r"(?<=[A-Za-z])'S\b", "'s", title.title())
         
     return None
 
@@ -1329,6 +1329,100 @@ def resolve_title(file_name: str, caption: str | None = "") -> tuple[str, str]:
     return "", "review"
 
 
+# =========================================================
+# 🧹 FILE NAME DUPLICATE CLEANER
+# =========================================================
+# - Metadata (year, language, quality...) ek hi baar aaye (word-level exact match)
+# - Title ke andar ka word metadata ko block na kare  (jaise "Hindi Medium" + language Hindi)
+# - Episode title me series ka naam repeat na ho  ("India's Got Latent S02 E08 India's Got Latent Finale")
+# - Title khud do baar likha ho ("Pushpa The Rule Pushpa The Rule") to ek baar
+# - Side-by-side repeat ("720P 720P") hat jaye
+
+def _name_tokens(text):
+    return re.findall(r"[a-z0-9.]+", str(text or "").lower().replace("'", "").replace("\u2019", ""))
+
+
+def _contains_seq(hay, needle):
+    n = len(needle)
+    if not n or n > len(hay):
+        return False
+    return any(hay[i:i + n] == needle for i in range(len(hay) - n + 1))
+
+
+def make_unique_adder(parts, protect=0):
+    """parts me value tabhi jodta hai jab wo pehle se (metadata me) na ho.
+
+    protect = parts ke shuru ke kitne items title hain (unse metadata ka match nahi hota).
+    check_title=True sirf year jaise value ke liye: title me wahi token ho to skip.
+    """
+    def add_unique(value, check_title=False):
+        if not value:
+            return
+        cand = _name_tokens(value)
+        if not cand:
+            return
+        hay = []
+        for p in parts[protect:]:
+            hay.extend(_name_tokens(p))
+        if _contains_seq(hay, cand):
+            return
+        if check_title:
+            title_hay = []
+            for p in parts[:protect]:
+                title_hay.extend(_name_tokens(p))
+            if _contains_seq(title_hay, cand):
+                return
+        parts.append(value)
+    return add_unique
+
+
+def dedupe_title_halves(title):
+    """'Pushpa The Rule Pushpa The Rule' -> 'Pushpa The Rule' (sirf jab aadha-aadha same ho, 2+ words)."""
+    words = (title or "").split()
+    n = len(words)
+    if n >= 4 and n % 2 == 0:
+        a, b = words[:n // 2], words[n // 2:]
+        if [re.sub(r"\W", "", w).lower() for w in a] == [re.sub(r"\W", "", w).lower() for w in b]:
+            return " ".join(a)
+    return title
+
+
+def clean_episode_title(ep_title, series_title):
+    """Episode title se series ka naam aur repeat words hatao. Kuch na bache to None."""
+    if not ep_title:
+        return None
+    et = re.sub(r"(?<=[A-Za-z])'S\b", "'s", str(ep_title)).strip()
+
+    def norm(w):
+        return re.sub(r"[^a-z0-9]", "", w.lower())
+
+    st = [norm(w) for w in str(series_title or "").split() if norm(w)]
+    words = et.split()
+    if st:
+        wn = [norm(w) for w in words]
+        k = len(st)
+        while len(words) >= k and [x for x in wn[:k]] == st:
+            words, wn = words[k:], wn[k:]
+    # side-by-side repeat words
+    out = []
+    for w in words:
+        if out and norm(out[-1]) == norm(w) and norm(w):
+            continue
+        out.append(w)
+    res = " ".join(out).strip(" -:|")
+    if len(res) <= 2 or re.fullmatch(r"[\d\s\-]+", res):
+        return None
+    return res
+
+
+def finalize_name_parts(parts, protect=0):
+    """parts -> final string. Metadata me side-by-side repeat tokens ('720P 720P') hata deta hai."""
+    head = " ".join(map(str, parts[:protect])).strip()
+    meta = " ".join(map(str, parts[protect:])).strip()
+    meta = re.sub(r"(?i)(?<!\S)(\S+)(?:\s+\1(?!\S))+", r"\1", meta)
+    return re.sub(r"\s+", " ", f"{head} {meta}").strip()
+
+
 #===================================
 # MAIN ASYNC SAVE PIPELINE
 #===================================
@@ -1577,16 +1671,18 @@ async def save_file(media, bot=None, extracted_info=None):
         final_title = " ".join(formatted_words)
 
         parts = []
-        def add_unique(value):
-            if value and str(value).lower() not in " ".join(map(str, parts)).lower():
-                parts.append(value)
+        # Title do baar likha ho to ek baar; phir metadata duplicate cleaner
+        final_title = dedupe_title_halves(final_title)
+        if final_title:
+            parts.append(final_title)
+        title_len = len(parts)
+        add_unique = make_unique_adder(parts, protect=title_len)
 
         # === STRICT SEQUENCE ASSEMBLER ===
-        # [1] Title
-        if final_title: add_unique(final_title)
+        # [1] Title (upar add ho chuka)
 
         # [2] Release Year (Title ke turant baad, brackets ke saath)
-        if extracted.get("year"): add_unique(extracted["year"])
+        if extracted.get("year"): add_unique(extracted["year"], check_title=True)
 
         # [3] Title Part / Volume / Chapter
         if extracted.get("title_part"): add_unique(extracted["title_part"])
@@ -1596,7 +1692,7 @@ async def save_file(media, bot=None, extracted_info=None):
 
         # [5] Episode Title
         if extracted.get("season_episode") and extracted.get("episode_title"):
-            add_unique(extracted["episode_title"])
+            add_unique(clean_episode_title(extracted["episode_title"], final_title))
 
         # [6] Series Status
         if extracted.get("series_status"): add_unique(extracted["series_status"])
@@ -1615,8 +1711,7 @@ async def save_file(media, bot=None, extracted_info=None):
             if tag in extracted.get("extra_tags", []): add_unique(tag)
 
         # [11] OTT Platform Tag
-        if extracted.get("ott") and extracted["ott"] not in parts:
-            parts.append(extracted["ott"])
+        if extracted.get("ott"): add_unique(extracted["ott"])
 
         # [12] Source Type
         if extracted.get("source"): add_unique(extracted["source"])
@@ -1647,11 +1742,11 @@ async def save_file(media, bot=None, extracted_info=None):
 
         # [18] Branding Signature
         parts = [p for p in parts if p and "Tokyo_Updates" not in str(p)]
+        title_len = min(title_len, len(parts))
         parts.append(RELEASE_TAG)
 
-        # Final String Assembly
-        file_name = " ".join(map(str, parts)).strip()
-        file_name = re.sub(r'\s+', ' ', file_name)
+        # Final String Assembly (side-by-side repeat tokens bhi saaf)
+        file_name = finalize_name_parts(parts, protect=title_len)
         file_name = file_name + ext.lower()
         file_name = re.sub(r'\s+\.', '.', file_name)
 
