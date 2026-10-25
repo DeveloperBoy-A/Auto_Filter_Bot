@@ -14,7 +14,7 @@ from umongo import Instance, Document, fields
 from motor.motor_asyncio import AsyncIOMotorClient
 from marshmallow import ValidationError
 from info import *
-from utils import get_settings, save_group_settings, remove_prefix_garbage, temp
+from utils import get_settings, save_group_settings, remove_prefix_garbage, temp, _title_matches
 from datetime import datetime, timedelta
 
 # Lazy import to avoid circular imports
@@ -32,26 +32,6 @@ def _year_matches(candidate_date: str | None, expected_year: str | None) -> bool
     if not expected_year or not candidate_date:
         return True
     return str(candidate_date).strip()[:4] == str(expected_year).strip()
-
-def _normalize_title_for_match(t) -> str:
-    if not t:
-        return ""
-    t = str(t).lower().strip()
-    t = re.sub(r'[^a-z0-9 ]', '', t)
-    t = re.sub(r'\s+', ' ', t).strip()
-    return t
-
-
-def _strip_leading_article(s: str) -> str:
-    return re.sub(r'^(the|a|an)\s+', '', s)
-
-
-def _title_matches(candidate_title, expected_title) -> bool:
-    c = _normalize_title_for_match(candidate_title)
-    e = _normalize_title_for_match(expected_title)
-    if not c or not e:
-        return True
-    return _strip_leading_article(c) == _strip_leading_article(e)
 
 async def _fetch_cover_url_official_tmdb(
     title: str,
@@ -347,6 +327,7 @@ async def _fetch_cover_url(
         details.get("poster_url")
         or details.get("backdrop_url")
     )
+            
 
 
 # ==========================================
@@ -437,6 +418,7 @@ def create_media_model(instance_obj):
         file_date = fields.DateTimeField(allow_none=True) # Upload timestamp for sorting
         title = fields.StrField(allow_none=True)          # Extracted title for cover reuse
         year = fields.StrField(allow_none=True)           # Release year for cover reuse
+        needs_review = fields.BoolField(allow_none=True)  # Title auto-detect nahi hui -> manual review
 
         class Meta:
             indexes = ("$file_name", "media_type", "-file_date", "title", "year")
@@ -702,6 +684,8 @@ def extract_pure_title(original_name):
 
     # Stop anchors: The title ends where these tags begin.
     stop_anchors = [
+        r'\bbonus\b(?=[\s\-_]*(?:episodes?|eps?|e\d|\d{1,3}(?![\dpPiI])|s\d{1,2}(?!\d)|season))',
+        r'\bspecial[\s\-_]*(?:episodes?|eps?)\b',
         r'\bseason[\s\-_]*\d{1,2}\b',
         r'\be\d{1,4}[\s\-_]*[tT][\s\-_]*e?\d{1,4}\b',
         r'\bepisode[\s\-_]*\d{1,4}\b',
@@ -751,10 +735,8 @@ def extract_pure_title(original_name):
 
 
 #===================================
-# SEASON & EPISODE NORMALIZER
+# SMART SEASON & EPISODE NORMALIZER
 #===================================
-
-import re
 
 def normalize_season_episode(text):
     text = text.lower()
@@ -856,6 +838,7 @@ def normalize_season_episode(text):
     text = re.sub(r'\s+', ' ', text).strip()
 
     return text.upper()
+
 
 #===================================
 # 🎬 SMART EPISODE TITLE EXTRACTOR
@@ -965,6 +948,67 @@ def apply_dual_multi_audio_tag(languages, scan_lower):
     return languages
 
 #===================================
+# 🎁 BONUS / SPECIAL EPISODE DETECTOR
+#===================================
+# "India's Got Latent S02 Bonus Episode 1", "S02 Bonus E02", "Bonus Ep 03",
+# "S02 Bonus", "S02E01 Bonus" ... sab ko regular episode se alag pehchanta hai,
+# taaki bonus E01 aur asli E01 ka naam/order na takraye.
+#
+# Final naam me:  S02 Bonus E01   (season nahi ho to: Bonus E01)
+# Search sorting me bonus episodes season ke andar regular episodes se PEHLE aate hain
+# (latest). Regular ke baad chahiye to BONUS_SORT_BASE = -1000 kar do.
+BONUS_SORT_BASE = 1000
+
+_BONUS_RE = re.compile(
+    r"\bbonus\b"
+    r"(?P<ep>[\s\-]*(?:episodes?|eps?|e)(?![A-Za-z]))?"
+    r"(?:[\s\-]*(?P<n1>\d{1,3})(?:\s*-\s*(?P<n2>\d{1,3}))?\b)?",
+    re.IGNORECASE,
+)
+_SPECIAL_EP_RE = re.compile(
+    r"\bspecial\b(?P<ep>[\s\-]*(?:episodes?|eps?)(?![A-Za-z]))"
+    r"(?:[\s\-]*(?P<n1>\d{1,3})(?:\s*-\s*(?P<n2>\d{1,3}))?\b)?",
+    re.IGNORECASE,
+)
+
+
+def extract_bonus_episode(text):
+    """Bonus/Special episode ho to dict return karta hai, warna None.
+
+    {"label": "Bonus"|"Special", "num": "E01"|"E01-02"|None, "first": 1|None, "season": 2|None}
+    Sirf "Bonus" word akela ho (na season, na episode, na number) to ignore — wo title ka
+    hissa ho sakta hai (jaise koi movie "The Bonus").
+    """
+    t = re.sub(r"[._]+", " ", str(text or ""))
+    label = "Bonus"
+    m = _BONUS_RE.search(t)
+    if not m:
+        label = "Special"
+        m = _SPECIAL_EP_RE.search(t)
+    if not m:
+        return None
+
+    n1, n2 = m.group("n1"), m.group("n2")
+    first = int(n1) if n1 else None
+    num = None
+    if n1:
+        num = f"E{int(n1):02d}" + (f"-{int(n2):02d}" if n2 else "")
+
+    season = None
+    sm = re.search(r"\bs(?:eason)?[\s\-]*(\d{1,2})(?!\d)", t, re.IGNORECASE)
+    if sm:
+        season = int(sm.group(1))
+
+    # Season range pack (S01-S04 ...) me bonus word ka matlab episode nahi
+    if re.search(r"\bs\d{1,2}\s*-\s*s?\d{1,2}\b", t, re.IGNORECASE) and first is None and not m.group("ep"):
+        return None
+
+    if season is None and first is None and not m.group("ep"):
+        return None
+    return {"label": label, "num": num, "first": first, "season": season}
+
+
+#===================================
 # DATA EXTRACTOR
 #===================================
 
@@ -973,7 +1017,6 @@ def extract_languages_quality(text_to_scan):
     scan_text = re.sub(r'[._]+', ' ', text_to_scan)
     scan_lower = scan_text.lower()
 
-    # scan_text (underscore/dot -> space) par search: raw naam me '_2026_' me \b kaam nahi karta tha
     year_match = re.search(r'\b(19\d{2}|20[0-2]\d)\b', scan_text)
     year = year_match.group(1) if year_match else None
 
@@ -1000,6 +1043,28 @@ def extract_languages_quality(text_to_scan):
                 episode_title = extract_episode_title(text_to_scan)
         elif s_match:
             season_episode = s_match.group(1)
+
+    # 🎁 Bonus / Special episode: "S02 Bonus E01" (regular E01 se alag)
+    bonus = extract_bonus_episode(scan_text)
+    if bonus:
+        season_part = None
+        ep_part = bonus["num"]
+        if season_episode:
+            ms = re.match(r"(S\d{2})\b(?!-)", season_episode)
+            if ms:
+                season_part = ms.group(1)
+            if not ep_part:
+                me = re.search(r"\b(E\d{2,4}(?:-\d{2,4})?)\b", season_episode)
+                if me:
+                    ep_part = me.group(1)
+        if not season_part and bonus["season"] is not None:
+            season_part = f"S{bonus['season']:02d}"
+        if not (season_episode and re.search(r"S\d{2}-\d{2}", season_episode)):
+            season_episode = " ".join(p for p in (season_part, bonus["label"], ep_part) if p)
+            if bonus["first"] is not None and not episode_title and "-" not in (ep_part or ""):
+                episode_title = extract_episode_title(text_to_scan)
+            if episode_title and episode_title.strip().lower() in ("bonus", "special"):
+                episode_title = None
 
     series_status = None
     status_match = re.search(r'\b(combined|complete)\b', scan_lower)
@@ -1174,6 +1239,94 @@ def extract_languages_quality(text_to_scan):
         "split_part": split_part
     }
 
+
+
+# =========================================================
+# SMART TITLE RESOLVER  (filename -> caption -> review)
+# =========================================================
+# Uploader / leech / merge ke junk words jo kabhi title nahi hote.
+# Naye uploader ya leech bot ke naam yaha add karte jao (lowercase me).
+JUNK_TITLE_WORDS = {
+    "hitleryt", "hitler", "yt", "merged", "merge", "leech", "leeched",
+    "output", "temp", "tmp", "final", "video", "vid", "img", "untitled", "unnamed",
+}
+
+_CAPTION_SKIP_RE = re.compile(
+    r"^\s*(?:size|year|language|lang|quality|join|search|duration|genre|audio|subtitles?|format|"
+    r"resolution|source|rating|cast|director|runtime|channel|group|powered|uploaded)\b"
+    r"|https?://|t\.me/|^\s*@",
+    re.I,
+)
+_CAPTION_TITLE_RE = re.compile(r"^\s*(?:title|name|movie|series)\s*[:\-–]\s*(.+)$", re.I)
+_MEDIA_EXT_RE = re.compile(r"\.(?:mkv|mp4|avi|mov|webm|m4v|ts|zip|rar)$", re.I)
+
+
+def _strip_handles(text: str) -> str:
+    """'@HiTLERYT_418_2026' -> '418 2026'  (@handle sirf pehle underscore/space tak hatta hai)."""
+    text = re.sub(r"@[^_\s\-.\]\)]+", " ", text or "")
+    return re.sub(r"\s+", " ", text.replace("_", " ")).strip()
+
+
+def _validate_title(title: str) -> str:
+    """Title ke aage-peeche ke junk words hatao. Kuch kaam ka na bache to '' return."""
+    def norm(w):
+        return re.sub(r"[^a-z0-9]", "", w.lower())
+
+    toks = (title or "").split()
+    stripped = False
+    while toks and norm(toks[0]) in JUNK_TITLE_WORDS:
+        toks.pop(0)
+        stripped = True
+    while toks and norm(toks[-1]) in JUNK_TITLE_WORDS:
+        toks.pop()
+        stripped = True
+    toks = [t for t in toks if norm(t)]
+    if not toks:
+        return ""
+    # junk hatane ke baad sirf numbers bache (jaise 'merged_1729' ya 'video_2026_07_17') -> junk
+    if stripped and all(norm(t).isdigit() for t in toks):
+        return ""
+    return " ".join(toks)
+
+
+def _title_from_text(text: str) -> str:
+    return _validate_title(extract_pure_title(_strip_handles(text)))
+
+
+def resolve_title_from_caption(caption: str | None) -> str:
+    """Caption ki lines me se pehli kaam ki line ka title. Nahi mila to ''."""
+    if not caption:
+        return ""
+    plain = re.sub(r"<br\s*/?>", "\n", str(caption), flags=re.I)
+    plain = re.sub(r"<[^>]+>", "", plain)
+    for line in plain.splitlines():
+        line = re.sub(r"[\U0001F000-\U0001FFFF\u2600-\u27BF\u2B00-\u2BFF“”\"»«]+", " ", line)
+        line = _MEDIA_EXT_RE.sub("", line.strip()).strip()
+        if not line or _CAPTION_SKIP_RE.search(line):
+            continue
+        m = _CAPTION_TITLE_RE.match(line)
+        if m:
+            line = m.group(1)
+        candidate = _title_from_text(line)
+        if candidate:
+            return candidate
+    return ""
+
+
+def resolve_title(file_name: str, caption: str | None = "") -> tuple[str, str]:
+    """Returns (title, source). source = 'filename' | 'caption' | 'review'.
+
+    1) Filename se title  2) bekaar ho to caption se  3) dono bekaar -> ('', 'review')
+    """
+    base = os.path.splitext(str(file_name or ""))[0]
+    base = base.replace(RELEASE_TAG, " ")
+    title = _title_from_text(base)
+    if title:
+        return title, "filename"
+    title = resolve_title_from_caption(caption)
+    if title:
+        return title, "caption"
+    return "", "review"
 
 
 #===================================
@@ -1404,21 +1557,16 @@ async def save_file(media, bot=None, extracted_info=None):
                 audio_tags.append("AAC")
             extracted["extra_tags"] = audio_tags
 
-        # Offload title extraction
-        cleaned_title = await asyncio.to_thread(extract_pure_title, base_name)
-        # FALLBACK: many channel files are named like "S01E05.1080p.WEB-DL.x264.mkv"
-        # with no real title in the filename at all — the title only exists in the
-        # caption (e.g. "🎬 Movie Name (2023)"). If the filename gave us nothing
-        # usable, try pulling the title out of the caption instead.
-
-        if not cleaned_title.strip():
-            raw_caption = getattr(media, "caption", None)
-            caption_text = getattr(raw_caption, "html", None) or str(raw_caption or "")
-            if caption_text:
-                caption_plain = re.sub(r'<[^>]+>', ' ', caption_text)   # strip html tags
-                caption_plain = re.sub(r'[\U0001F000-\U0001FFFF\u2600-\u27BF]+', ' ', caption_plain)  # strip emoji
-                caption_plain = caption_plain.splitlines()[0] if caption_plain.strip() else caption_plain
-                cleaned_title = await asyncio.to_thread(extract_pure_title, caption_plain)
+        # Smart title: filename -> caption -> review
+        # (@handle_418_2026 jaise junk filenames aur leech/merge wali files ke liye)
+        raw_caption = getattr(media, "caption", None)
+        caption_text_for_title = getattr(raw_caption, "html", None) or str(raw_caption or "")
+        cleaned_title, title_source = await asyncio.to_thread(
+            resolve_title, original_name, caption_text_for_title
+        )
+        needs_review = (title_source == "review")
+        if needs_review:
+            logger.warning(f"⚠️ [NEEDS REVIEW] Title detect nahi hui: {original_name}")
 
         formatted_words = []
         for word in cleaned_title.split():
@@ -1507,6 +1655,9 @@ async def save_file(media, bot=None, extracted_info=None):
         file_name = file_name + ext.lower()
         file_name = re.sub(r'\s+\.', '.', file_name)
 
+        # Review wali file ko galat canonical naam mat do: original naam hi rakho
+        if needs_review:
+            file_name = original_name
 
         # Check for duplicates across all active databases
         for db_index, media_cls in enumerate(MEDIA_DBS):
@@ -1545,15 +1696,16 @@ async def save_file(media, bot=None, extracted_info=None):
             cover=None,
             media_type=media_type,
             file_date=datetime.utcnow(), 
-            title=final_title,
-            year=extracted.get("year")
+            title=final_title or None,
+            year=extracted.get("year"),
+            needs_review=True if needs_review else None
         )
         await record.commit()
 
         # ============================================================
         # 🖼️ COVER FETCH — AFTER FILE IS SUCCESSFULLY SAVED
         # ============================================================
-        if str(COVERX).strip().lower() not in {"false", "0", "no"}:
+        if not needs_review and str(COVERX).strip().lower() not in {"false", "0", "no"}:
             asyncio.ensure_future(
                 _fetch_and_save_cover(
                     file_id=file_id,
@@ -1619,7 +1771,7 @@ def extract_source(name):
             return weight
     return -1
 
-def extract_season_episode(name):
+def _extract_season_episode_plain(name):
     name = name.lower()
 
     # Combined pattern first: catches attached "S01E01" style (no separator between
@@ -1636,6 +1788,21 @@ def extract_season_episode(name):
     episode = int(e.group(1)) if e else 0
     return season, episode
 
+def extract_season_episode(name):
+    """(season, episode) for sorting. Bonus/Special episodes ko BONUS_SORT_BASE ka offset milta hai,
+    taaki unka order regular episodes se alag (aur sahi) rahe."""
+    season, episode = _extract_season_episode_plain(name)
+    bonus = extract_bonus_episode(name)
+    if bonus:
+        if bonus["season"] is not None:
+            season = bonus["season"]
+        num = bonus["first"]
+        if num is None:
+            m = re.search(r"\bs\d{1,2}[\s._-]*e(\d{1,4})", str(name).lower())
+            num = int(m.group(1)) if m else 0
+        return season, BONUS_SORT_BASE + num
+    return season, episode
+
 SERIES_PATTERNS = [
     r"\bs\d{1,2}[\s._-]*e\d{1,4}\b",                                              # S01E01, S1E1
     r"\bs\d{1,2}\s*-\s*s?\d{1,2}\b",                                              # S01-S05, S01-05 (season range)
@@ -1645,6 +1812,9 @@ SERIES_PATTERNS = [
     r"\bweb[\s._-]?series\b",                                                     # Web Series
     r"\bseries\b",                                                                # Series
     r"\bs\d{1,2}\b",                                                              # lone S01 (season pack)
+    r"\bbonus[\s._-]*(?:episodes?|eps?)(?![a-z])",                               # Bonus Episode / Bonus Ep
+    r"\bbonus[\s._-]*e\d{1,3}\b",                                                 # Bonus E01
+    r"\bspecial[\s._-]*(?:episodes?|eps?)(?![a-z])",                              # Special Episode
     r"\bepisode[\s._-]*\d{1,4}\b",                                                # Episode 5
     r"\bep[\s._-]*\d{1,4}\b",                                                     # EP05
     r"\ball\s*episodes?\b",                                                       # All Episodes
