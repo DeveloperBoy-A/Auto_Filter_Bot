@@ -17,6 +17,9 @@ from database.ia_filterdb import (
     extract_languages_quality,
     RELEASE_TAG,
     unpack_new_file_id,
+    resolve_title,
+    resolve_title_from_caption,
+    is_series_file,
 )
 from info import ADMINS
 
@@ -119,6 +122,8 @@ _kw_wait: dict[int, float] = {}
 _batch_scope: dict[int, str | None] = {}
 # Last single rename, for undo {user_id: {...}}
 _undo: dict[int, dict] = {}
+# Needs-review list shown to admin {user_id: [(media_cls, doc), ...]}
+_review_lists: dict[int, list] = {}
 
 
 # ── Keyboards ─────────────────────────────────────────────────
@@ -132,7 +137,10 @@ def _rename_menu() -> InlineKeyboardMarkup:
             B("🔎 Keyword Rename", callback_data="rename_keyword"),
             B("📊 DB Stats", callback_data="rename_stats"),
         ],
-        [B("ℹ️ Rename Help", callback_data="rename_help")],
+        [
+            B("📋 Needs Review", callback_data="rename_review"),
+            B("ℹ️ Rename Help", callback_data="rename_help"),
+        ],
     ])
 
 
@@ -146,6 +154,7 @@ def _single_actions() -> InlineKeyboardMarkup:
             B("✏️ Full Name", callback_data="rename_action:full"),
             B("🎬 Change Title", callback_data="rename_action:title"),
         ],
+        [B("📝 Title From Caption", callback_data="rename_action:captitle")],
         [
             B("📅 Set Year", callback_data="rename_action:year"),
             B("🎞 Set Quality", callback_data="rename_quality"),
@@ -205,7 +214,12 @@ def _back_menu_button() -> InlineKeyboardMarkup:
 
 
 # ── build_new_name: ia_filterdb.save_file ka EXACT sequence logic ────
-def build_new_name(doc) -> str | None:
+def _build(doc, title_override: str | None = None):
+    """Returns (new_name | None, final_title, title_source).
+
+    title_source: 'filename' | 'caption' | 'override' | 'review'.
+    'review' = title detect nahi hui -> naam ban hi nahi sakta (new_name None).
+    """
     original_name: str = doc.get("file_name") or "Unnamed File"
     base_name, ext = os.path.splitext(original_name)
     caption_text: str = doc.get("caption") or ""
@@ -237,14 +251,13 @@ def build_new_name(doc) -> str | None:
             audio_tags.append("AAC")
         extracted["extra_tags"] = audio_tags
 
-    cleaned_title = extract_pure_title(base_name)
-
-    # FALLBACK (same as save_file): filename me title nahi to caption ki pehli line se lo
-    if not cleaned_title.strip() and caption_text:
-        caption_plain = re.sub(r"<[^>]+>", " ", caption_text)
-        caption_plain = re.sub(r"[\U0001F000-\U0001FFFF\u2600-\u27BF]+", " ", caption_plain)
-        caption_plain = caption_plain.splitlines()[0] if caption_plain.strip() else caption_plain
-        cleaned_title = extract_pure_title(caption_plain)
+    # Smart title (save_file jaisa): filename -> caption -> review
+    if title_override and title_override.strip():
+        cleaned_title, title_source = title_override.strip(), "override"
+    else:
+        cleaned_title, title_source = resolve_title(original_name, caption_text)
+    if title_source == "review":
+        return None, "", "review"
 
     formatted_words = []
     for word in cleaned_title.split():
@@ -342,7 +355,34 @@ def build_new_name(doc) -> str | None:
     file_name = file_name + ext.lower()
     file_name = re.sub(r"\s+\.", ".", file_name)
 
-    return file_name if file_name != original_name else None
+    return (file_name if file_name != original_name else None), final_title, title_source
+
+
+def build_new_name(doc, title_override: str | None = None) -> str | None:
+    """Canonical (save_file-style) naam. None = koi change nahi / title detect nahi hui."""
+    return _build(doc, title_override)[0]
+
+
+def _fmt_title(t: str) -> str:
+    words = []
+    for word in (t or "").split():
+        words.append(word[0].upper() + word[1:] if len(word) > 1 else word.upper())
+    return " ".join(words)
+
+
+def _fields_for(new_name: str, caption: str = "") -> dict:
+    """DB me update hone wale fields (file_name + title + year + media_type)."""
+    fields = {
+        "file_name": new_name,
+        "media_type": "series" if is_series_file(new_name) else "movie",
+    }
+    t, _src = resolve_title(new_name, caption)
+    if t:
+        fields["title"] = _fmt_title(t)
+    year = extract_languages_quality(new_name).get("year")
+    if year:
+        fields["year"] = year
+    return fields
 
 
 def _canon(name: str, caption: str = "") -> str:
@@ -359,6 +399,7 @@ async def process_rename_db(client: Client, status_msg: Message, user_id: int,
 
     updated = 0
     skipped = 0
+    reviewed = 0
     errors = 0
     total = 0
     cancelled = False
@@ -399,9 +440,15 @@ async def process_rename_db(client: Client, status_msg: Message, user_id: int,
             db_seen += 1
             try:
                 old_name = doc.get("file_name")
-                new_name = build_new_name(doc)
+                new_name, _t, t_src = _build(doc)
 
-                if new_name is None:
+                if t_src == "review":
+                    # Title detect nahi hui -> galat naam mat do, review list me daalo
+                    reviewed += 1
+                    logger.warning(f"⚠️ NEEDS REVIEW | DB: {db_label} | {old_name}")
+                    if not dry_run:
+                        await collection.update_one({"_id": doc["_id"]}, {"$set": {"needs_review": True}})
+                elif new_name is None:
                     skipped += 1
                 else:
                     logger.info(f"🔄 OLD → NEW | DB: {db_label} | OLD: {old_name} → NEW: {new_name}")
@@ -410,7 +457,10 @@ async def process_rename_db(client: Client, status_msg: Message, user_id: int,
                     if not dry_run:
                         await collection.update_one(
                             {"_id": doc["_id"]},
-                            {"$set": {"file_name": new_name}}
+                            {
+                                "$set": _fields_for(new_name, doc.get("caption") or ""),
+                                "$unset": {"needs_review": ""},
+                            }
                         )
                     updated += 1
 
@@ -433,6 +483,7 @@ async def process_rename_db(client: Client, status_msg: Message, user_id: int,
                     f"📊 Progress : <b>{percentage:.2f}%</b> ({db_seen}/{total_docs})\n"
                     f"✅ Renamed  : <b>{updated}</b>\n"
                     f"⏭️ Skipped  : <b>{skipped}</b>\n"
+                    f"⚠️ Review   : <b>{reviewed}</b>\n"
                     f"❌ Errors   : <b>{errors}</b>"
                 )
                 try:
@@ -462,6 +513,7 @@ async def process_rename_db(client: Client, status_msg: Message, user_id: int,
                     f"📊 Processed : <b>{total}</b>\n"
                     f"✏️ {'Would rename' if dry_run else 'Renamed'} : <b>{updated}</b>\n"
                     f"⏭️ No change  : <b>{skipped}</b>\n"
+                    f"⚠️ Review     : <b>{reviewed}</b>\n"
                     f"❌ Errors     : <b>{errors}</b>"
                 ),
                 reply_markup=None
@@ -492,6 +544,7 @@ async def process_rename_db(client: Client, status_msg: Message, user_id: int,
         f"📊 Total scanned : <b>{total}</b>\n"
         f"✏️ {action_word}   : <b>{updated}</b>\n"
         f"⏭️ No change     : <b>{skipped}</b>\n"
+        f"⚠️ Needs review  : <b>{reviewed}</b>\n"
         f"❌ Errors        : <b>{errors}</b>"
     )
     text = body + sample_text + footer
@@ -604,24 +657,29 @@ async def rename_stats_cb(client: Client, query: CallbackQuery):
     _db_labels = ["Primary DB", "Secondary DB", "Tertiary DB", "Quaternary DB", "Quinary DB"]
     tag_regex = {"$regex": re.escape(RELEASE_TAG) + r"\.[A-Za-z0-9]+$"}
     lines = []
-    all_total = all_done = 0
+    all_total = all_done = all_review = 0
     for i, media_cls in enumerate(MEDIA_DBS):
         label = _db_labels[i] if i < len(_db_labels) else f"DB {i + 1}"
         try:
             total = await media_cls.collection.count_documents({})
             done = await media_cls.collection.count_documents({"file_name": tag_regex})
+            review = await media_cls.collection.count_documents({"needs_review": True})
         except Exception as e:
             lines.append(f"🗄️ <b>{label}</b> : ❌ <code>{_esc(e)}</code>")
             continue
         all_total += total
         all_done += done
-        lines.append(f"🗄️ <b>{label}</b>\n   📁 Total: <b>{total}</b> | ✅ Renamed: <b>{done}</b> | ⏳ Baaki: <b>{total - done}</b>")
+        all_review += review
+        lines.append(
+            f"🗄️ <b>{label}</b>\n   📁 Total: <b>{total}</b> | ✅ Renamed: <b>{done}</b> | ⏳ Baaki: <b>{total - done}</b>"
+            f" | ⚠️ Review: <b>{review}</b>"
+        )
     pct = (all_done / all_total * 100) if all_total else 0
     await query.message.edit_text(
         F(
             "<b>📊 RENAME STATS</b>\n\n"
             + "\n\n".join(lines)
-            + f"\n\n📈 Overall: <b>{all_done}/{all_total}</b> (<b>{pct:.1f}%</b>)"
+            + f"\n\n📈 Overall: <b>{all_done}/{all_total}</b> (<b>{pct:.1f}%</b>) | ⚠️ Review: <b>{all_review}</b>"
             + "\n\n<i>Renamed = filename release tag se end hota hai.</i>"
         ),
         reply_markup=InlineKeyboardMarkup([
@@ -629,6 +687,79 @@ async def rename_stats_cb(client: Client, query: CallbackQuery):
             [B("🔙 Back", callback_data="rename_menu")],
         ])
     )
+
+
+@Client.on_callback_query(filters.regex(r"^rename_review$") & filters.user(ADMINS))
+async def rename_review_cb(client: Client, query: CallbackQuery):
+    """Wo files jinki title auto detect nahi hui (needs_review)."""
+    user_id = query.from_user.id
+    await query.answer()
+    items: list = []
+    total_review = 0
+    limit = 10
+    for media_cls in MEDIA_DBS:
+        coll = media_cls.collection
+        try:
+            total_review += await coll.count_documents({"needs_review": True})
+            if len(items) < limit:
+                async for doc in coll.find({"needs_review": True}).limit(limit - len(items)):
+                    items.append((media_cls, doc))
+        except Exception as e:
+            logger.error(f"Review list failed: {e}", exc_info=True)
+
+    _review_lists[user_id] = items
+    if not items:
+        await query.message.edit_text(
+            F("<b>📋 NEEDS REVIEW</b>\n\n✅ Koi file review ke liye pending nahi hai."),
+            reply_markup=_back_menu_button()
+        )
+        return
+
+    lines = [f"<b>{i}.</b> <code>{_esc((d.get('file_name') or 'Unknown')[:60])}</code>" for i, (_m, d) in enumerate(items, 1)]
+    rows = []
+    row = []
+    for i in range(1, len(items) + 1):
+        row.append(InlineKeyboardButton(str(i), callback_data=f"rename_pick:{i - 1}"))
+        if len(row) == 5:
+            rows.append(row)
+            row = []
+    if row:
+        rows.append(row)
+    rows.append([B("🔄 Refresh", callback_data="rename_review")])
+    rows.append([B("🔙 Back", callback_data="rename_menu")])
+    await query.message.edit_text(
+        F(
+            f"<b>📋 NEEDS REVIEW</b> ({total_review} total)\n\n"
+            + "\n".join(lines)
+            + "\n\nNumber dabao, phir <b>Title From Caption</b> ya <b>Change Title</b> use karo."
+        ),
+        reply_markup=InlineKeyboardMarkup(rows)
+    )
+
+
+@Client.on_callback_query(filters.regex(r"^rename_pick:(\d+)$") & filters.user(ADMINS))
+async def rename_pick_cb(client: Client, query: CallbackQuery):
+    user_id = query.from_user.id
+    idx = int(query.data.split(":", 1)[1])
+    items = _review_lists.get(user_id) or []
+    if idx >= len(items):
+        await query.answer(F("List purani ho gayi, refresh karo."), show_alert=True)
+        return
+    media_cls, doc = items[idx]
+    fresh = await media_cls.collection.find_one({"_id": doc["_id"]})
+    if not fresh:
+        await query.answer(F("File ab DB me nahi hai."), show_alert=True)
+        return
+    _kw_wait.pop(user_id, None)
+    _single_states[user_id] = {
+        "action": "selected",
+        "file_id": fresh["_id"],
+        "media_cls": media_cls,
+        "doc": fresh,
+        "ts": time.time(),
+    }
+    await query.answer()
+    await query.message.edit_text(_selected_text(_single_states[user_id]), reply_markup=_single_actions())
 
 
 @Client.on_callback_query(filters.regex(r"^rename_help$") & filters.user(ADMINS))
@@ -643,12 +774,15 @@ async def rename_help_cb(client: Client, query: CallbackQuery):
             "• 👁 Preview Auto → bina save kiye naya naam dekho\n"
             "• ✏️ Full Name → poora filename manually set\n"
             "• 🎬 Change Title → sirf title replace\n"
+            "• 📝 Title From Caption → caption se title lo\n"
             "• 📅 Set Year → year change karo\n"
             "• 🎞 Set Quality → 480P/720P/1080P... button se\n"
             "• 🧹 Remove Word → filename se word/phrase remove\n"
             "• 🔁 Replace Text → <code>old | new</code> format me bhejo\n"
             "• ➕/➖ Language → language add / remove\n"
             "• ↩️ Undo Last → last rename wapas\n\n"
+            "📋 <b>Needs Review</b>\n"
+            "Jin files ki title filename aur caption dono se nahi mili, wo yaha aati hain.\n\n"
             "🗄️ <b>All DB / Keyword</b>\n"
             "Pehle dry-run preview chalega, phir Confirm button se live rename.\n\n"
             "<i>Extension automatically preserve hoti hai.</i>"
@@ -668,7 +802,7 @@ async def rename_back_actions_cb(client: Client, query: CallbackQuery):
     await query.message.edit_text(_selected_text(state), reply_markup=_single_actions())
 
 
-@Client.on_callback_query(filters.regex(r"^rename_action:(auto|preview|full|title|year|replace|remove|addlang|remlang)$") & filters.user(ADMINS))
+@Client.on_callback_query(filters.regex(r"^rename_action:(auto|preview|captitle|full|title|year|replace|remove|addlang|remlang)$") & filters.user(ADMINS))
 async def rename_action_cb(client: Client, query: CallbackQuery):
     action = query.data.split(":", 1)[1]
     user_id = query.from_user.id
@@ -683,11 +817,23 @@ async def rename_action_cb(client: Client, query: CallbackQuery):
         await query.message.edit_text(F(result), reply_markup=_single_actions())
         return
 
+    if action == "captitle":
+        await query.answer(F("Caption se title nikal raha hu..."))
+        result = await _apply_single_rename(state, action, None, user_id)
+        await query.message.edit_text(F(result), reply_markup=_single_actions())
+        return
+
     if action == "preview":
         await query.answer()
         old_name = state["doc"].get("file_name") or "Unnamed File"
-        new_name = build_new_name(state["doc"])
-        if new_name is None:
+        new_name, _t, t_src = _build(state["doc"])
+        if t_src == "review":
+            text = (
+                "<b>👁 PREVIEW</b>\n\n⚠️ Title auto detect nahi hui (filename aur caption dono me).\n"
+                "<b>Change Title</b> ya <b>Title From Caption</b> use karo.\n\n"
+                f"<code>{_esc(old_name)}</code>"
+            )
+        elif new_name is None:
             text = f"<b>👁 PREVIEW</b>\n\nℹ️ Koi change nahi hoga.\n\n<code>{_esc(old_name)}</code>"
         else:
             text = (
@@ -877,13 +1023,21 @@ async def _apply_single_rename(state: dict, action: str, value: str | None, user
     elif action == "title":
         if not value or not value.strip():
             return "❌ Title empty nahi ho sakta."
-        current = _canon(old_name, caption)
-        cbase, cext = os.path.splitext(current)
-        old_title = extract_pure_title(base)
-        if old_title.strip() and old_title in current:
-            new_name = current.replace(old_title, value.strip(), 1)
-        else:
-            new_name = f"{value.strip()} {cbase}".strip() + cext
+        # Naya title de ke poora naam canonical order me dobara banao
+        new_name = build_new_name({"file_name": old_name, "caption": caption}, title_override=value.strip())
+        if new_name is None:
+            new_name = old_name
+
+    elif action == "captitle":
+        cap_title = resolve_title_from_caption(caption)
+        if not cap_title:
+            return (
+                "❌ <b>Caption me bhi sahi title nahi mila.</b>\n\n"
+                "<b>Change Title</b> se manually title bhejo."
+            )
+        new_name = build_new_name({"file_name": old_name, "caption": caption}, title_override=cap_title)
+        if new_name is None:
+            new_name = old_name
 
     elif action == "year":
         year = (value or "").strip().strip("()[]")
@@ -947,14 +1101,7 @@ async def _apply_single_rename(state: dict, action: str, value: str | None, user
     if duplicate:
         return f"❌ <b>Duplicate file name already exists.</b>\n\n<code>{_esc(new_name)}</code>"
 
-    extracted = extract_languages_quality(new_name)
-    title = extract_pure_title(os.path.splitext(new_name)[0]).strip()
-    new_fields = {
-        "file_name": new_name,
-        "title": title or doc.get("title"),
-        "year": extracted.get("year") or doc.get("year"),
-        "media_type": "series" if re.search(r"\bS\d{1,3}(?:E\d{1,4})?\b", new_name, re.I) else doc.get("media_type", "movie"),
-    }
+    new_fields = _fields_for(new_name, caption)
 
     # Undo snapshot
     if user_id is not None:
@@ -964,8 +1111,12 @@ async def _apply_single_rename(state: dict, action: str, value: str | None, user
             "fields": {k: doc.get(k) for k in new_fields},
         }
 
-    await media_cls.collection.update_one({"_id": doc["_id"]}, {"$set": new_fields})
+    await media_cls.collection.update_one(
+        {"_id": doc["_id"]},
+        {"$set": new_fields, "$unset": {"needs_review": ""}},
+    )
     doc.update(new_fields)
+    doc.pop("needs_review", None)
     try:
         clear_search_cache()
     except Exception:
@@ -978,10 +1129,20 @@ async def _apply_single_rename(state: dict, action: str, value: str | None, user
 
 
 def _selected_text(state: dict) -> str:
+    doc = state["doc"]
+    review = ""
+    if doc.get("needs_review"):
+        cap = re.sub(r"<[^>]+>", "", doc.get("caption") or "").strip()
+        cap_line = cap.splitlines()[0][:80] if cap else "N/A"
+        review = (
+            "⚠️ <b>Title auto detect nahi hui.</b>\n"
+            f"📝 Caption: <code>{_esc(cap_line)}</code>\n\n"
+        )
     return F(
         f"<b>✅ FILE SELECTED</b>\n\n"
         f"🗄️ DB: <code>{state['media_cls'].__name__}</code>\n"
-        f"📄 Current Name:\n<code>{_esc(state['doc'].get('file_name', 'Unknown'))}</code>\n\n"
+        f"📄 Current Name:\n<code>{_esc(doc.get('file_name', 'Unknown'))}</code>\n\n"
+        f"{review}"
         "Ab neeche se rename operation choose karo:"
     )
 
