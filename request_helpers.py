@@ -602,7 +602,7 @@ def _item_lines(tab, r) -> list:
         lines.append(f"┃ 📀 {sc('quality')} : {esc(q)}" if q else "┃")
         lines.append(f"┃ 📨 {sc('notified')} : {sent}/{total}")
         lines.append(f"┃ 💬 {sc('dm')} {nt.get('dm', 0)} • 👥 {sc('grp')} {nt.get('group', 0)} • ❌ {nt.get('failed', 0)}")
-        lines.append(f"┃ 🕒 {sc('uploaded')} : {ago(r.get('closed_at'))}")
+        lines.append(f"┃ 🕒 {sc('uploaded')} : {ago(r.get('closed_at') or r.get('updated_at'))}")
     else:
         lines.append("┃")
         lines.append(f"┃ 👥 {sc('users')}  : {n}")
