@@ -193,7 +193,10 @@ class RequestDB:
             return None
         now = datetime.utcnow()
         fields = {"status": status, "open": bool(keep_open), "updated_at": now}
-        if not keep_open:
+        # cam_only (HDTC / low quality) stays open for the HD upload, but we still stamp
+        # `closed_at` so the Request Page can show "uploaded X ago" for it.
+        # (TTL index only touches open=False docs, so the open request is never auto-deleted.)
+        if not keep_open or status == "cam_only":
             fields["closed_at"] = now
         if by is not None:
             fields["handled_by"] = by
@@ -230,10 +233,15 @@ class RequestDB:
 
     @staticmethod
     def _tab_filter(tab):
+        # HDTC / low-quality (cam_only) requests count as UPLOADED on the Request Page
+        # (they stay open in the DB, so the HD upload can still auto-notify the users again).
         if tab == "p":
-            return {"open": True}                                   # pending
+            return {"open": True, "status": {"$ne": "cam_only"}}    # pending
         if tab == "u":
-            return {"open": False, "status": "uploaded"}            # uploaded
+            return {"$or": [
+                {"open": False, "status": "uploaded"},              # uploaded (full)
+                {"status": "cam_only"},                             # low quality uploaded
+            ]}
         return {"open": False, "status": {"$ne": "uploaded"}}       # rejected / other closed
 
     async def count_tab(self, tab):
@@ -262,10 +270,10 @@ class RequestDB:
         async for row in self.col.aggregate(pipeline):
             st, n = row["_id"], row["n"]
             notified += row.get("sent", 0)
-            if st in OPEN_STATUSES:
-                pending += n
-            elif st == "uploaded":
+            if st in ("uploaded", "cam_only"):          # low quality upload = uploaded count
                 uploaded += n
+            elif st in OPEN_STATUSES:
+                pending += n
             else:
                 rejected += n
         return {"pending": pending, "uploaded": uploaded, "rejected": rejected, "notified": notified}
