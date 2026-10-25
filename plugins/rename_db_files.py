@@ -20,6 +20,10 @@ from database.ia_filterdb import (
     resolve_title,
     resolve_title_from_caption,
     is_series_file,
+    make_unique_adder,
+    dedupe_title_halves,
+    clean_episode_title,
+    finalize_name_parts,
 )
 from info import ADMINS
 
@@ -267,22 +271,23 @@ def _build(doc, title_override: str | None = None):
             formatted_words.append(word.upper())
     final_title = " ".join(formatted_words)
 
+    # Duplicate cleaner (save_file jaisa): title ek baar, metadata ek baar
+    final_title = dedupe_title_halves(final_title)
     parts = []
-
-    def add_unique(value):
-        if value and str(value).lower() not in " ".join(map(str, parts)).lower():
-            parts.append(value)
+    if final_title:
+        parts.append(final_title)
+    title_len = len(parts)
+    add_unique = make_unique_adder(parts, protect=title_len)
 
     # ==========================================
     #      STRICT SEQUENCE ASSEMBLER (1 to 18)
     #      (ia_filterdb.save_file ke same order me)
     # ==========================================
 
-    # [1] Title
-    if final_title: add_unique(final_title)
+    # [1] Title (upar add ho chuka)
 
     # [2] Release Year (Title ke turant baad)
-    if extracted.get("year"): add_unique(extracted["year"])
+    if extracted.get("year"): add_unique(extracted["year"], check_title=True)
 
     # [3] Title Part / Volume / Chapter
     if extracted.get("title_part"): add_unique(extracted["title_part"])
@@ -292,7 +297,7 @@ def _build(doc, title_override: str | None = None):
 
     # [5] Episode Title
     if extracted.get("season_episode") and extracted.get("episode_title"):
-        add_unique(extracted["episode_title"])
+        add_unique(clean_episode_title(extracted["episode_title"], final_title))
 
     # [6] Series Status
     if extracted.get("series_status"): add_unique(extracted["series_status"])
@@ -311,8 +316,7 @@ def _build(doc, title_override: str | None = None):
         if tag in extracted.get("extra_tags", []): add_unique(tag)
 
     # [11] OTT Platform Tag
-    if extracted.get("ott") and extracted["ott"] not in parts:
-        parts.append(extracted["ott"])
+    if extracted.get("ott"): add_unique(extracted["ott"])
 
     # [12] Source Type
     if extracted.get("source"): add_unique(extracted["source"])
@@ -347,11 +351,11 @@ def _build(doc, title_override: str | None = None):
 
     # [18] Branding Signature
     parts = [p for p in parts if p and "Tokyo_Updates" not in str(p)]
+    title_len = min(title_len, len(parts))
     parts.append(RELEASE_TAG)
 
-    # Final Assembly
-    file_name = " ".join(map(str, parts)).strip()
-    file_name = re.sub(r"\s+", " ", file_name)
+    # Final Assembly (side-by-side repeat tokens bhi saaf)
+    file_name = finalize_name_parts(parts, protect=title_len)
     file_name = file_name + ext.lower()
     file_name = re.sub(r"\s+\.", ".", file_name)
 
