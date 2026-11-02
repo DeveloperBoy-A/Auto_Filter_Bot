@@ -2563,4 +2563,98 @@ async def dreamxbotz_clean_title(filename: str, is_series: bool = False) -> str:
                 title = season_match.group(1).strip()
                 season = season_match.group(2) or season_match.group(3) or season_match.group(4)
                 title = (
-                    re.su
+                    re.sub(
+                        r"(?:@[^ \n\r\t.,:;!?()\[\]{}<>\\\/\"'=_%]+|[._\-\[\]@()]+)",
+                        " ",
+                        title,
+                    )
+                    .strip()
+                    .title()
+                )
+                return f"{title} S{int(season):02}.{ext}" if ext else f"{title} S{int(season):02}"
+
+        title = filename_cleaned
+        title = (
+            re.sub(
+                r"(?:@[^ \n\r\t.,:;!?()\[\]{}<>\\\/\"'=_%]+|[._\-\[\]@()]+)", " ", title
+            )
+            .strip()
+            .title()
+        )
+        return f"{title}.{ext}" if ext else title
+
+    except Exception as e:
+        logger.error(f"Error in dreamxbotz_clean_title: {e}")
+        return filename
+
+
+async def dreamxbotz_get_movies(limit: int = 20) -> List[str]:
+    try:
+        cursor = await dreamxbotz_fetch_media(limit * 2)
+        results = set()
+        pattern = r"(?:s\d{1,2}|season\s*\d+|season\d+)(?:\s*combined)?(?:e\d{1,4}|episode\s*\d+)?\b"
+
+        for file in cursor:
+            file_name = getattr(file, "file_name", "")
+
+            parts = file_name.rsplit(".", 1)
+            name_part = parts[0]
+            ext = parts[1] if len(parts) > 1 else ""
+
+            name_part = re.sub(r"[._\-]+", " ", name_part)
+            name_part = re.sub(r"\s+", " ", name_part).strip()
+
+            file_name_cleaned = name_part
+
+            if not re.search(pattern, file_name_cleaned, re.IGNORECASE):
+                title = await dreamxbotz_clean_title(file_name_cleaned)
+                if ext:
+                    title = f"{title}.{ext}"
+                results.add(title)
+
+            if len(results) >= limit:
+                break
+
+        return sorted(list(results))[:limit]
+    except Exception as e:
+        logger.error(f"Error in dreamxbotz_get_movies: {e}")
+        return []
+
+
+async def dreamxbotz_get_series(limit: int = 30) -> Dict[str, List[int]]:
+    try:
+        cursor = await dreamxbotz_fetch_media(limit * 5)
+        grouped = defaultdict(list)
+        pattern = r"(.*?)(?:S(\d{1,2})|Season\s*(\d+)|Season(\d+))(?:\s*Combined)?(?:E(\d{1,4})|Episode\s*(\d+))?\b"
+
+        for file in cursor:
+            file_name = getattr(file, "file_name", "")
+
+            parts = file_name.rsplit(".", 1)
+            name_part = parts[0]
+            ext = parts[1] if len(parts) > 1 else ""
+
+            name_part = re.sub(r"[._\-]+", " ", name_part)
+            name_part = re.sub(r"\s+", " ", name_part).strip()
+
+            file_name_cleaned = name_part
+
+            match = re.search(pattern, file_name_cleaned, re.IGNORECASE)
+            if match:
+                title_raw = match.group(1)
+                title = await dreamxbotz_clean_title(title_raw, is_series=True)
+                if ext:
+                    title = f"{title}.{ext}"
+
+                season = int(match.group(2) or match.group(3) or match.group(4))
+                grouped[title].append(season)
+
+        return {
+            title: sorted(set(seasons))[:10]
+            for title, seasons in grouped.items()
+            if seasons
+        }
+    except Exception as e:
+        logger.error(f"Error in dreamxbotz_get_series: {e}")
+        return []
+    
