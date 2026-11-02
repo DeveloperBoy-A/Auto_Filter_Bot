@@ -612,10 +612,164 @@ OTT_MAP = {
 # =========================================================
 # SMART DYNAMIC TITLE EXTRACTOR
 # =========================================================
+#===================================
+# 🧼 PREFIX JUNK CLEANER + NUMBER-TITLE DETECTOR
+#===================================
+# Filename ke shuru ke bekar tags (site/channel/group, brackets, emoji, numbering, quality...)
+# hatata hai, aur "1923 2025 480p ..." / "1917 1080p ..." jaise names me number ko hi title maanta hai.
+
+_STRONG_PREFIX_TAGS = [
+    r's\d{1,2}(?:-\d{1,2})?', r'e\d{1,4}(?:-\d{1,4})?',
+    r'\d{3,4}[pi]', r'4k', r'8k',
+    r'(?:19|20)\d{2}',
+    r'combined', r'complete',
+    r'dual[\s\-]?audio', r'multi[\s\-]?audio',
+    r'hdtc', r'@', r'tamil', r'telugu', r'malayalam', r'kannada', r'bengali', r'marathi', r'korean', r'japanese', r'chinese', r'spanish', r'russian', r'streamershub', r'french',
+    r'web[\-\s]?dl', r'web[\-\s]?rip', r'hdrip', r'bluray', r'brrip', r'dvdrip', r'camrip', r'hdts', r'hdcam',
+    r'av1', r'x264', r'x265', r'hevc', r'10bit', r'aac', r'eac3', r'ac3', r'ddp[\s\-]?7\.1', r'ddp[\s\-]?5\.1', r'dd[\s\-]?5\.1', r'dd[\s\-]?2\.0', r'ddp', r'5\.1', r'7\.1', r'2\.0', r'2ch', r'stereo',
+    r'full[\s\-]?movie', r'web[\s\-]?series',
+    r'netflix', r'hotstar', r'zee5', r'sonyliv', r'jio', r'jiocinema', r'voot', r'altbalaji',
+    # ── naye tags ──
+    r'hdtv', r'bdrip', r'bdremux', r'remux', r'webdl', r'dvdscr', r'predvd',
+    r'h\s?26[45]', r'x\s?26[45]', r'12bit',
+    r'dts(?:[\s\-]?hd)?', r'atmos', r'truehd', r'flac', r'opus',
+    r'hdr10\+?', r'hdr', r'sdr', r'uhd', r'dolby[\s\-]?vision',
+    r'esubs?', r'msubs?', r'hardsubs?', r'hc',
+    r'amzn', r'amazon', r'prime', r'disney', r'hbomax', r'appletv', r'sunnxt', r'mxplayer',
+    r'english', r'hindi',
+]
+# Ye words real titles ka hissa bhi hote hain (Uncut Gems, Original Sin, Web of Lies...)
+# isliye sirf tab hatate hain jab inke baad bhi koi tag aaye.
+_SOFT_PREFIX_WORDS = {
+    'uncut', 'unrated', 'extended', 'original', 'org', 'proper', 'repack', 'web', 'cam',
+    'dub', 'dubbed', 'sub', 'subs', 'hq', 'sd', 'dv', 'free', 'official', 'new', 'latest', 'full',
+}
+LANG_PREFIX_WORDS = {
+    'hindi', 'english', 'tamil', 'telugu', 'malayalam', 'kannada',
+    'bengali', 'marathi', 'korean', 'japanese', 'chinese', 'spanish',
+    'russian', 'french'
+}
+_PREFIX_TOKEN_RE = re.compile(
+    '(?:' + '|'.join(_STRONG_PREFIX_TAGS + [re.escape(w) for w in sorted(_SOFT_PREFIX_WORDS)]) + ')',
+    re.IGNORECASE,
+)
+
+# Piracy / upload sites aur groups jo filename ke shuru me lagte hain
+_JUNK_SITE_NAMES = [
+    'hdhub4u', 'hdhub', 'tamilmv', '1tamilmv', 'tamilblasters', '1tamilblasters', 'tamilrockers', 'isaimini', 'madrasrockers',
+    'moviesmod', 'moviesflix', 'themoviesflix', 'vegamovies', 'vegamovie', 'skymovieshd', 'katmoviehd', 'katmovie',
+    '9xmovies', '9xflix', 'filmyzilla', 'filmywap', 'filmyhit', 'mkvcinemas', 'mkvking', 'mkvhub', 'bolly4u', 'bollyflix',
+    'desiremovies', 'cinevood', 'worldfree4u', 'extramovies', 'jiorockers', 'movierulz', '7starhd', 'hdmoviesmaza',
+    'mlwbd', 'khatrimaza', 'okjatt', 'pagalmovies', 'mp4moviez', 'uwatchfree', 'pahe', 'galaxyrg', 'rarbg', '1337x',
+    'yts', 'psa', 'moviezwap', 'jalshamoviez', 'sdmoviespoint', 'atishmkv', 'cinemaza', 'mobilemovies', 'moviesverse',
+    'topmoviesinfo', 'primewire', 'torrentcounter', 'ofilmywap', 'mlsbd', 'hdmovie2', 'moviesda', 'tamilyogi',
+    'streamershub', 'bobfiles', 'tokyo', 'tokyotoshokan',
+]
+_JUNK_SITE_RE = re.compile(
+    r'^(?:' + '|'.join(re.escape(x) for x in sorted(_JUNK_SITE_NAMES, key=len, reverse=True)) + r')'
+    r'(?:[\s._\-]*(?:com|net|org|in|me|to|tv|cc|xyz|vip|top|pro|info|click|lol|lat|ws|mx|am|ag|cfd|ink|club|site|online|wiki|co|app|cam|fun|run|bar))?'
+    r'(?![A-Za-z0-9])[\s._\-–—|:~•·]*',
+    re.IGNORECASE,
+)
+_BRACKET_GROUP_RE = re.compile(
+    r'^\s*(?:\[[^\]]*\]|\([^)]*\)|\{[^}]*\}|【[^】]*】|『[^』]*』|「[^」]*」|《[^》]*》|〈[^〉]*〉|［[^］]*］|（[^）]*）)\s*'
+)
+_DOMAIN_RE = re.compile(
+    r'^\s*(?:https?://)?(?:www\.)?[A-Za-z0-9][A-Za-z0-9\-]*(?:\.[A-Za-z0-9\-]+)*'
+    r'\.(?:com|net|org|in|me|to|tv|cc|xyz|vip|top|pro|info|click|lol|lat|ws|mx|am|ag|cfd|ink|club|site|online|wiki|co|app|fun|run|bar)'
+    r'(?![A-Za-z0-9.])[\s._\-–—|:~•·]*',
+    re.IGNORECASE,
+)
+_PREFIX_PHRASE_RE = re.compile(
+    r'^(?:'
+    r'(?:telegram|tg)\b[\s:._\-–|]*(?=@)'
+    r'|downloaded?\s+from\b[\s:._\-–|]*'
+    r'|download\b[\s:._\-–|]+'
+    r'|watch\s+(?:online|now)\b[\s:._\-–|]*'
+    r'|join\s+(?:us|now|channel)\b[\s:._\-–|]*'
+    r'|uploaded\s+by\b[\s:._\-–|]*'
+    r'|powered\s+by\b[\s:._\-–|]*'
+    r')',
+    re.IGNORECASE,
+)
+
+
+def _strip_prefix_junk(name):
+    """Naam ke shuru ke bekar hisse (brackets, emoji, @handle, site, numbering...) hatao."""
+    s = str(name or "").strip()
+    for _ in range(12):
+        before = s
+
+        # 1) leading bracket groups: [HDHub4u], (Tokyo), 【Group】 ... ("(500) Days" jaise chhote number bachte hain)
+        m = _BRACKET_GROUP_RE.match(s)
+        if m:
+            inner = m.group(0).strip()[1:-1].strip()
+            if not re.fullmatch(r'\d{1,3}', inner):
+                s = s[m.end():]
+
+        # 2) leading emoji / symbols / separators
+        s = re.sub(r'^[^\w@\[\(\{【『「《〈［（]+', '', s)
+
+        # 3) @handle (sirf handle, uske baad ka title nahi)
+        s = re.sub(r'^@[^\s_\-–.]+[\s_\-–.]*(?:(?:channel|updates?|official|movies|hub|zone|group)(?![A-Za-z0-9])[\s_\-–.]*)?', '', s, flags=re.IGNORECASE)
+
+        # 4) domain / url:  www.1TamilMV.com - ...
+        m = _DOMAIN_RE.match(s)
+        if m:
+            s = s[m.end():]
+
+        # 5) known site/group names:  HDHub4u - ..., TamilMV ...
+        m = _JUNK_SITE_RE.match(s)
+        if m and m.end() < len(s):
+            s = s[m.end():]
+
+        # 6) "Telegram @x", "Download from", "Join us" ...
+        s = _PREFIX_PHRASE_RE.sub('', s)
+
+        # 7) numbering: "01. Leo", "1) Leo", "02 - Leo"
+        s = re.sub(r'^\d{1,3}\s*[.)\-–]\s+(?=[^\W\d_])', '', s)
+
+        s = s.strip()
+        if s == before:
+            break
+    return s
+
+
+def leading_number_title(name):
+    """'1923 2025 480p HEVC ...' / '1917 1080p BluRay' -> '1923' / '1917'.
+
+    Shuru me 4-digit year jaisa number ho aur uske baad seedha koi tag (year, quality, source,
+    season, language...) aaye, to wo number hi title hai. Number ke baad title ke words aayein
+    ('2025 Leo 1080p') to wo number sirf year-prefix maana jaata hai (None return).
+    """
+    s = _strip_prefix_junk(name)
+    s = re.sub(r'[()\[\]_@]+', ' ', s)
+    s = re.sub(r'[._\-]+', ' ', s).strip()
+    m = re.match(r'((?:19|20)\d{2})(?=\s|$)', s)
+    if not m:
+        return None
+    rest = s[m.end():].lstrip()
+    if not rest:
+        return m.group(1)
+    t = _PREFIX_TOKEN_RE.match(rest)
+    if not t or (t.end() < len(rest) and rest[t.end()].isalnum()):
+        return None
+    word = t.group(0).lower()
+    if word in LANG_PREFIX_WORDS or word in _SOFT_PREFIX_WORDS:
+        nxt = rest[t.end():].lstrip()
+        nt = _PREFIX_TOKEN_RE.match(nxt) if nxt else None
+        if not nt or (nt.end() < len(nxt) and nxt[nt.end()].isalnum()):
+            return None
+    return m.group(1)
+
+
 def extract_pure_title(original_name):
     """Cleans a raw file string to extract just the pure movie or series title."""
-    clean_name = re.sub(r'^\[.*?\]', '', original_name).strip() 
-    clean_name = re.sub(r'^@\w+[\s_\-–]*', '', clean_name).strip()
+    # Number-title ("1923 2025 480p ..." -> 1923) aur prefix junk cleaner
+    lead_title = leading_number_title(original_name)
+    if lead_title:
+        return lead_title
+    clean_name = _strip_prefix_junk(original_name)
     clean_name = re.sub(r'[@\[\]\(\)_]+', ' ', clean_name)
     clean_name = re.sub(r"[._\-]+", " ", clean_name)
 
@@ -632,27 +786,8 @@ def extract_pure_title(original_name):
     uploader_cleanup = r'^(?:(?:' + '|'.join(uploader_tags) + r')[\s]*)+'
     clean_name = re.sub(uploader_cleanup, '', clean_name, flags=re.IGNORECASE).strip()
 
-    prefix_tags = [
-        r's\d{1,2}(?:-\d{1,2})?', r'e\d{1,4}(?:-\d{1,4})?', 
-        r'\d{3,4}[pi]', r'4k', r'8k',                                 
-        r'(?:19|20)\d{2}',                                  
-        r'combined', r'complete',                           
-        r'dual[\s\-]?audio', r'multi[\s\-]?audio',          
-        r'hdtc', r'@', r'tamil', r'telugu', r'malayalam', r'kannada', r'bengali', r'marathi', r'korean', r'japanese', r'chinese', r'spanish', r'russian', r'streamershub', r'french',
-        r'web[\-\s]?dl', r'web[\-\s]?rip', r'hdrip', r'bluray', r'brrip', r'dvdrip', r'camrip', r'hdts', r'hdcam', 
-        r'av1', r'x264', r'x265', r'hevc', r'10bit', r'aac', r'eac3', r'ac3', r'ddp[\s\-]?7\.1', r'ddp[\s\-]?5\.1', r'dd[\s\-]?5\.1', r'dd[\s\-]?2\.0', r'ddp', r'5\.1', r'7\.1', r'2\.0', r'2ch', r'stereo',
-         r'full[\s\-]?movie', r'web[\s\-]?series', 
-        r'netflix', r'hotstar', r'zee5', r'sonyliv', r'jio', r'jiocinema', r'voot', r'altbalaji' 
-    ]
-
-    # Ensure language tags (e.g., 'Hindi', 'Korean') are only stripped if followed 
-    # by other quality/source tags to prevent stripping the actual title.
-    LANG_PREFIX_WORDS = {
-        'hindi', 'english', 'tamil', 'telugu', 'malayalam', 'kannada',
-        'bengali', 'marathi', 'korean', 'japanese', 'chinese', 'spanish',
-        'russian', 'french'
-    }
-    _prefix_token_re = re.compile('(?:' + '|'.join(prefix_tags) + ')', re.IGNORECASE)
+    # prefix tag list / soft words / language words module-level hain (upar)
+    _prefix_token_re = _PREFIX_TOKEN_RE
     _sep_re = re.compile(r'[\s_\-]*')
 
     def _splits_a_word(text, end_pos):
@@ -672,7 +807,7 @@ def extract_pure_title(original_name):
             # This tag only matched part of a longer word (e.g. "new" inside "Newtons") —
             # that's not a real noise tag, it's the start of the actual title. Stop here.
             break
-        is_lang = tok_m.group(0).lower() in LANG_PREFIX_WORDS
+        is_lang = tok_m.group(0).lower() in LANG_PREFIX_WORDS or tok_m.group(0).lower() in _SOFT_PREFIX_WORDS
         if is_lang:
             sep_m2 = _sep_re.match(clean_name, tok_m.end())
             p2 = sep_m2.end() if sep_m2 else tok_m.end()
@@ -1017,8 +1152,12 @@ def extract_languages_quality(text_to_scan):
     scan_text = re.sub(r'[._]+', ' ', text_to_scan)
     scan_lower = scan_text.lower()
 
-    year_match = re.search(r'\b(19\d{2}|20[0-2]\d)\b', scan_text)
-    year = year_match.group(1) if year_match else None
+    all_years = re.findall(r'\b(19\d{2}|20[0-2]\d)\b', scan_text)
+    # "1923 2025 480p ..." me 1923 title hai, year 2025 hai
+    lead_num = leading_number_title(scan_text)
+    if lead_num and all_years and all_years[0] == lead_num:
+        all_years = all_years[1:]
+    year = all_years[0] if all_years else None
 
     # Parse Season and Episode
     normalized_se = normalize_season_episode(scan_text)
@@ -1263,7 +1402,8 @@ _MEDIA_EXT_RE = re.compile(r"\.(?:mkv|mp4|avi|mov|webm|m4v|ts|zip|rar)$", re.I)
 
 def _strip_handles(text: str) -> str:
     """'@HiTLERYT_418_2026' -> '418 2026'  (@handle sirf pehle underscore/space tak hatta hai)."""
-    text = re.sub(r"@[^_\s\-.\]\)]+", " ", text or "")
+    text = _strip_prefix_junk(text or "")
+    text = re.sub(r"@[^_\s\-.\]\)]+", " ", text)
     return re.sub(r"\s+", " ", text.replace("_", " ")).strip()
 
 
@@ -2423,97 +2563,4 @@ async def dreamxbotz_clean_title(filename: str, is_series: bool = False) -> str:
                 title = season_match.group(1).strip()
                 season = season_match.group(2) or season_match.group(3) or season_match.group(4)
                 title = (
-                    re.sub(
-                        r"(?:@[^ \n\r\t.,:;!?()\[\]{}<>\\\/\"'=_%]+|[._\-\[\]@()]+)",
-                        " ",
-                        title,
-                    )
-                    .strip()
-                    .title()
-                )
-                return f"{title} S{int(season):02}.{ext}" if ext else f"{title} S{int(season):02}"
-
-        title = filename_cleaned
-        title = (
-            re.sub(
-                r"(?:@[^ \n\r\t.,:;!?()\[\]{}<>\\\/\"'=_%]+|[._\-\[\]@()]+)", " ", title
-            )
-            .strip()
-            .title()
-        )
-        return f"{title}.{ext}" if ext else title
-
-    except Exception as e:
-        logger.error(f"Error in dreamxbotz_clean_title: {e}")
-        return filename
-
-
-async def dreamxbotz_get_movies(limit: int = 20) -> List[str]:
-    try:
-        cursor = await dreamxbotz_fetch_media(limit * 2)
-        results = set()
-        pattern = r"(?:s\d{1,2}|season\s*\d+|season\d+)(?:\s*combined)?(?:e\d{1,4}|episode\s*\d+)?\b"
-
-        for file in cursor:
-            file_name = getattr(file, "file_name", "")
-
-            parts = file_name.rsplit(".", 1)
-            name_part = parts[0]
-            ext = parts[1] if len(parts) > 1 else ""
-
-            name_part = re.sub(r"[._\-]+", " ", name_part)
-            name_part = re.sub(r"\s+", " ", name_part).strip()
-
-            file_name_cleaned = name_part
-
-            if not re.search(pattern, file_name_cleaned, re.IGNORECASE):
-                title = await dreamxbotz_clean_title(file_name_cleaned)
-                if ext:
-                    title = f"{title}.{ext}"
-                results.add(title)
-
-            if len(results) >= limit:
-                break
-
-        return sorted(list(results))[:limit]
-    except Exception as e:
-        logger.error(f"Error in dreamxbotz_get_movies: {e}")
-        return []
-
-
-async def dreamxbotz_get_series(limit: int = 30) -> Dict[str, List[int]]:
-    try:
-        cursor = await dreamxbotz_fetch_media(limit * 5)
-        grouped = defaultdict(list)
-        pattern = r"(.*?)(?:S(\d{1,2})|Season\s*(\d+)|Season(\d+))(?:\s*Combined)?(?:E(\d{1,4})|Episode\s*(\d+))?\b"
-
-        for file in cursor:
-            file_name = getattr(file, "file_name", "")
-
-            parts = file_name.rsplit(".", 1)
-            name_part = parts[0]
-            ext = parts[1] if len(parts) > 1 else ""
-
-            name_part = re.sub(r"[._\-]+", " ", name_part)
-            name_part = re.sub(r"\s+", " ", name_part).strip()
-
-            file_name_cleaned = name_part
-
-            match = re.search(pattern, file_name_cleaned, re.IGNORECASE)
-            if match:
-                title_raw = match.group(1)
-                title = await dreamxbotz_clean_title(title_raw, is_series=True)
-                if ext:
-                    title = f"{title}.{ext}"
-
-                season = int(match.group(2) or match.group(3) or match.group(4))
-                grouped[title].append(season)
-
-        return {
-            title: sorted(set(seasons))[:10]
-            for title, seasons in grouped.items()
-            if seasons
-        }
-    except Exception as e:
-        logger.error(f"Error in dreamxbotz_get_series: {e}")
-        return []
+                    re.su
